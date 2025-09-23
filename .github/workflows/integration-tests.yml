@@ -51,10 +51,11 @@ jobs:
           - 6379:6379
 
       minio:
-        image: minio/minio:latest server /data
+        image: minio/minio:latest
         env:
           MINIO_ROOT_USER: admin
           MINIO_ROOT_PASSWORD: password123
+          MINIO_SERVER_ARGS: "server /data"
         options: >-
           --health-cmd "curl -f http://localhost:9000/minio/health/live"
           --health-interval 30s
