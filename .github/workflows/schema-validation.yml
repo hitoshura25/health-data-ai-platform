@@ -2,12 +2,14 @@ name: Schema Validation
 
 on:
   push:
+    branches: [main]
     paths:
       - 'shared/schemas/**'
       - 'shared/types/**'
       - 'shared/validation/**'
       - '.github/workflows/schema-validation.yml'
   pull_request:
+    branches: [main]
     paths:
       - 'shared/schemas/**'
       - 'shared/types/**'
