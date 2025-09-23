@@ -1,0 +1,26 @@
+{
+  "type": "record",
+  "name": "AvroDevice",
+  "namespace": "io.github.hitoshura25.healthsyncapp.data.avro",
+  "doc": "Device information for health data collection devices",
+  "fields": [
+    {
+      "name": "manufacturer",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Device manufacturer (e.g., Samsung, Oura, Dexcom)"
+    },
+    {
+      "name": "model",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Device model (e.g., Galaxy Watch 7, Oura Ring Gen 3, Stelo)"
+    },
+    {
+      "name": "type",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Device type classification (e.g., smartwatch, ring, cgm)"
+    }
+  ]
+}

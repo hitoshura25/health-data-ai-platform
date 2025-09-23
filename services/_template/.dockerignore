@@ -1,0 +1,89 @@
+# Health Data AI Platform - Docker Ignore Template
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Testing
+.coverage
+.pytest_cache/
+.tox/
+htmlcov/
+.nox/
+
+# Documentation
+docs/_build/
+*.md
+
+# Logs
+*.log
+logs/
+
+# Development files
+.env.local
+.env.development
+.env.test
+*.pid
+
+# Service-specific ignores (customize as needed)
+# For ML services:
+# models/
+# *.pkl
+# *.joblib
+
+# For data services:
+# data/
+# *.csv
+# *.json
+
+# Exclude other services
+services/*
+!services/your-service-name/

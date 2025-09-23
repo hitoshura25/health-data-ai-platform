@@ -1,0 +1,86 @@
+{
+  "type": "record",
+  "name": "ErrorMessage",
+  "namespace": "io.github.healthdataai.processing",
+  "doc": "Error message format for failed processing operations",
+  "fields": [
+    {
+      "name": "messageId",
+      "type": "string",
+      "doc": "Unique identifier for this error message"
+    },
+    {
+      "name": "correlationId",
+      "type": "string",
+      "doc": "Correlation ID linking to original processing message"
+    },
+    {
+      "name": "originalIdempotencyKey",
+      "type": "string",
+      "doc": "Idempotency key from original processing message"
+    },
+    {
+      "name": "userId",
+      "type": "string",
+      "doc": "User identifier for data ownership"
+    },
+    {
+      "name": "serviceComponent",
+      "type": {
+        "type": "enum",
+        "name": "ServiceComponent",
+        "doc": "Component where the error occurred",
+        "symbols": [
+          "HEALTH_API_SERVICE",
+          "MESSAGE_QUEUE",
+          "DATA_LAKE",
+          "ETL_NARRATIVE_ENGINE",
+          "AI_QUERY_INTERFACE"
+        ]
+      },
+      "doc": "Service component that generated this error"
+    },
+    {
+      "name": "errorDetails",
+      "type": "ProcessingError",
+      "doc": "Detailed error information"
+    },
+    {
+      "name": "originalMessage",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Original message content (if available and safe to log)"
+    },
+    {
+      "name": "stackTrace",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Stack trace information for debugging"
+    },
+    {
+      "name": "retryable",
+      "type": "boolean",
+      "doc": "Whether this error condition is retryable"
+    },
+    {
+      "name": "severity",
+      "type": {
+        "type": "enum",
+        "name": "ErrorSeverity",
+        "symbols": ["INFO", "WARNING", "ERROR", "CRITICAL"]
+      },
+      "doc": "Severity level of the error"
+    },
+    {
+      "name": "errorTimestamp",
+      "type": "long",
+      "doc": "When the error occurred (epoch milliseconds)"
+    },
+    {
+      "name": "environment",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Environment where error occurred (dev, staging, prod)"
+    }
+  ]
+}
