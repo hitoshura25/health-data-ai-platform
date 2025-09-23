@@ -77,7 +77,7 @@ jobs:
         python-version: '3.11'
 
     - name: Cache pip dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('services/your-service-name/requirements.txt') }}
@@ -152,7 +152,7 @@ jobs:
         bandit -r . -f json -o bandit-report.json || true
 
     - name: Upload security scan results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: bandit-report-${{ env.SERVICE_NAME }}
         path: services/${{ env.SERVICE_NAME }}/bandit-report.json

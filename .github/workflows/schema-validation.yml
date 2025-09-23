@@ -222,7 +222,7 @@ jobs:
         " > schema-report.md
 
     - name: Upload schema report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: schema-documentation
         path: shared/schemas/schema-report.md
@@ -235,7 +235,7 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
 
         # List changed schema files
-        git diff --name-only origin/main...HEAD | grep -E '\.(avsc|py)$' | grep -E '^shared/(schemas|types|validation)/' || echo "No schema files changed" >> $GITHUB_STEP_SUMMARY
+        git diff --name-only origin/main...HEAD | grep -E '\.(avsc|py) | grep -E '^shared/(schemas|types|validation)/' || echo "No schema files changed" >> $GITHUB_STEP_SUMMARY
 
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "Please ensure:" >> $GITHUB_STEP_SUMMARY
