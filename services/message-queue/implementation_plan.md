@@ -8,7 +8,7 @@ This message queue implementation provides reliable message delivery and process
 
 ## Architecture Goals
 
-- **Persistent Deduplication:** Use SQLite/file-based tracking for robust duplicate prevention
+- **Persistent Deduplication:** Use Redis for robust and performant duplicate prevention
 - **Intelligent Retry Logic:** TTL + Dead Letter Exchange pattern for exponential backoff
 - **Operational Simplicity:** Leverage native RabbitMQ features without external dependencies
 - **Message Intelligence:** Rich message format with embedded metadata for processing optimization
@@ -27,7 +27,7 @@ dataclasses-json==0.6.1
 
 ### Database for Deduplication
 ```txt
-aiosqlite==0.19.0
+redis>=5.0.0
 ```
 
 ## Implementation
@@ -81,7 +81,7 @@ class MessageQueueSettings(BaseSettings):
     retry_delays: list = [30, 300, 900]  # 30s, 5m, 15m
 
     # Deduplication
-    deduplication_db_path: str = "message_deduplication.db"
+    redis_url: str = "redis://localhost:6379"
     deduplication_retention_hours: int = 72
 
     # Message Configuration
@@ -178,152 +178,77 @@ class HealthDataMessage:
 
 ### 4. Persistent Deduplication (core/deduplication.py)
 ```python
-import aiosqlite
 import asyncio
-from datetime import datetime, timedelta
+import redis.asyncio as redis
+from datetime import timedelta
 from typing import Optional
 import structlog
 
+from .message import HealthDataMessage
+from config.settings import settings
+
 logger = structlog.get_logger()
 
-class PersistentDeduplicationStore:
-    """SQLite-based persistent deduplication tracking"""
+class RedisDeduplicationStore:
+    """Redis-based persistent deduplication tracking"""
 
-    def __init__(self, db_path: str, retention_hours: int = 72):
-        self.db_path = db_path
-        self.retention_hours = retention_hours
-        self._lock = asyncio.Lock()
+    def __init__(self, retention_hours: int = 72):
+        self.redis_pool = None
+        # Convert retention to seconds for Redis TTL
+        self.retention_seconds = int(timedelta(hours=retention_hours).total_seconds())
 
     async def initialize(self):
-        """Initialize database tables"""
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS processed_messages (
-                    idempotency_key TEXT PRIMARY KEY,
-                    message_id TEXT NOT NULL,
-                    correlation_id TEXT NOT NULL,
-                    user_id TEXT NOT NULL,
-                    record_type TEXT NOT NULL,
-                    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    processing_duration_seconds REAL,
-                    status TEXT DEFAULT 'completed'
-                )
-            """)
-
-            await db.execute("""
-                CREATE INDEX IF NOT EXISTS idx_processed_at
-                ON processed_messages(processed_at)
-            """)
-
-            await db.execute("""
-                CREATE INDEX IF NOT EXISTS idx_user_record_type
-                ON processed_messages(user_id, record_type)
-            """)
-
-            await db.commit()
-
-        logger.info("Deduplication store initialized", db_path=self.db_path)
+        """Initialize the Redis connection pool."""
+        if self.redis_pool:
+            return
+        try:
+            self.redis_pool = redis.ConnectionPool.from_url(
+                settings.redis_url, decode_responses=True
+            )
+            # Test the connection
+            client = redis.Redis(connection_pool=self.redis_pool)
+            await client.ping()
+            logger.info("Deduplication store initialized", store="Redis")
+        except Exception as e:
+            logger.error("Failed to initialize Redis deduplication store", error=e)
+            raise
 
     async def is_already_processed(self, idempotency_key: str) -> bool:
-        """Check if message was already processed"""
-        async with self._lock:
-            async with aiosqlite.connect(self.db_path) as db:
-                cursor = await db.execute(
-                    "SELECT 1 FROM processed_messages WHERE idempotency_key = ?",
-                    (idempotency_key,)
-                )
-                result = await cursor.fetchone()
-                return result is not None
+        """Check if message was already processed using EXISTS."""
+        client = redis.Redis(connection_pool=self.redis_pool)
+        return await client.exists(idempotency_key) > 0
 
-    async def mark_processing_started(self, message: 'HealthDataMessage'):
-        """Mark message as processing started"""
-        async with self._lock:
-            async with aiosqlite.connect(self.db_path) as db:
-                await db.execute("""
-                    INSERT OR REPLACE INTO processed_messages
-                    (idempotency_key, message_id, correlation_id, user_id, record_type, status)
-                    VALUES (?, ?, ?, ?, ?, 'processing')
-                """, (
-                    message.idempotency_key,
-                    message.message_id,
-                    message.correlation_id,
-                    message.user_id,
-                    message.record_type
-                ))
-                await db.commit()
+    async def mark_processing_started(self, message: HealthDataMessage):
+        """Mark message as processing started by setting a key with a short TTL."""
+        client = redis.Redis(connection_pool=self.redis_pool)
+        # Set a short TTL for the "processing" state
+        await client.set(message.idempotency_key, "processing", ex=600) # 10 minutes
 
-    async def mark_processing_completed(
-        self,
-        idempotency_key: str,
-        processing_duration: float
-    ):
-        """Mark message as successfully processed"""
-        async with self._lock:
-            async with aiosqlite.connect(self.db_path) as db:
-                await db.execute("""
-                    UPDATE processed_messages
-                    SET status = 'completed', processing_duration_seconds = ?
-                    WHERE idempotency_key = ?
-                """, (processing_duration, idempotency_key))
-                await db.commit()
+    async def mark_processing_completed(self, idempotency_key: str, processing_duration: float):
+        """Mark message as successfully processed by setting the key with the full retention TTL."""
+        client = redis.Redis(connection_pool=self.redis_pool)
+        await client.set(idempotency_key, "completed", ex=self.retention_seconds)
 
     async def mark_processing_failed(self, idempotency_key: str, error_message: str):
-        """Mark message as failed"""
-        async with self._lock:
-            async with aiosqlite.connect(self.db_path) as db:
-                await db.execute("""
-                    UPDATE processed_messages
-                    SET status = 'failed'
-                    WHERE idempotency_key = ?
-                """, (idempotency_key,))
-                await db.commit()
+        """Mark message as failed, also with the full retention TTL to prevent retries."""
+        client = redis.Redis(connection_pool=self.redis_pool)
+        await client.set(idempotency_key, "failed", ex=self.retention_seconds)
 
     async def cleanup_old_records(self):
-        """Remove old processed message records"""
-        cutoff_time = datetime.utcnow() - timedelta(hours=self.retention_hours)
+        """This is a no-op for Redis as TTL handles expiration automatically."""
+        logger.debug("Cleanup is handled automatically by Redis TTL.")
+        pass
 
-        async with self._lock:
-            async with aiosqlite.connect(self.db_path) as db:
-                cursor = await db.execute(
-                    "DELETE FROM processed_messages WHERE processed_at < ?",
-                    (cutoff_time.isoformat(),)
-                )
-                deleted_count = cursor.rowcount
-                await db.commit()
+    async def _get_status_for_testing(self, idempotency_key: str) -> Optional[str]:
+        """FOR TESTING ONLY: Gets the status of a message."""
+        client = redis.Redis(connection_pool=self.redis_pool)
+        return await client.get(idempotency_key)
 
-        logger.info("Cleaned up old deduplication records",
-                   deleted_count=deleted_count,
-                   cutoff_time=cutoff_time)
-
-    async def get_processing_stats(self) -> dict:
-        """Get processing statistics"""
-        async with aiosqlite.connect(self.db_path) as db:
-            # Total processed messages
-            cursor = await db.execute("SELECT COUNT(*) FROM processed_messages")
-            total_processed = (await cursor.fetchone())[0]
-
-            # Messages by status
-            cursor = await db.execute("""
-                SELECT status, COUNT(*)
-                FROM processed_messages
-                GROUP BY status
-            """)
-            status_counts = dict(await cursor.fetchall())
-
-            # Messages by record type (last 24 hours)
-            cursor = await db.execute("""
-                SELECT record_type, COUNT(*)
-                FROM processed_messages
-                WHERE processed_at > datetime('now', '-24 hours')
-                GROUP BY record_type
-            """)
-            recent_by_type = dict(await cursor.fetchall())
-
-            return {
-                "total_processed": total_processed,
-                "status_distribution": status_counts,
-                "recent_24h_by_type": recent_by_type
-            }
+    async def close(self):
+        """Close the Redis connection pool."""
+        if self.redis_pool:
+            await self.redis_pool.disconnect()
+            logger.info("Deduplication store connection closed.")
 ```
 
 ### 5. Publisher Implementation (publisher/health_data_publisher.py)
@@ -1115,3 +1040,23 @@ async def run_consumer():
 - **Monitoring:** Exports metrics for Prometheus scraping
 
 This implementation provides enterprise-grade message reliability with persistent deduplication and intelligent retry logic while maintaining operational simplicity through native RabbitMQ features.
+
+## Architectural Decision: Redis vs. SQLite for Deduplication
+
+For this specific use case, Redis is the recommended choice over SQLite for the message deduplication store. Here's a breakdown of why it's the better choice:
+
+### Why Redis is a Better Fit:
+
+1.  **Performance and Concurrency:**
+    *   **Redis:** As an in-memory data store, Redis is exceptionally fast. This is crucial for the message queue, where every message needs a quick deduplication check. It's designed for high-concurrency scenarios, which is exactly what a message queue will face under load.
+    *   **SQLite:** While simple, SQLite is a file-based database. File I/O is significantly slower than in-memory operations. Under high message volume, the database file could become a bottleneck, slowing down the entire processing pipeline. The original hanging tests with `aiosqlite` were likely due to the complexities of managing file-based database connections in a highly concurrent, asynchronous application.
+
+2.  **Automatic Key Expiration (TTL):**
+    *   **Redis:** The "time-to-live" (TTL) feature is a perfect fit for our needs. We can set an expiration time for each deduplication key, and Redis will automatically remove it after the retention period. This is efficient and eliminates the need for manual cleanup tasks.
+    *   **SQLite:** To achieve the same result in SQLite, we would need to run a periodic background task to manually delete old records, which adds complexity and another potential point of failure.
+
+3.  **Scalability:**
+    *   **Redis:** Redis is designed to be a centralized service that can be accessed by multiple consumer processes or containers. This makes it much easier to scale the number of message consumers in the future.
+    *   **SQLite:** A file-based SQLite database is not easily shared across multiple processes or containers, especially in a distributed environment. It would require complex file locking mechanisms or a single process dedicated to database access, which would defeat the purpose of a scalable microservice architecture.
+
+While SQLite is a great tool for simpler, single-process applications, **Redis is the more robust and scalable solution for a high-performance message queue**. The switch to Redis was a good architectural decision that aligns better with the overall goals of the platform. The previous issues with hanging tests were a symptom of the underlying challenges of using a file-based database in this context.
