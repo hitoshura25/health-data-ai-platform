@@ -31,6 +31,7 @@ class BaseIdempotentConsumer(ABC):
         self._consuming = False
         self._consumer_tag = None
         self._stopped_future = None
+        self.queue = None
 
     async def initialize(self):
         """Initialize consumer and all its dependencies with a single connection."""
@@ -38,10 +39,11 @@ class BaseIdempotentConsumer(ABC):
 
         self.connection = await aio_pika.connect_robust(settings.rabbitmq_url)
         self.channel = await self.connection.channel()
-        await self.channel.set_qos(prefetch_count=1)
 
-        # Initialize the publisher with the consumer's channel
-        await self.publisher.initialize(channel=self.channel)
+        await self.channel.set_qos(prefetch_count=1)
+        #await self.channel.confirm_delivery()
+
+        await self.publisher.initialize()
 
         logger.info("Consumer initialized", queue=self.queue_name)
 
@@ -50,19 +52,20 @@ class BaseIdempotentConsumer(ABC):
         if not self.connection:
             await self.initialize()
 
-        queue = await self.channel.get_queue(self.queue_name)
+        self.queue = await self.channel.get_queue(self.queue_name)
 
         logger.info("Started consuming messages", queue=self.queue_name)
         self._consuming = True
         self._stopped_future = asyncio.Future()
 
-        self._consumer_tag = await queue.consume(self._process_message_with_idempotency)
+        self._consumer_tag = await self.queue.consume(self._process_message_with_idempotency)
 
         # Wait until the consumer is stopped
         await self._stopped_future
 
     async def _process_message_with_idempotency(self, message: aio_pika.IncomingMessage):
         """Process message with comprehensive idempotency checking"""
+        logger.info("Received message", body=message.body.decode())
         start_time = time.time()
         health_message = None
 
@@ -145,38 +148,14 @@ class BaseIdempotentConsumer(ABC):
         """Process the health message - implemented by subclasses"""
         pass
 
-    async def _periodic_cleanup(self):
-        """Periodic cleanup of old deduplication records"""
-        while self._consuming:
-            try:
-                await asyncio.sleep(3600)  # Run every hour
-                await self.deduplication_store.cleanup_old_records()
-            except asyncio.CancelledError:
-                break # Stop cleanup on consumer stop
-            except Exception as e:
-                logger.error("Cleanup task failed", error=str(e))
-
     async def stop(self):
         """Stop consuming messages gracefully."""
         if not self._consuming:
             return
-
+    
         logger.info("Stopping consumer...")
+        self.connection.close()
+        self.publisher.close()
+        self.deduplication_store.close()
         self._consuming = False
-
-        if self._consumer_tag and self.channel:
-            try:
-                await self.channel.cancel(self._consumer_tag)
-            except aio_pika.exceptions.ChannelClosed:
-                pass # Channel might already be closed
-
-        await self.publisher.close() # This is safe, does nothing for external channel
-        await self.deduplication_store.close()
-
-        if self.connection and not self.connection.is_closed:
-            await self.connection.close()
-        
-        if self._stopped_future and not self._stopped_future.done():
-            self._stopped_future.set_result(True)
-
         logger.info("Consumer stopped")

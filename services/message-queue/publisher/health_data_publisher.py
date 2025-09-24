@@ -22,26 +22,29 @@ class HealthDataPublisher:
         self.channel = None
         self.metrics = MessageQueueMetrics()
         self._initialized = False
-        self._is_external_channel = False
 
-    async def initialize(self, channel: aio_pika.Channel = None):
-        """Initialize publisher, optionally using an existing channel."""
+
+    async def initialize(self):
+        """Initialize publisher, creating its own connection and channel."""
         if self._initialized:
             return
 
         try:
-            if channel:
-                self.channel = channel
-                self._is_external_channel = True
-            else:
-                self.connection = await aio_pika.connect_robust(
-                    settings.rabbitmq_url,
-                    heartbeat=60
-                )
-                self.channel = await self.connection.channel()
+            self.connection = await aio_pika.connect_robust(
+                settings.rabbitmq_url,
+                heartbeat=60
+            )
+            self.channel = await self.connection.channel()
 
-            if settings.enable_publisher_confirms:
-                pass  # On by default
+            # Declare the exchange on a new channel
+            async with self.connection.channel() as channel:
+                await channel.declare_exchange(
+                    name=settings.main_exchange,
+                    type=aio_pika.ExchangeType.TOPIC,
+                    durable=True
+                )
+
+
 
             self._initialized = True
             logger.info("Health data publisher initialized")
@@ -174,11 +177,7 @@ class HealthDataPublisher:
         return True
 
     async def close(self):
-        """Close publisher connection, if it owns it."""
-        if self._is_external_channel:
-            logger.debug("Publisher is using an external channel, not closing.")
-            return
-
+        """Close publisher connection."""
         if self.connection and not self.connection.is_closed:
             await self.connection.close()
             self._initialized = False
