@@ -28,7 +28,6 @@ jobs:
       - name: Generate .env file
         run: |
           bash setup-env.sh
-          cat .env
         working-directory: ./services/message-queue
 
       - name: Install dependencies
@@ -41,5 +40,5 @@ jobs:
       - name: Run tests
         run: |
           source .venv/bin/activate
-          pytest
+          pytest -v -s
         working-directory: ./services/message-queue
