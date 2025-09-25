@@ -1,12 +1,13 @@
+import os
 from pydantic_settings import BaseSettings
 from typing import Dict, Any, List
 
 class MessageQueueSettings(BaseSettings):
     # RabbitMQ Connection
-    rabbitmq_url: str
-    rabbitmq_management_url: str = "http://localhost:15672"
-    mq_rabbitmq_user: str
-    mq_rabbitmq_pass: str
+    rabbitmq_url: str = os.getenv("MQ_RABBITMQ_URL")
+    rabbitmq_management_url: str = os.getenv("MQ_RABBITMQ_MANAGEMENT_URL")
+    mq_rabbitmq_user: str = os.getenv("MQ_RABBITMQ_USER")
+    mq_rabbitmq_pass: str = os.getenv("MQ_RABBITMQ_PASS")
 
     # Exchange Configuration
     main_exchange: str = "health_data_exchange"
@@ -21,7 +22,7 @@ class MessageQueueSettings(BaseSettings):
     retry_delays: List[int] = [30, 300, 900]  # 30s, 5m, 15m
 
     # Redis
-    redis_url: str = "redis://localhost:6379"
+    redis_url: str = os.getenv("MQ_REDIS_URL")
 
     # Deduplication
 
