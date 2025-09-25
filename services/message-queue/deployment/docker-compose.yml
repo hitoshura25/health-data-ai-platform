@@ -1,0 +1,46 @@
+
+services:
+  rabbitmq:
+    image: rabbitmq:4.1.4-management
+    container_name: health-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${MQ_RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${MQ_RABBITMQ_PASS}
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "5672:5672"    # AMQP port
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: health-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  message-queue-setup:
+    build:
+      context: ../
+      dockerfile: ./deployment/Dockerfile  # I will create this Dockerfile next
+    command: python config/rabbitmq_setup.py
+    environment:
+      MQ_RABBITMQ_URL: amqp://${MQ_RABBITMQ_USER}:${MQ_RABBITMQ_PASS}@rabbitmq:5672
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: "no"
+
+volumes:
+  rabbitmq_data:
