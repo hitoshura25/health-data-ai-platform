@@ -29,7 +29,7 @@ def docker_services():
 
     try:
         subprocess.run(
-            ["docker-compose", "-f", compose_file, "--env-file", env_file, "up", "-d", "rabbitmq", "redis"],
+            ["docker", "compose", "-f", compose_file, "--env-file", env_file, "up", "-d", "rabbitmq", "redis"],
             check=True,
             capture_output=True
         )
@@ -37,7 +37,7 @@ def docker_services():
         yield
     finally:
         subprocess.run(
-            ["docker-compose", "-f", compose_file, "--env-file", env_file, "down"],
+            ["docker", "compose", "-f", compose_file, "--env-file", env_file, "down"],
             check=True,
             capture_output=True
         )

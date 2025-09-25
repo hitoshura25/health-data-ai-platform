@@ -1,0 +1,44 @@
+# This GitHub Actions workflow runs tests for the message-queue service.
+
+name: Message Queue CI
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'services/message-queue/**'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'services/message-queue/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Generate .env file
+        run: |
+          bash setup-env.sh
+        working-directory: ./services/message-queue
+
+      - name: Install dependencies
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -r requirements.txt
+        working-directory: ./services/message-queue
+
+      - name: Run tests
+        run: |
+          source .venv/bin/activate
+          pytest
+        working-directory: ./services/message-queue
