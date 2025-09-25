@@ -150,12 +150,20 @@ class BaseIdempotentConsumer(ABC):
         """Stop consuming messages gracefully."""
         if not self._consuming:
             return
-    
+
         logger.info("Stopping consumer...")
         if self._consumer_tag:
             await self.queue.cancel(self._consumer_tag)
-        await self.connection.close()
-        await self.publisher.close()
-        await self.deduplication_store.close()
+
+        # Close resources
+        if self.publisher:
+            await self.publisher.close()
+        if self.deduplication_store:
+            await self.deduplication_store.close()
+        if self.connection:
+            await self.connection.close()
+
         self._consuming = False
+        if self._stopped_future and not self._stopped_future.done():
+            self._stopped_future.set_result(None)
         logger.info("Consumer stopped")

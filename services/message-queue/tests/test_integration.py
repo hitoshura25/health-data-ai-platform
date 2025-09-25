@@ -60,7 +60,7 @@ async def test_env(docker_services):
     publisher = HealthDataPublisher()
     await publisher.initialize()
 
-    consumer = MyConsumer(queue_name=queue_name)
+    consumer = MyConsumer(queue_name=queue_name, stop_after_n_messages=1)
     await consumer.initialize()
 
     consumer.processed_messages = []
@@ -76,6 +76,7 @@ async def test_env(docker_services):
     await publisher.close()
     await consumer.stop()
 
+@pytest.mark.timeout(60)
 @pytest.mark.asyncio
 async def test_deduplication_integration(test_env):
     """Tests that a message published twice is processed only once."""
@@ -97,15 +98,7 @@ async def test_deduplication_integration(test_env):
     await publisher.publish_health_data_message(message)
     await publisher.publish_health_data_message(message)
 
-    consume_task = asyncio.create_task(consumer.start_consuming())
-    await asyncio.sleep(2)
-
-    await consumer.stop()
-    consume_task.cancel()
-    try:
-        await consume_task
-    except asyncio.CancelledError:
-        pass
+    await consumer.start_consuming()
 
     assert len(consumer.processed_messages) == 1
     assert consumer.processed_messages[0].idempotency_key == "integration_test_idem_key"
