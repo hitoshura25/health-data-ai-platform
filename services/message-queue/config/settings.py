@@ -33,8 +33,9 @@ class MessageQueueSettings(BaseSettings):
     enable_metrics: bool = True
     metrics_port: int = 8001
 
-    class Config:
-        env_file = ".env"
-        env_prefix = "MQ_"
+    model_config = {
+        "env_file": ".env",
+        "env_prefix": "MQ_"
+    }
 
 settings = MessageQueueSettings()

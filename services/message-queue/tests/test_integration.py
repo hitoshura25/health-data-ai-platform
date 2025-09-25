@@ -15,7 +15,7 @@ import aio_pika
 from config.settings import settings
 from core.message import HealthDataMessage
 from publisher.health_data_publisher import HealthDataPublisher
-from tests.helpers import TestConsumer
+from tests.helpers import MyConsumer
 
 @pytest.fixture(scope="session")
 def docker_services():
@@ -46,7 +46,7 @@ async def test_env(docker_services):
     publisher = HealthDataPublisher()
     await publisher.initialize()
 
-    consumer = TestConsumer(queue_name=queue_name)
+    consumer = MyConsumer(queue_name=queue_name)
     await consumer.initialize()
 
     consumer.processed_messages = []

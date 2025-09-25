@@ -1,4 +1,4 @@
-aio-pika==9.3.1
+aio-pika==9.5.7
 pytest-asyncio
 pytest-timeout
 structlog==23.2.0
@@ -10,6 +10,3 @@ redis>=5.0.0
 
 # Testing
 pytest
-
-
-pytest-rabbitmq

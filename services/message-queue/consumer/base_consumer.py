@@ -154,8 +154,10 @@ class BaseIdempotentConsumer(ABC):
             return
     
         logger.info("Stopping consumer...")
-        self.connection.close()
-        self.publisher.close()
-        self.deduplication_store.close()
+        if self._consumer_tag:
+            await self.queue.cancel(self._consumer_tag)
+        await self.connection.close()
+        await self.publisher.close()
+        await self.deduplication_store.close()
         self._consuming = False
         logger.info("Consumer stopped")

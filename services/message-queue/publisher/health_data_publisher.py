@@ -1,6 +1,6 @@
 import aio_pika
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from tenacity import retry, stop_after_attempt, wait_exponential
 import sys
 import os
@@ -62,7 +62,7 @@ class HealthDataPublisher:
         if not self._initialized:
             await self.initialize()
 
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         try:
             # Get routing key
@@ -74,7 +74,7 @@ class HealthDataPublisher:
                 delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
                 message_id=message.message_id,
                 correlation_id=message.correlation_id,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 headers={
                     'retry_count': message.retry_count,
                     'idempotency_key': message.idempotency_key,
@@ -101,8 +101,7 @@ class HealthDataPublisher:
                     mandatory=True
                 )
 
-            # Record metrics
-            duration = (datetime.utcnow() - start_time).total_seconds()
+            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
             self.metrics.record_publish_success(
                 exchange=settings.main_exchange,
                 routing_key=routing_key,
