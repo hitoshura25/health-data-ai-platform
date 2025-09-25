@@ -41,8 +41,6 @@ class BaseIdempotentConsumer(ABC):
         self.channel = await self.connection.channel()
 
         await self.channel.set_qos(prefetch_count=1)
-        #await self.channel.confirm_delivery()
-
         await self.publisher.initialize()
 
         logger.info("Consumer initialized", queue=self.queue_name)
