@@ -30,8 +30,7 @@ def docker_services():
     try:
         subprocess.run(
             ["docker", "compose", "-f", compose_file, "--env-file", env_file, "up", "-d", "rabbitmq", "redis"],
-            check=True,
-            capture_output=True
+            check=True
         )
         time.sleep(10) # Give services time to start
         yield
