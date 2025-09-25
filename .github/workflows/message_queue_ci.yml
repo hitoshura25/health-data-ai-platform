@@ -37,6 +37,9 @@ jobs:
           pip install -r requirements.txt
         working-directory: ./services/message-queue
 
+      - name: Check disk space
+        run: df -h
+
       - name: Run tests
         run: |
           source .venv/bin/activate
