@@ -4,8 +4,8 @@ services:
     image: rabbitmq:4.1.4-management
     container_name: health-rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
+      RABBITMQ_DEFAULT_USER: ${MQ_RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${MQ_RABBITMQ_PASS}
       RABBITMQ_DEFAULT_VHOST: /
     ports:
       - "5672:5672"    # AMQP port
@@ -34,7 +34,7 @@ services:
       dockerfile: ./deployment/Dockerfile  # I will create this Dockerfile next
     command: python config/rabbitmq_setup.py
     environment:
-      MQ_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      MQ_RABBITMQ_URL: amqp://${MQ_RABBITMQ_USER}:${MQ_RABBITMQ_PASS}@rabbitmq:5672
     depends_on:
       rabbitmq:
         condition: service_healthy

@@ -20,13 +20,27 @@ from tests.helpers import MyConsumer
 @pytest.fixture(scope="session")
 def docker_services():
     """Starts and stops the redis and rabbitmq services for the integration tests."""
-    docker_compose_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'deployment', 'docker-compose.yml'))
+    compose_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'deployment', 'docker-compose.yml'))
+    env_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.env'))
+
+    # Ensure the .env file exists before starting
+    if not os.path.exists(env_file):
+        pytest.fail(".env file not found. Please run setup-env.sh first.")
+
     try:
-        subprocess.run(["docker-compose", "-f", docker_compose_path, "up", "-d", "rabbitmq", "redis"], check=True)
-        time.sleep(10)
+        subprocess.run(
+            ["docker-compose", "-f", compose_file, "--env-file", env_file, "up", "-d", "rabbitmq", "redis"],
+            check=True,
+            capture_output=True
+        )
+        time.sleep(10) # Give services time to start
         yield
     finally:
-        subprocess.run(["docker-compose", "-f", docker_compose_path, "down"])
+        subprocess.run(
+            ["docker-compose", "-f", compose_file, "--env-file", env_file, "down"],
+            check=True,
+            capture_output=True
+        )
 
 @pytest_asyncio.fixture
 async def test_env(docker_services):

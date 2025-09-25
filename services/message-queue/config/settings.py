@@ -3,8 +3,10 @@ from typing import Dict, Any, List
 
 class MessageQueueSettings(BaseSettings):
     # RabbitMQ Connection
-    rabbitmq_url: str = "amqp://guest:guest@localhost:5672"
+    rabbitmq_url: str
     rabbitmq_management_url: str = "http://localhost:15672"
+    mq_rabbitmq_user: str
+    mq_rabbitmq_pass: str
 
     # Exchange Configuration
     main_exchange: str = "health_data_exchange"
