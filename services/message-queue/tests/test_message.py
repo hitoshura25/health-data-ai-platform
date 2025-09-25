@@ -36,7 +36,7 @@ def test_message_creation_auto_idempotency_key(sample_message_data):
     data = {**sample_message_data, "idempotency_key": ""}
     msg = HealthDataMessage(**data)
     assert msg.idempotency_key is not None
-    assert len(msg.idempotency_key) == 16 # As per implementation
+    assert len(msg.idempotency_key) == 16  # As per implementation
 
 def test_serialization_deserialization(sample_message_data):
     """Tests that a message can be serialized to JSON and back."""

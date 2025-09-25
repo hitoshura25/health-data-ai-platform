@@ -17,12 +17,12 @@ import pytest_asyncio
 
 @pytest_asyncio.fixture
 async def store(mocker):
-    """Fixture to create a Redis-based deduplication store with a mock Redis pool."""
+    """Fixture to create a Redis-based deduplication store with a mock Redis client."""
     # Configure the fake redis to decode responses to avoid `b'...'` issues
     fake_redis_instance = fakeredis.aioredis.FakeRedis(decode_responses=True)
     
-    # Patch the redis connection pool to use the fake one
-    mocker.patch('redis.asyncio.ConnectionPool.from_url', return_value=fake_redis_instance.connection_pool)
+    # Patch from_url to return our fake instance
+    mocker.patch('core.deduplication.redis.from_url', return_value=fake_redis_instance)
     
     store = RedisDeduplicationStore(retention_hours=1)
     await store.initialize()
@@ -47,8 +47,8 @@ def sample_message():
 
 @pytest.mark.asyncio
 async def test_initialization(store):
-    """Tests that the store initializes correctly with a Redis pool."""
-    assert store.redis_pool is not None
+    """Tests that the store initializes correctly with a Redis client."""
+    assert store.redis_client is not None
 
 @pytest.mark.asyncio
 async def test_mark_started_and_is_processed(store, sample_message):
@@ -87,8 +87,7 @@ async def test_retention_ttl(store, sample_message):
     await store.mark_processing_completed(sample_message.idempotency_key, 0.1)
     
     # Get a client from the pool to check the TTL
-    client = fakeredis.aioredis.FakeRedis(connection_pool=store.redis_pool)
-    ttl = await client.ttl(sample_message.idempotency_key)
+    ttl = await store.redis_client.ttl(sample_message.idempotency_key)
     
     # fakeredis might not be exact, so check if it's close
     assert expected_ttl - 5 <= ttl <= expected_ttl

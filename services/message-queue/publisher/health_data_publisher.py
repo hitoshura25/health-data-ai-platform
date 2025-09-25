@@ -88,18 +88,11 @@ class HealthDataPublisher:
             exchange = await self.channel.get_exchange(settings.main_exchange)
 
             # Publish with mandatory flag
-            if settings.enable_publisher_confirms:
-                await exchange.publish(
-                    amqp_message,
-                    routing_key=routing_key,
-                    mandatory=True
-                )
-            else:
-                await exchange.publish(
-                    amqp_message,
-                    routing_key=routing_key,
-                    mandatory=True
-                )
+            await exchange.publish(
+                amqp_message,
+                routing_key=routing_key,
+                mandatory=True
+            )
 
             duration = (datetime.now(timezone.utc) - start_time).total_seconds()
             self.metrics.record_publish_success(

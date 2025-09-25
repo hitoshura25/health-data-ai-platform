@@ -19,7 +19,7 @@ from tests.helpers import MyConsumer
 
 @pytest.fixture(scope="session")
 def docker_services():
-    """Starts and stops the redis and rabbitmq services for the integration tests."""
+    """Starts and stops the Redis and RabbitMQ services for the integration tests."""
     compose_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'deployment', 'docker-compose.yml'))
     env_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
@@ -29,10 +29,9 @@ def docker_services():
 
     try:
         subprocess.run(
-            ["docker", "compose", "-f", compose_file, "--env-file", env_file, "up", "-d", "rabbitmq", "redis"],
+            ["docker", "compose", "-f", compose_file, "--env-file", env_file, "up", "-d", "--wait", "rabbitmq", "redis"],
             check=True
         )
-        time.sleep(10) # Give services time to start
         yield
     finally:
         subprocess.run(
