@@ -28,6 +28,7 @@ jobs:
       - name: Generate .env file
         run: |
           bash setup-env.sh
+          cat .env
         working-directory: ./services/message-queue
 
       - name: Install dependencies
