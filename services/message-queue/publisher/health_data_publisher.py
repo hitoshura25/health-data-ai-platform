@@ -109,7 +109,7 @@ class HealthDataPublisher:
             return True
 
         except Exception as e:
-            duration = (datetime.utcnow() - start_time).total_seconds()
+            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
             self.metrics.record_publish_failure(
                 exchange=settings.main_exchange,
                 error_type=type(e).__name__
