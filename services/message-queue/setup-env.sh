@@ -4,7 +4,7 @@
 
 # Function to generate a secure random string
 generate_secret() {
-  openssl rand -base64 24
+  openssl rand -hex 24
 }
 
 # Set the path for the .env file
