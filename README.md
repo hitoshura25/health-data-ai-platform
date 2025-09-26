@@ -55,6 +55,38 @@ health-data-ai-platform/
 └── .github/workflows/        # CI/CD pipelines
 ```
 
+### Data Lake
+
+The data lake service is responsible for storing and managing the health data. It uses MinIO for object storage and provides features like intelligent object naming, lifecycle management, and data quality validation.
+
+#### Running the Integration Tests
+
+1.  **Start the MinIO service:**
+
+    ```bash
+    docker-compose up -d minio
+    ```
+
+2.  **Set the environment variables:**
+
+    ```bash
+    export DATALAKE_MINIO_ENDPOINT=localhost:9000
+    export DATALAKE_MINIO_ACCESS_KEY=minioadmin
+    export DATALAKE_MINIO_SECRET_KEY=minioadmin
+    ```
+
+3.  **Run the tests:**
+
+    ```bash
+    pytest services/data-lake/tests
+    ```
+
+4.  **Stop the MinIO service:**
+
+    ```bash
+    docker-compose down
+    ```
+
 ## 📊 Implementation Order
 
 The services should be implemented in this order based on dependencies:
