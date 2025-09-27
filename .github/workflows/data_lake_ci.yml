@@ -1,0 +1,47 @@
+# This GitHub Actions workflow runs tests for the data-lake service.
+
+name: Data Lake CI
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'services/data-lake/**'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'services/data-lake/**'
+
+jobs:
+  run-data-lake-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Generate .env file
+        run: |
+          bash setup-secure-env.sh
+        working-directory: ./services/data-lake
+
+      - name: Install dependencies
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -r requirements.txt
+        working-directory: ./services/data-lake
+
+      - name: Check disk space
+        run: df -h
+
+      - name: Run tests
+        run: |
+          source .venv/bin/activate
+          pytest -v -s
+        working-directory: ./services/data-lake
