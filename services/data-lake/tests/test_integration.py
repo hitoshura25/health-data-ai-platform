@@ -37,8 +37,7 @@ def docker_services():
     finally:
         subprocess.run(
             ["docker", "compose", "-p", "data-lake", "-f", compose_file, "--env-file", env_file, "down"],
-            check=True,
-            capture_output=True
+            check=True
         )
 
 @pytest_asyncio.fixture

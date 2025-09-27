@@ -1,15 +1,42 @@
 from minio import Minio
 from minio.error import S3Error
 from minio.versioningconfig import VersioningConfig
-from minio.commonconfig import ENABLED, DISABLED
+from minio.commonconfig import ENABLED
 from minio.sseconfig import SSEConfig, Rule
 import structlog
-import asyncio
 from typing import Optional, Dict, Any, List, AsyncGenerator
 from datetime import datetime
 import json
+from functools import wraps
+from time import time
+from monitoring.metrics import HTTP_REQUESTS_TOTAL, HTTP_REQUESTS_DURATION_SECONDS
 
 logger = structlog.get_logger()
+
+def monitor_request(method_name: str):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(self, *args, **kwargs):
+            start_time = time()
+            status_code = "200"
+            try:
+                return await func(self, *args, **kwargs)
+            except S3Error as e:
+                status_code = str(e.code)
+                raise
+            finally:
+                end_time = time()
+                duration = end_time - start_time
+                HTTP_REQUESTS_DURATION_SECONDS.labels(
+                    bucket_name=kwargs.get("bucket_name"), method=method_name
+                ).observe(duration)
+                HTTP_REQUESTS_TOTAL.labels(
+                    bucket_name=kwargs.get("bucket_name"), method=method_name, status_code=status_code
+                ).inc()
+
+        return wrapper
+
+    return decorator
 
 class SecureMinIOClient:
     """Secure MinIO client with enterprise features"""
@@ -78,6 +105,7 @@ class SecureMinIOClient:
             logger.error("Failed to set bucket policy", bucket=bucket_name, error=str(e))
             raise
 
+    @monitor_request(method_name="put_object")
     async def upload_file(
         self,
         bucket_name: str,
@@ -116,6 +144,7 @@ class SecureMinIOClient:
                         error=str(e))
             raise
 
+    @monitor_request(method_name="get_object")
     async def download_file(self, bucket_name: str, object_key: str) -> bytes:
         """Download file content"""
         try:
