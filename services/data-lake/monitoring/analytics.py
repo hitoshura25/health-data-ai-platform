@@ -1,7 +1,7 @@
 from storage.client import SecureMinIOClient
 from core.naming import IntelligentObjectKeyGenerator
 from typing import Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import pandas as pd
 import structlog
@@ -20,7 +20,7 @@ class DataLakeAnalytics:
         """Generate daily analytics report"""
 
         if date is None:
-            date = datetime.utcnow()
+            date = datetime.now(timezone.utc)
 
         analytics = {
             "date": date.isoformat(),
@@ -190,7 +190,7 @@ class DataLakeAnalytics:
                 content_type="application/json",
                 metadata={
                     "analytics_type": "daily_summary",
-                    "generated_at": datetime.utcnow().isoformat()
+                    "generated_at": datetime.now(timezone.utc).isoformat()
                 }
             )
 
@@ -213,7 +213,7 @@ class DataLakeAnalytics:
             # This would typically query stored analytics
             # For now, provide a framework for trend analysis
 
-            end_date = datetime.utcnow().date()
+            end_date = datetime.now(timezone.utc).date()
             start_date = end_date - timedelta(days=days)
 
             current_date = start_date
@@ -237,7 +237,7 @@ class DataLakeAnalytics:
         """Generate compliance report for audit purposes"""
 
         report = {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "bucket": self.bucket_name,
             "compliance_checks": {
                 "encryption_enabled": False,

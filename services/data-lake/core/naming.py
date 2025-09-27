@@ -1,5 +1,5 @@
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 import re
@@ -94,7 +94,7 @@ class IntelligentObjectKeyGenerator:
     ) -> str:
         """Move failed files to quarantine with reason"""
         if quarantine_timestamp is None:
-            quarantine_timestamp = datetime.utcnow()
+            quarantine_timestamp = datetime.now(timezone.utc)
 
         timestamp_str = quarantine_timestamp.strftime("%Y%m%d_%H%M%S")
         clean_reason = self._sanitize_component(reason)
@@ -173,7 +173,7 @@ class IntelligentObjectKeyGenerator:
                     layer=layer,
                     record_type="unknown",
                     user_id="unknown",
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     file_hash="unknown",
                     reason=reason
                 )

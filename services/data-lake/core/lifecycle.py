@@ -1,7 +1,7 @@
 from minio import Minio
 from minio.lifecycleconfig import LifecycleConfig, Rule, Expiration
 from minio.commonconfig import Filter
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List
 import structlog
 
@@ -144,7 +144,7 @@ class DataLifecycleManager:
                 cost_analysis["by_prefix"][prefix]["size_gb"] += size_gb
 
                 # Estimate storage class based on age and prefix
-                obj_age_days = (datetime.utcnow() - obj.last_modified).days
+                obj_age_days = (datetime.now(timezone.utc) - obj.last_modified).days
                 storage_class = self._estimate_storage_class(prefix, obj_age_days)
 
                 cost_analysis["cost_breakdown"][storage_class]["objects"] += 1

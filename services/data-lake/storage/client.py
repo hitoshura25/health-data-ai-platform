@@ -5,7 +5,7 @@ from minio.commonconfig import ENABLED
 from minio.sseconfig import SSEConfig, Rule
 import structlog
 from typing import Optional, Dict, Any, List, AsyncGenerator
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 from functools import wraps
 from time import time
@@ -219,7 +219,7 @@ class SecureMinIOClient:
                 copy_source,
                 metadata={
                     "quarantine_reason": reason,
-                    "quarantine_timestamp": datetime.utcnow().isoformat(),
+                    "quarantine_timestamp": datetime.now(timezone.utc).isoformat(),
                     "original_key": source_key
                 },
                 metadata_directive="REPLACE"
