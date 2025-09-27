@@ -129,7 +129,7 @@ settings = DataLakeSettings()
 ### 3. Intelligent Object Naming (core/naming.py)
 ```python
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 import re
@@ -224,7 +224,7 @@ class IntelligentObjectKeyGenerator:
     ) -> str:
         """Move failed files to quarantine with reason"""
         if quarantine_timestamp is None:
-            quarantine_timestamp = datetime.utcnow()
+            quarantine_timestamp = datetime.now(timezone.utc)
 
         timestamp_str = quarantine_timestamp.strftime("%Y%m%d_%H%M%S")
         clean_reason = self._sanitize_component(reason)
@@ -303,7 +303,7 @@ class IntelligentObjectKeyGenerator:
                     layer=layer,
                     record_type="unknown",
                     user_id="unknown",
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     file_hash="unknown",
                     reason=reason
                 )
@@ -413,7 +413,7 @@ class ComprehensiveDataValidator:
         warnings = []
         metadata = {
             'file_size_bytes': len(file_content),
-            'validation_timestamp': pd.Timestamp.utcnow().isoformat()
+            'validation_timestamp': pd.Timestamp.now(tz='UTC').isoformat()
         }
 
         try:
@@ -893,7 +893,7 @@ class DataLifecycleManager:
                 cost_analysis["by_prefix"][prefix]["size_gb"] += size_gb
 
                 # Estimate storage class based on age and prefix
-                obj_age_days = (datetime.utcnow() - obj.last_modified).days
+                obj_age_days = (datetime.now(timezone.utc) - obj.last_modified).days
                 storage_class = self._estimate_storage_class(prefix, obj_age_days)
 
                 cost_analysis["cost_breakdown"][storage_class]["objects"] += 1
@@ -1118,7 +1118,7 @@ class SecureMinIOClient:
                 copy_source,
                 metadata={
                     "quarantine_reason": reason,
-                    "quarantine_timestamp": datetime.utcnow().isoformat(),
+                    "quarantine_timestamp": datetime.now(timezone.utc).isoformat(),
                     "original_key": source_key
                 },
                 metadata_directive="REPLACE"
@@ -1254,7 +1254,7 @@ class DataLakeAnalytics:
         """Generate daily analytics report"""
 
         if date is None:
-            date = datetime.utcnow()
+            date = datetime.now(timezone.utc)
 
         analytics = {
             "date": date.isoformat(),
@@ -1424,7 +1424,7 @@ class DataLakeAnalytics:
                 content_type="application/json",
                 metadata={
                     "analytics_type": "daily_summary",
-                    "generated_at": datetime.utcnow().isoformat()
+                    "generated_at": datetime.now(timezone.utc).isoformat()
                 }
             )
 
@@ -1447,7 +1447,7 @@ class DataLakeAnalytics:
             # This would typically query stored analytics
             # For now, provide a framework for trend analysis
 
-            end_date = datetime.utcnow().date()
+            end_date = datetime.now(timezone.utc).date()
             start_date = end_date - timedelta(days=days)
 
             current_date = start_date
@@ -1471,7 +1471,7 @@ class DataLakeAnalytics:
         """Generate compliance report for audit purposes"""
 
         report = {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "bucket": self.bucket_name,
             "compliance_checks": {
                 "encryption_enabled": False,
@@ -1720,7 +1720,7 @@ async def example_usage():
     object_key = key_generator.generate_raw_key(
         record_type="BloodGlucoseRecord",
         user_id="user123",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         file_hash="abc123...",
         source_device="dexcom_g7"
     )
