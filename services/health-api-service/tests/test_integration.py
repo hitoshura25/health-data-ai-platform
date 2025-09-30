@@ -18,8 +18,6 @@ def docker_services():
             check=True,
             text=True
         )
-        # Give the service a moment to become fully ready
-        time.sleep(5)
         yield
     except subprocess.CalledProcessError as e:
         print(f"Docker compose up failed: {e.stderr}")
