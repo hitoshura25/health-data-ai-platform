@@ -3,7 +3,7 @@ import subprocess
 import pytest
 import requests
 import time
-from uuid import uuid4
+from uuid import UUID, uuid4
 from dateutil.parser import isoparse
 
 @pytest.fixture(scope="session")
@@ -57,10 +57,14 @@ def auth_token():
 def validate_uuid(uuid_string):
     """Helper to check if a string is a valid UUID."""
     try:
-        uuid4.UUID(uuid_string)
+        UUID(uuid_string)
         return True
     except ValueError:
         return False
+
+def validate_user_id(user_id):
+    """Helper to check if a user ID is a valid integer."""
+    return isinstance(user_id, int)
 
 def validate_iso_timestamp(timestamp_string):
     """Helper to check if a string is a valid ISO 8601 timestamp."""
@@ -122,7 +126,7 @@ def test_register_endpoint():
     assert data["email"] == user_email
     assert data["first_name"] == "New"
     assert data["last_name"] == "User"
-    assert validate_uuid(data["id"])
+    assert validate_user_id(data["id"])
     assert data["is_active"] is True
     assert data["is_verified"] is False
     assert validate_iso_timestamp(data["created_at"])
@@ -135,7 +139,7 @@ def test_login_and_logout(auth_token):
     
     # Logout
     logout_response = requests.post("http://localhost:8000/auth/jwt/logout", headers=headers)
-    assert logout_response.status_code == 200
+    assert logout_response.status_code == 204
 
     # Verify token is no longer valid
     me_response = requests.get("http://localhost:8000/users/me", headers=headers)
