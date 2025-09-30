@@ -134,16 +134,8 @@ paths:
       summary: Logout and invalidate token
       description: Logout the current user and invalidate the JWT token
       responses:
-        '200':
+        '204':
           description: Successfully logged out
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: "Successfully logged out"
         '401':
           $ref: '#/components/responses/Unauthorized'
 
