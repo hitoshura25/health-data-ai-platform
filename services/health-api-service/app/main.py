@@ -3,6 +3,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 import structlog
 import logging
+from contextlib import asynccontextmanager
 
 from app.config import settings
 from app.health.router import router as health_router
@@ -28,10 +29,22 @@ structlog.configure(
 
 logger = structlog.get_logger()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create database tables
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    logger.info("Health API service started", version="1.0.0")
+    yield
+    # any shutdown logic would go here
+
+
 app = FastAPI(
     title="Health Data AI Platform - API Service",
     description="Secure health data upload and processing API for the Health Data AI Platform.",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Rate limiting
@@ -55,13 +68,6 @@ app.include_router(
     prefix="/users",
     tags=["User Management"],
 )
-
-@app.on_event("startup")
-async def on_startup():
-    # Create database tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    logger.info("Health API service started", version="1.0.0")
 
 @app.get("/")
 async def root():
