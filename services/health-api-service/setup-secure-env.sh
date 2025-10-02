@@ -39,7 +39,12 @@ REDIS_URL=redis://localhost:6379
 S3_ENDPOINT_URL=http://localhost:9000
 S3_ACCESS_KEY=${MINIO_ROOT_USER}
 S3_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+S3_BUCKET_NAME=health-data
 RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@localhost:5672/
+
+# Rate Limiting and File Size
+UPLOAD_RATE_LIMIT=10/minute
+MAX_FILE_SIZE_MB=50
 
 # --- Docker Compose Variables ---
 # These are used by the docker-compose.yml file
@@ -56,6 +61,7 @@ MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
 # RabbitMQ
 RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
 RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+RABBITMQ_MAIN_EXCHANGE=health_data_exchange
 EOL
 
 echo "✅ Secure .env file created at ${ENV_FILE}"

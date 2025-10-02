@@ -1,8 +1,8 @@
 from minio import Minio
 from minio.lifecycleconfig import LifecycleConfig, Rule, Expiration
 from minio.commonconfig import Filter
-from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, List
+from datetime import datetime, timezone
+from typing import Dict, Any
 import structlog
 
 logger = structlog.get_logger()
