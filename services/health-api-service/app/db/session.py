@@ -1,5 +1,5 @@
 
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 import redis.asyncio as redis
 
@@ -16,3 +16,10 @@ class Base(DeclarativeBase):
 async def get_async_session():
     async with SessionLocal() as session:
         yield session
+
+
+async def rollback_session_if_active(session: AsyncSession):
+    """Safely roll back the session if it is active."""
+    if session.is_active:
+        await session.rollback()
+

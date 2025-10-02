@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 # Ensure your .env file has the correct localhost URLs for the services below.
 from app.main import app
 from app.db.models import Base
-from app.db.session import get_async_session
+from app.db.session import get_async_session, rollback_session_if_active
 from app.config import settings
 
 # Create a test engine that will be disposed properly between tests
@@ -96,7 +96,7 @@ async def client(db_setup, s3_bucket_setup):
 
     del app.dependency_overrides[get_async_session]
     await session.close()
-    await transaction.rollback()
+    await rollback_session_if_active(session)
     await connection.close()
     await test_engine.dispose()
 

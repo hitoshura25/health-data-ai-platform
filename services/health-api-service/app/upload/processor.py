@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import User, Upload
+from app.db.session import rollback_session_if_active
 from app.upload.validator import HealthDataValidator
 from app.services.storage import S3StorageService
 from app.services.messaging import RabbitMQService
@@ -97,7 +98,7 @@ class UploadProcessor:
 
             except Exception as e:
                 logger.error("Upload processing failed", error=str(e))
-                await db.rollback()
+                await rollback_session_if_active(db)
                 raise
 
     def _generate_object_key(self, record_type: str, user_id: str,
