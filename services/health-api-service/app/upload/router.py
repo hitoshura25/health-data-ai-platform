@@ -47,7 +47,12 @@ async def upload_health_data(
 
     except ValueError as e:
         # Validation errors
-        if "Only .avro files are supported" in str(e):
+        error_str = str(e).lower()
+        if "file size" in error_str:
+            raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=f"File is too large. Maximum size is {settings.MAX_FILE_SIZE_MB}MB.")
+        if "unsupported record type" in error_str:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        if "only .avro files are supported" in error_str:
             raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Unsupported file type. Only .avro files are supported.")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

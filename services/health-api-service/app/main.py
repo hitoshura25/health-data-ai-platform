@@ -11,6 +11,7 @@ from app.users import fastapi_users, auth_backend
 from app.schemas import UserRead, UserCreate, UserUpdate
 from app.upload.router import router as upload_router
 from app.db.session import Base, engine
+from app.supported_record_types import SUPPORTED_RECORD_TYPES
 
 from app.auth.router import router as auth_router
 
@@ -76,12 +77,5 @@ async def root():
         "version": "1.0.0",
         "documentation": "/docs",
         "supported_formats": ["Apache Avro"],
-        "supported_record_types": [
-            "AvroBloodGlucoseRecord",
-            "AvroHeartRateRecord",
-            "AvroStepsRecord",
-            "AvroSleepSessionRecord",
-            "AvroActiveCaloriesBurnedRecord",
-            "AvroHeartRateVariabilityRmssdRecord",
-        ],
+        "supported_record_types": SUPPORTED_RECORD_TYPES,
     }

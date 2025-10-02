@@ -7,6 +7,7 @@ from fastapi import UploadFile
 from dataclasses import dataclass
 from typing import List, Optional
 import structlog
+from app.supported_record_types import SUPPORTED_RECORD_TYPES
 
 logger = structlog.get_logger()
 
@@ -30,13 +31,10 @@ class HealthDataValidator:
 
         # Basic file checks
         if file.size > self.max_file_size_bytes:
-            errors.append(f"File size {file.size} exceeds maximum {self.max_file_size_bytes}")
+            raise ValueError(f"File size {file.size} exceeds maximum {self.max_file_size_bytes}")
 
         if not file.filename.endswith('.avro'):
-            errors.append("Only .avro files are supported")
-
-        if errors:
-            return ValidationResult(False, errors, warnings)
+            raise ValueError("Only .avro files are supported")
 
         # Read file content
         content = await file.read()
@@ -54,13 +52,17 @@ class HealthDataValidator:
             record_type = reader.meta.get('avro.schema')
             schema = avro.schema.parse(record_type)
             record_type = schema.name
+            logger.info("Avro schema parsed", schema_name=record_type)
+
+            if record_type not in SUPPORTED_RECORD_TYPES:
+                raise ValueError(f"Unsupported record type: {record_type}")
 
             record_count = 0
             for record in reader:
                 record_count += 1
 
             if record_count == 0:
-                errors.append("No valid records found in Avro file")
+                raise ValueError("No valid records found in Avro file")
 
             logger.info("File validation completed",
                        filename=file.filename,
@@ -77,6 +79,8 @@ class HealthDataValidator:
                 file_hash=file_hash
             )
 
+        except ValueError as e:
+            raise e
         except Exception as e:
             logger.error("Avro validation failed", error=str(e))
             errors.append(f"Avro validation failed: {e}")

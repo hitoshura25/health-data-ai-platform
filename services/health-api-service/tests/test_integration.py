@@ -9,6 +9,7 @@ import asyncio
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
+
 # The TestClient will automatically load .env.
 # Ensure your .env file has the correct localhost URLs for the services below.
 from app.main import app
@@ -199,6 +200,7 @@ async def test_register_existing_user_conflict(client: httpx.AsyncClient):
         ({"email": f"testuser_{uuid4()}@example.com"}, "field required"),
     ],
 )
+@pytest.mark.asyncio
 async def test_register_invalid_payload(client: httpx.AsyncClient, payload: dict, expected_detail_part: str):
     """Tests that registering with an invalid payload returns a 422 Unprocessable Entity error."""
     response = await client.post("/auth/register", json=payload)
@@ -269,7 +271,8 @@ from uuid import uuid4
 import asyncio
 import io
 import avro.schema
-import avro.io
+from avro.io import DatumWriter
+from avro.datafile import DataFileWriter
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
@@ -453,23 +456,6 @@ async def test_register_existing_user_conflict(client: httpx.AsyncClient):
     response2 = await client.post("/auth/register", json=user_payload)
     assert response2.status_code == 409
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "payload, expected_detail_part",
-    [
-        ({"email": "invalid-email", "password": "SecurePassword123!"}, "is not a valid email address"),
-        ({"email": f"testuser_{uuid4()}@example.com", "password": "short"}, "should be at least 8 characters"),
-        ({"password": "SecurePassword123!"}, "field required"),
-        ({"email": f"testuser_{uuid4()}@example.com"}, "field required"),
-    ],
-)
-
-@pytest.mark.asyncio
-async def test_register_invalid_payload(client: httpx.AsyncClient, payload: dict, expected_detail_part: str):
-    """Tests that registering with an invalid payload returns a 422 Unprocessable Entity error."""
-    response = await client.post("/auth/register", json=payload)
-    assert response.status_code == 422
-
 
 @pytest.mark.asyncio
 async def test_login_and_logout(client: httpx.AsyncClient, auth_token: str):
@@ -558,11 +544,12 @@ async def test_upload_invalid_avro_schema(client: httpx.AsyncClient, auth_token:
     headers = {"Authorization": f"Bearer {auth_token}"}
 
     # Create a dummy Avro file with a schema that doesn't match health data
-    schema = avro.schema.make_avsc_object('{"type": "record", "name": "Invalid", "fields": [{"name": "data", "type": "string"}]}')
+    schema_dict = {"type": "record", "name": "Invalid", "fields": [{"name": "data", "type": "string"}]}
+    schema = avro.schema.make_avsc_object(schema_dict)
     
     writer_buffer = io.BytesIO()
-    datum_writer = avro.io.DatumWriter(schema)
-    writer = avro.io.DataFileWriter(writer_buffer, datum_writer, schema)
+    datum_writer = DatumWriter(schema)
+    writer = DataFileWriter(writer_buffer, datum_writer, schema)
     writer.append({"data": "some invalid data"})
     writer.flush()
     writer_buffer.seek(0)
@@ -594,7 +581,7 @@ async def test_upload_and_status_endpoints(client: httpx.AsyncClient, auth_token
     correlation_id = upload_data["correlation_id"]        
     status_response = await client.get(f"/v1/upload/status/{correlation_id}", headers=headers)
     assert status_response.status_code == 200
-    status_data = response.json()
+    status_data = status_response.json()
     assert status_data["status"] in ["queued"]
 
 @pytest.mark.asyncio
