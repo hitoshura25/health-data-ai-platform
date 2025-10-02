@@ -2,7 +2,7 @@
 from fastapi_users import schemas
 from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, EmailStr
 from uuid import UUID
 
 class UserRead(schemas.BaseUser[int]):
@@ -12,6 +12,8 @@ class UserRead(schemas.BaseUser[int]):
     updated_at: datetime
 
 class UserCreate(schemas.BaseUserCreate):
+    email: EmailStr
+    password: str = Field(..., min_length=8)
     first_name: Optional[str] = None
     last_name: Optional[str] = None
 

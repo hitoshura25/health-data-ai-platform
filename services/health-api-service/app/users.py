@@ -33,7 +33,10 @@ class UserManager(IntegerIDMixin, BaseUserManager[User, int]):
 
         existing_user = await self.user_db.get_by_email(user_create.email)
         if existing_user is not None:
-            raise exceptions.UserAlreadyExists()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="REGISTER_USER_ALREADY_EXISTS",
+            )
 
         user_dict = (
             user_create.create_update_dict()
