@@ -1,9 +1,7 @@
-from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Request
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from app.limiter import limiter
 from app.users import current_active_user as get_current_active_user
 from app.db.models import User, Upload
 from app.db.session import get_async_session
@@ -14,10 +12,6 @@ import structlog
 import uuid
 
 logger = structlog.get_logger()
-
-# Rate limiter
-limiter = Limiter(key_func=get_remote_address, storage_uri=settings.REDIS_URL)
-
 router = APIRouter(prefix="/v1", tags=["Health Data Upload"])
 
 upload_processor = UploadProcessor()

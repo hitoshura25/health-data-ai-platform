@@ -1,15 +1,15 @@
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 import structlog
 import logging
 from contextlib import asynccontextmanager
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.config import settings
 from app.health.router import router as health_router
-from app.users import fastapi_users, auth_backend
+from app.limiter import limiter
+from app.users import fastapi_users, auth_backend, settings
 from app.schemas import UserRead, UserCreate, UserUpdate
 from app.upload.router import router as upload_router
 from app.db.session import Base, engine
@@ -85,8 +85,6 @@ app = FastAPI(
 # Add middleware to convert login 400 errors to 401
 app.add_middleware(LoginErrorMiddleware)
 
-# Rate limiting
-limiter = Limiter(key_func=lambda request: request.scope["client"][0], storage_uri=settings.REDIS_URL)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 

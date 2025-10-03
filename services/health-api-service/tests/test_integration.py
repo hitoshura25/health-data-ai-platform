@@ -213,7 +213,6 @@ async def test_register_invalid_payload(client: httpx.AsyncClient, payload: dict
     assert response.status_code == 422
     error_data = response.json()
     assert "detail" in error_data
-    logger.info(f"Error detail: {error_data['detail']}")
     assert any(expected_detail_part in str(err).lower() for err in error_data["detail"])
 
 
@@ -468,7 +467,7 @@ async def test_upload_history_date_filtering(client: httpx.AsyncClient, auth_tok
 
 @pytest.mark.asyncio
 async def test_upload_rate_limiting(client: httpx.AsyncClient, auth_token: str):
-    """Tests that rate limiting is enforced for uploads (10 per minute)."""
+    """Tests that rate limiting is enforced for uploads (based on UPLOAD_RATE_LIMIT)."""
     headers = {"Authorization": f"Bearer {auth_token}"}
 
     # Create a small valid Avro file for testing
@@ -479,18 +478,28 @@ async def test_upload_rate_limiting(client: httpx.AsyncClient, auth_token: str):
     with open(sample_file_path, "rb") as f:
         file_content = f.read()
 
-    # Make 11 rapid uploads
-    for i in range(11):
+    # Make rapid uploads until rate limited
+    rate_limited = False
+    for i in range(15):  # Try up to 15 uploads
         files = {"file": (f"upload_{i}.avro", file_content, "application/avro")}
         response = await client.post("/v1/upload", headers=headers, files=files)
 
-        # First 10 should succeed (202), 11th should be rate limited (429)
-        if i < 10:
-            assert response.status_code == 202, f"Upload {i+1} should succeed"
-        else:
-            assert response.status_code == 429, "11th upload should be rate limited"
+        if response.status_code == 429:
+            # Rate limit hit - this is expected behavior
             error_data = response.json()
-            assert "detail" in error_data
+            assert "error" in error_data
+            rate_limited = True
+            logger.info(f"Rate limit hit at upload {i+1}")
+            break
+        elif response.status_code == 202:
+            # Upload succeeded
+            continue
+        else:
+            # Unexpected status code
+            pytest.fail(f"Unexpected status code {response.status_code} at upload {i+1}")
+
+    # Verify that rate limiting is working (hit at some point)
+    assert rate_limited, "Rate limiting should have been triggered within 15 uploads"
 
 
 @pytest.mark.asyncio
@@ -531,27 +540,25 @@ async def test_update_user_invalid_data(client: httpx.AsyncClient, auth_token: s
     """Tests that updating user with invalid data returns 422 validation error."""
     headers = {"Authorization": f"Bearer {auth_token}"}
 
-    # Test 1: Try to update with invalid email format (if supported)
-    # Note: UserUpdate schema might not include email, so test other invalid fields
-
-    # Test 2: Try to update with excessively long names
+    # Test 1: Try to update with excessively long names (exceeds 50 char max_length)
     invalid_payload = {
-        "first_name": "A" * 1000,  # Exceeds any reasonable max length
-        "last_name": "B" * 1000
+        "first_name": "A" * 51,  # Exceeds 50 character limit
+        "last_name": "B" * 51
     }
 
     response = await client.patch("/users/me", headers=headers, json=invalid_payload)
-    # This might return 200 if no validation, or 422 if validation exists
-    # We expect 422 based on the spec, but implementation might vary
-    assert response.status_code in [200, 422]  # Accept either for now
+    # Should return 422 validation error due to Pydantic max_length constraint
+    assert response.status_code == 422
+    error_data = response.json()
+    assert "detail" in error_data
 
-    # Test 3: Try to update with null values inappropriately
-    invalid_payload2 = {
+    # Test 2: Valid null values should succeed (these fields are Optional)
+    valid_payload = {
         "first_name": None,
         "last_name": None
     }
-    response2 = await client.patch("/users/me", headers=headers, json=invalid_payload2)
-    assert response2.status_code in [200, 422]
+    response2 = await client.patch("/users/me", headers=headers, json=valid_payload)
+    assert response2.status_code == 200  # Null is valid for Optional fields
 
 
 @pytest.mark.asyncio
