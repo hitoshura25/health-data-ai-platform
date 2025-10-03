@@ -201,7 +201,7 @@ async def test_register_existing_user_conflict(client: httpx.AsyncClient):
     "payload, expected_detail_part",
     [
         ({"email": "invalid-email", "password": "SecurePassword123!"}, "is not a valid email address"),
-        ({"email": f"testuser_{uuid4()}@example.com", "password": "short"}, "should be at least 8 characters"),
+        ({"email": f"testuser_{uuid4()}@example.com", "password": "short"}, "should have at least 8 characters"),
         ({"password": "SecurePassword123!"}, "field required"),
         ({"email": f"testuser_{uuid4()}@example.com"}, "field required"),
     ],

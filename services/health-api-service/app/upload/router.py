@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -51,7 +52,7 @@ async def upload_health_data(
         if "file size" in error_str:
             raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=f"File is too large. Maximum size is {settings.MAX_FILE_SIZE_MB}MB.")
         if "unsupported record type" in error_str:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
         if "only .avro files are supported" in error_str:
             raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Unsupported file type. Only .avro files are supported.")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -92,11 +93,21 @@ async def get_upload_status(
 async def get_upload_history(
     limit: int = 20,
     offset: int = 0,
+    status: str = None,
+    record_type: str = None,
     user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ):
     """Get user's upload history"""
-    query = select(Upload).where(Upload.user_id == user.id).order_by(Upload.upload_timestamp.desc())
+    query = select(Upload).where(
+        Upload.user_id == user.id
+    ).order_by(Upload.upload_timestamp.desc())
+
+    if status is not None:
+        query = query.where(Upload.status == status)
+    if record_type is not None:
+        query = query.where(Upload.record_type == record_type)
+
     total_query = select(func.count()).select_from(query.alias())
     
     total = await db.scalar(total_query)
