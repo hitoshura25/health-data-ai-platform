@@ -9,7 +9,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.health.router import router as health_router
 from app.limiter import limiter
-from app.users import fastapi_users, auth_backend, settings
+from app.users import fastapi_users, auth_backend
 from app.schemas import UserRead, UserCreate, UserUpdate
 from app.upload.router import router as upload_router
 from app.db.session import Base, engine
@@ -31,7 +31,6 @@ structlog.configure(
 )
 
 logger = structlog.get_logger()
-
 
 class LoginErrorMiddleware(BaseHTTPMiddleware):
     """Middleware to convert 400 Bad Request to 401 Unauthorized for login endpoint"""
@@ -64,7 +63,6 @@ class LoginErrorMiddleware(BaseHTTPMiddleware):
 
         return response
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Create database tables
@@ -73,7 +71,6 @@ async def lifespan(app: FastAPI):
     logger.info("Health API service started", version="1.0.0")
     yield
     # any shutdown logic would go here
-
 
 app = FastAPI(
     title="Health Data AI Platform - API Service",

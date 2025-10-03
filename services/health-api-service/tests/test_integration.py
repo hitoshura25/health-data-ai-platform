@@ -13,13 +13,13 @@ import io
 import structlog
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
-
 # The TestClient will automatically load .env.
 # Ensure your .env file has the correct localhost URLs for the services below.
 from app.main import app
 from app.db.models import Base
 from app.db.session import get_async_session, rollback_session_if_active
 from app.config import settings
+from app.limiter import limiter
 
 logger = structlog.get_logger()
 
@@ -30,6 +30,11 @@ def get_test_engine():
         echo=False,
         poolclass=None  # Use NullPool to avoid connection pool issues in tests
     )
+
+@pytest.fixture(autouse=True)
+def test_limiter(monkeypatch):
+    """Clear out in memory storage for rate limiting for tests."""
+    limiter.limiter.storage.reset()  
 
 @pytest_asyncio.fixture(scope="session")
 def docker_services():

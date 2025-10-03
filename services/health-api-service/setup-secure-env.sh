@@ -44,6 +44,7 @@ RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@localhost:
 
 # Rate Limiting and File Size
 UPLOAD_RATE_LIMIT=10/minute
+UPLOAD_RATE_LIMIT_STORAGE_URI=redis://localhost:6379
 MAX_FILE_SIZE_MB=50
 
 # --- Docker Compose Variables ---

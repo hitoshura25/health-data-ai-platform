@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     RABBITMQ_URL: str
     RABBITMQ_MAIN_EXCHANGE: str
     UPLOAD_RATE_LIMIT: str = "10/minute"
+    UPLOAD_RATE_LIMIT_STORAGE_URI: str
     MAX_FILE_SIZE_MB: int = 50
 
 settings = Settings()
