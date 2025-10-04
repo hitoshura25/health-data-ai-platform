@@ -1,0 +1,39 @@
+# MPO WebAuthn Authentication Server
+# Passkey-based authentication service (from external repo: mpo-api-authn-server)
+services:
+  webauthn-server:
+    image: ghcr.io/hitoshura25/mpo-webauthn-server:${WEBAUTHN_VERSION:-latest}
+    container_name: health-webauthn
+    ports:
+      - "${WEBAUTHN_PORT:-8080}:8080"
+    environment:
+      # Database connection
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/${WEBAUTHN_DB:-webauthn}
+      - DATABASE_USER=${POSTGRES_USER:-postgres}
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+
+      # Redis for session storage
+      - REDIS_URL=redis://redis:6379
+
+      # Jaeger tracing (required by WebAuthn server)
+      - JAEGER_ENDPOINT=http://jaeger:4318
+
+      # WebAuthn configuration
+      - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-localhost}
+      - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-Health Data Platform}
+      - WEBAUTHN_ORIGIN=${WEBAUTHN_ORIGIN:-http://localhost:8080}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      jaeger:
+        condition: service_started
+    networks:
+      - health-platform-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped

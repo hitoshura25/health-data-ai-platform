@@ -836,37 +836,12 @@ volumes:
   postgres_data:
 ```
 
-### 15. Environment Configuration (.env.example)
-```bash
-# Application
-SECRET_KEY=your-very-secure-secret-key-here
-DEBUG=false
-
-# Database
-DATABASE_URL=postgresql+asyncpg://healthapi:password@localhost:5432/healthapi
-
-# External Services
-REDIS_URL=redis://localhost:6379
-S3_ENDPOINT_URL=http://localhost:9000
-S3_ACCESS_KEY=minioadmin
-S3_SECRET_KEY=your-minio-secret-key
-S3_BUCKET_NAME=health-data
-RABBITMQ_URL=amqp://localhost:5672
-
-# Rate Limiting
-UPLOAD_RATE_LIMIT=10/minute
-DEFAULT_RATE_LIMIT=100/hour
-
-# File Upload
-MAX_FILE_SIZE_MB=50
-```
-
 ## Deployment Instructions
 
 ### Development
 1. **Install dependencies:** `pip install -r requirements.txt`
-2. **Set up environment:** Copy `.env.example` to `.env` and configure
-3. **Start services:** `docker-compose up -d db redis rabbitmq`
+2. **Set up environment:** Run `../../setup-all-services.sh` from project root to generate `.env` files
+3. **Start services:** `docker compose up -d` from project root
 4. **Run application:** `uvicorn app.main:app --reload`
 
 ### Production

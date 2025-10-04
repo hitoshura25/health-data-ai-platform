@@ -1,0 +1,45 @@
+# Health Data AI Platform - Main Orchestrator
+#
+# This file orchestrates all microservices and infrastructure for the platform.
+#
+# Services included:
+# - Infrastructure: PostgreSQL, Redis, Jaeger (monitoring)
+# - Authentication: WebAuthn Server (passkey-based auth)
+# - Data Storage: MinIO S3-compatible object storage
+# - Message Queue: RabbitMQ for async processing
+# - API Services: Health API (upload & query)
+#
+# Usage:
+#   docker compose up -d                    # Start all services
+#   docker compose up -d health-api         # Start health-api and dependencies only
+#   docker compose logs -f health-api       # View health-api logs
+#   docker compose down                     # Stop all services
+#   docker compose down -v                  # Stop and remove volumes
+#
+# Environment:
+#   Copy .env.example to .env and configure before running
+
+# Include shared infrastructure components
+include:
+  # Shared infrastructure (used by multiple services)
+  - path: infrastructure/postgres.compose.yml
+  - path: infrastructure/redis.compose.yml
+  - path: infrastructure/jaeger.compose.yml
+
+  # Authentication service (WebAuthn/Passkeys)
+  - path: infrastructure/webauthn.compose.yml
+
+  # Data storage (MinIO S3-compatible object storage)
+  - path: services/data-lake/deployment/minio.compose.yml
+
+  # Message queue (RabbitMQ for async processing)
+  - path: services/message-queue/deployment/rabbitmq.compose.yml
+
+  # API services
+  - path: services/health-api-service/health-api.compose.yml
+
+# Create the shared network that all services will use
+networks:
+  health-platform-net:
+    driver: bridge
+    name: health-platform-net

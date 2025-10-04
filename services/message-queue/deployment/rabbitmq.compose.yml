@@ -1,0 +1,43 @@
+# RabbitMQ message queue for async processing
+# Used by: health-api-service (upload events), etl-narrative-engine (data processing)
+services:
+  rabbitmq:
+    image: rabbitmq:4.1.4-management
+    container_name: health-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${MQ_RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${MQ_RABBITMQ_PASS:-guest}
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "${RABBITMQ_AMQP_PORT:-5672}:5672"       # AMQP port
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"     # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ../deployment/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ../deployment/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - health-platform-net
+    restart: unless-stopped
+
+  message-queue-setup:
+    build:
+      context: ../
+      dockerfile: ./deployment/Dockerfile
+    command: python config/rabbitmq_setup.py
+    environment:
+      MQ_RABBITMQ_URL: amqp://${MQ_RABBITMQ_USER:-guest}:${MQ_RABBITMQ_PASS:-guest}@rabbitmq:5672
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - health-platform-net
+    restart: "no"
+
+volumes:
+  rabbitmq_data:
+    driver: local

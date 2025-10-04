@@ -39,9 +39,12 @@ def test_limiter(monkeypatch):
 @pytest_asyncio.fixture(scope="session")
 def docker_services():
     """Starts and stops the dependency services for the integration tests."""
-    compose_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'docker-compose.yml'))
-    env_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.env'))
-    services = ["db", "redis", "minio", "rabbitmq"]
+    # Use root docker-compose.yml which includes all services via include directive
+    compose_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'docker-compose.yml'))
+    # Use root .env file which has all infrastructure variables
+    env_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '.env'))
+    # Only start the services needed for health-api tests (postgres renamed from db)
+    services = ["postgres", "redis", "minio", "rabbitmq"]
     
     # Ensure a clean slate before starting
     subprocess.run(["docker", "compose", "-f", compose_file, "--env-file", env_file, "down", "-v"], check=True)

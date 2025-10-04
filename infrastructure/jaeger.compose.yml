@@ -1,0 +1,16 @@
+# Jaeger distributed tracing
+# Used by: webauthn-server (required), health-api-service (future), etl-narrative-engine (future)
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: health-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "${JAEGER_UI_PORT:-16686}:16686"      # Jaeger UI
+      - "${JAEGER_OTLP_GRPC:-4317}:4317"      # OTLP gRPC receiver
+      - "${JAEGER_OTLP_HTTP:-4318}:4318"      # OTLP HTTP receiver
+      - "${JAEGER_ZIPKIN:-9411}:9411"         # Zipkin compatible endpoint
+    networks:
+      - health-platform-net
+    restart: unless-stopped

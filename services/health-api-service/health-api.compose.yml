@@ -1,0 +1,44 @@
+# Health Data API Service
+# Secure health data upload and processing API
+services:
+  health-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: health-api
+    ports:
+      - "${HEALTH_API_PORT:-8000}:8000"
+    environment:
+      # Database
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${HEALTH_API_DB:-healthapi}
+
+      # Redis (for rate limiting)
+      - REDIS_URL=redis://redis:6379
+      - UPLOAD_RATE_LIMIT_STORAGE_URI=redis://redis:6379
+
+      # S3/MinIO (for file storage)
+      - S3_ENDPOINT_URL=http://minio:9000
+      - S3_ACCESS_KEY=${DATALAKE_MINIO_ACCESS_KEY:-minioadmin}
+      - S3_SECRET_KEY=${DATALAKE_MINIO_SECRET_KEY:-minioadmin}
+      - S3_BUCKET_NAME=${DATALAKE_BUCKET_NAME:-health-data}
+
+      # RabbitMQ (for message queue)
+      - RABBITMQ_URL=amqp://${MQ_RABBITMQ_USER:-guest}:${MQ_RABBITMQ_PASS:-guest}@rabbitmq:5672/
+      - RABBITMQ_MAIN_EXCHANGE=${RABBITMQ_MAIN_EXCHANGE:-health-data}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - health-platform-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
