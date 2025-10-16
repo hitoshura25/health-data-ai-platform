@@ -38,11 +38,14 @@ class UploadStatusResponse(BaseModel):
     object_key: str
     record_type: str
     record_count: int
+    description: Optional[str] = None
     processing_started_at: Optional[datetime] = None
     processing_completed_at: Optional[datetime] = None
     narrative_preview: Optional[str] = None
     training_data_generated: Optional[bool] = None
     error_message: Optional[str] = None
+    retry_count: Optional[int] = None
+    quarantined: Optional[bool] = None
 
 class Pagination(BaseModel):
     total: int

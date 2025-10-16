@@ -30,7 +30,7 @@ async def upload_health_data(
     """Upload health data file for processing"""
 
     try:
-        result = await upload_processor.process_upload(db, file, user)
+        result = await upload_processor.process_upload(db, file, user, description)
         return UploadResponse(
             status=result["status"],
             correlation_id=result["correlation_id"],
@@ -79,10 +79,13 @@ async def get_upload_status(
         object_key=upload.object_key,
         record_type=upload.record_type,
         record_count=upload.record_count,
+        description=upload.description,
         processing_started_at=upload.processing_started_at,
         processing_completed_at=upload.processing_completed_at,
         narrative_preview=upload.narrative_preview,
         error_message=upload.error_message,
+        retry_count=upload.retry_count,
+        quarantined=upload.quarantined,
     )
 
 @router.get("/upload/history", response_model=UploadHistoryResponse)
@@ -128,10 +131,13 @@ async def get_upload_history(
             object_key=upload.object_key,
             record_type=upload.record_type,
             record_count=upload.record_count,
+            description=upload.description,
             processing_started_at=upload.processing_started_at,
             processing_completed_at=upload.processing_completed_at,
             narrative_preview=upload.narrative_preview,
             error_message=upload.error_message,
+            retry_count=upload.retry_count,
+            quarantined=upload.quarantined,
         ) for upload in uploads],
         pagination=Pagination(
             total=total,

@@ -346,7 +346,7 @@ async def test_upload_and_status_endpoints(client: httpx.AsyncClient, auth_token
     sample_file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'docs', 'sample-avro-files', 'StepsRecord_1758407386729.avro'))
     
     with open(sample_file_path, "rb") as f:
-        files = {"file": ("StepsRecord_1758407386729.avro", f.read(), "application/avro")}
+        files = {"file": ("StepsRecord_1758407386729.avro", f.read(), "application/avro"), "description": (None, "Test upload of StepsRecord")}
 
     upload_response = await client.post("/v1/upload", headers=headers, files=files)
     assert upload_response.status_code == 202
@@ -355,11 +355,24 @@ async def test_upload_and_status_endpoints(client: httpx.AsyncClient, auth_token
     assert upload_data["status"] == "accepted"
     assert "correlation_id" in upload_data
 
-    correlation_id = upload_data["correlation_id"]        
+    correlation_id = upload_data["correlation_id"]
     status_response = await client.get(f"/v1/upload/status/{correlation_id}", headers=headers)
     assert status_response.status_code == 200
     status_data = status_response.json()
     assert status_data["status"] in ["queued"]
+
+    # Verify all expected fields are present and valid
+    assert "description" in status_data
+    assert status_data["description"] == "Test upload of StepsRecord"
+    assert "retry_count" in status_data
+    assert status_data["retry_count"] == 0  # Default value
+    assert "quarantined" in status_data
+    assert status_data["quarantined"] is False  # Default value
+    assert "correlation_id" in status_data
+    assert "upload_timestamp" in status_data
+    assert "object_key" in status_data
+    assert "record_type" in status_data
+    assert "record_count" in status_data
 
 @pytest.mark.asyncio
 async def test_get_upload_status_not_found(client: httpx.AsyncClient, auth_token: str):

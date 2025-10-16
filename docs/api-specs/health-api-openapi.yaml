@@ -736,10 +736,6 @@ components:
           enum: [queued, processing, completed, failed]
           description: Current processing status
           example: "queued"
-        estimated_processing_time_minutes:
-          type: integer
-          description: Estimated processing time in minutes
-          example: 2
 
     UploadStatusResponse:
       type: object
@@ -771,6 +767,11 @@ components:
           type: integer
           description: Number of records processed
           example: 287
+        description:
+          type: string
+          nullable: true
+          description: User-provided description of the uploaded data
+          example: "Weekly glucose monitoring data from Dexcom sensor"
         processing_started_at:
           type: string
           format: date-time
@@ -783,12 +784,6 @@ components:
           nullable: true
           description: Processing completion timestamp
           example: "2025-09-26T14:31:42.789Z"
-        estimated_completion:
-          type: string
-          format: date-time
-          nullable: true
-          description: Estimated completion time (for processing status)
-          example: "2025-09-26T14:32:00.000Z"
         narrative_preview:
           type: string
           nullable: true

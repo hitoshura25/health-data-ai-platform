@@ -18,7 +18,7 @@ class UploadProcessor:
         self.storage = S3StorageService()
         self.messaging = RabbitMQService()
 
-    async def process_upload(self, db: AsyncSession, file: UploadFile, user: User) -> dict:
+    async def process_upload(self, db: AsyncSession, file: UploadFile, user: User, description: str = None) -> dict:
         """Process complete upload workflow"""
         correlation_id = uuid.uuid4()
 
@@ -59,6 +59,7 @@ class UploadProcessor:
                     record_type=validation.record_type,
                     record_count=validation.record_count,
                     status="queued",
+                    description=description,
                 )
                 db.add(upload)
                 await db.commit()
