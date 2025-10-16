@@ -12,6 +12,7 @@ import avro.datafile
 import io
 import structlog
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from datetime import datetime, timezone, timedelta
 
 # The TestClient will automatically load .env.
 # Ensure your .env file has the correct localhost URLs for the services below.
@@ -233,7 +234,7 @@ async def test_register_invalid_payload(client: httpx.AsyncClient, payload: dict
 
 @pytest.mark.asyncio
 async def test_login_and_logout(client: httpx.AsyncClient, auth_token: str):
-    """Tests the /auth/jwt/logout and /auth/jwt/logout endpoint."""
+    """Tests the /auth/jwt/login and /auth/jwt/logout endpoint."""
     headers = {"Authorization": f"Bearer {auth_token}"}
     
     # Logout
@@ -456,7 +457,6 @@ async def test_upload_history_date_filtering(client: httpx.AsyncClient, auth_tok
         assert upload_resp.status_code == 202
 
     # Test from_date filtering (get uploads from today onwards)
-    from datetime import datetime, timezone, timedelta
     today = datetime.now(timezone.utc).isoformat()
     yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
     tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
