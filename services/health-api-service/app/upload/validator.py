@@ -29,10 +29,6 @@ class HealthDataValidator:
         errors = []
         warnings = []
 
-        # Basic file checks
-        if file.size > self.max_file_size_bytes:
-            raise ValueError(f"File size {file.size} exceeds maximum {self.max_file_size_bytes}")
-
         if not file.filename.endswith('.avro'):
             raise ValueError("Only .avro files are supported")
 
@@ -40,15 +36,20 @@ class HealthDataValidator:
         content = await file.read()
         await file.seek(0)  # Reset file pointer
 
+        # Check file size from content (file.size may be None across Starlette versions)
+        if len(content) > self.max_file_size_bytes:
+            raise ValueError(f"File size {len(content)} exceeds maximum {self.max_file_size_bytes}")
+
         # Generate file hash
         file_hash = hashlib.sha256(content).hexdigest()
 
         # Avro validation
+        reader = None
         try:
             bytes_reader = io.BytesIO(content)
             datum_reader = avro.io.DatumReader()
             reader = avro.datafile.DataFileReader(bytes_reader, datum_reader)
-            
+
             record_type = reader.meta.get('avro.schema')
             schema = avro.schema.parse(record_type)
             record_type = schema.name
@@ -85,3 +86,7 @@ class HealthDataValidator:
             logger.error("Avro validation failed", error=str(e))
             errors.append(f"Avro validation failed: {e}")
             return ValidationResult(False, errors, warnings, file_hash=file_hash)
+        finally:
+            # Close DataFileReader to free resources
+            if reader is not None:
+                reader.close()

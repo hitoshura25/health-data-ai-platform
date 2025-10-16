@@ -89,10 +89,12 @@ async def get_upload_history(
     offset: int = 0,
     status: str = None,
     record_type: str = None,
+    from_date: str = None,
+    to_date: str = None,
     user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    """Get user's upload history"""
+    """Get user's upload history with optional filtering by status, record_type, and date range"""
     query = select(Upload).where(
         Upload.user_id == user.id
     ).order_by(Upload.upload_timestamp.desc())
@@ -101,6 +103,10 @@ async def get_upload_history(
         query = query.where(Upload.status == status)
     if record_type is not None:
         query = query.where(Upload.record_type == record_type)
+    if from_date is not None:
+        query = query.where(Upload.upload_timestamp >= from_date)
+    if to_date is not None:
+        query = query.where(Upload.upload_timestamp <= to_date)
 
     total_query = select(func.count()).select_from(query.alias())
     

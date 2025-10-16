@@ -12,6 +12,7 @@ import avro.datafile
 import io
 import structlog
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.pool import NullPool
 from datetime import datetime, timezone, timedelta
 
 # The TestClient will automatically load .env.
@@ -29,7 +30,7 @@ def get_test_engine():
     return create_async_engine(
         settings.DATABASE_URL,
         echo=False,
-        poolclass=None  # Use NullPool to avoid connection pool issues in tests
+        poolclass=NullPool  # Use NullPool to avoid connection pool issues in tests
     )
 
 @pytest.fixture(autouse=True)

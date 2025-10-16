@@ -16,12 +16,11 @@ class RabbitMQService:
         """Initialize RabbitMQ connection"""
         self.connection = await aio_pika.connect_robust(settings.RABBITMQ_URL)
         self.channel = await self.connection.channel()
-        async with self.connection.channel() as channel:
-            await channel.declare_exchange(
-                name=settings.RABBITMQ_MAIN_EXCHANGE,
-                type=aio_pika.ExchangeType.TOPIC,
-                durable=True
-            )
+        await self.channel.declare_exchange(
+            name=settings.RABBITMQ_MAIN_EXCHANGE,
+            type=aio_pika.ExchangeType.TOPIC,
+            durable=True
+        )
 
     @retry(
         stop=stop_after_attempt(3),
