@@ -19,46 +19,62 @@ These instructions will get the message queue service running locally for develo
 
 ### Setup and Running
 
-1.  **Generate Environment File**: The service uses a `.env` file for secure credential management. A script is provided to generate this for you. Navigate to this directory and run it once:
+1.  **Generate Environment Files**: The platform uses coordinated `.env` files for secure credential management across all services. From the **project root directory**, run the setup script:
 
     ```bash
-    bash setup-env.sh
+    ./setup-all-services.sh
     ```
-    This will create a local `.env` file with a unique, secure username and password for RabbitMQ.
 
-2.  **Start Services**: With the `.env` file created, start the RabbitMQ and Redis containers:
+    This will generate:
+    - Coordinated credentials for all infrastructure (PostgreSQL, Redis, RabbitMQ, MinIO)
+    - Service-specific `.env` files with shared credentials
+    - `.env` file at project root for docker-compose
+
+2.  **Start Services**: With the `.env` files created, start the RabbitMQ and Redis containers from the **project root**:
 
     ```bash
-    docker-compose -f deployment/docker-compose.yml up -d
+    docker compose up -d rabbitmq redis
     ```
 
-    You can now access the RabbitMQ Management UI at [http://localhost:15672](http://localhost:15672) using the credentials generated in your `.env` file.
+    You can now access the RabbitMQ Management UI at [http://localhost:15672](http://localhost:15672) using the credentials from `infrastructure/.env` (MQ_RABBITMQ_USER and MQ_RABBITMQ_PASS).
 
 ## Testing
 
-Tests are located in the `tests/` directory and are designed to be run with `pytest`.
+Tests are located in the `tests/` directory and are designed to be run with `pytest`. Integration tests automatically manage their own Docker containers.
 
 ### Test Setup
 
-1.  **Create a Virtual Environment**: It is recommended to use a Python virtual environment.
+1.  **Generate Environment Files**: First ensure you've run the setup script from the project root (see Setup and Running above).
+
+2.  **Create a Virtual Environment** (if not already done): From the **project root**, create a shared virtual environment:
 
     ```bash
     python -m venv .venv
     ```
 
-2.  **Activate Environment and Install Dependencies**: Activate the environment and install the required packages.
+3.  **Activate Environment and Install Dependencies**:
 
     ```bash
     source .venv/bin/activate
-    pip install -r requirements.txt
+    pip install -r services/message-queue/requirements.txt
     ```
 
 ### Running Tests
 
-With the virtual environment activated, you can run the entire test suite:
+**From project root**, with the virtual environment activated:
 
 ```bash
-pytest
+# Run all message-queue tests
+./run-tests.sh message-queue
+
+# Run with verbose output
+./run-tests.sh message-queue -v
+
+# Run only unit tests (no Docker needed)
+cd services/message-queue
+pytest tests/test_message_queue_message.py tests/test_message_queue_deduplication.py
 ```
 
-This will execute both the unit tests (which use mocks) and the integration tests (which require Docker to be running for RabbitMQ and Redis).
+**Test types:**
+- **Unit tests**: Use mocks, no Docker required
+- **Integration tests**: Automatically start/stop Docker containers (RabbitMQ, Redis) via fixtures
