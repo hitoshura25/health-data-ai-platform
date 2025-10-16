@@ -483,7 +483,7 @@ async def test_upload_history_date_filtering(client: httpx.AsyncClient, auth_tok
 
 @pytest.mark.asyncio
 async def test_upload_rate_limiting(client: httpx.AsyncClient, auth_token: str):
-    """Tests that rate limiting is enforced for uploads (based on UPLOAD_RATE_LIMIT)."""
+    """Tests that rate limiting is enforced for uploads and SlowAPI middleware provides proper headers."""
     headers = {"Authorization": f"Bearer {auth_token}"}
 
     # Create a small valid Avro file for testing
@@ -496,6 +496,9 @@ async def test_upload_rate_limiting(client: httpx.AsyncClient, auth_token: str):
 
     # Make rapid uploads until rate limited
     rate_limited = False
+    rate_limit_response = None
+    successful_response = None
+
     for i in range(15):  # Try up to 15 uploads
         files = {"file": (f"upload_{i}.avro", file_content, "application/avro")}
         response = await client.post("/v1/upload", headers=headers, files=files)
@@ -505,10 +508,13 @@ async def test_upload_rate_limiting(client: httpx.AsyncClient, auth_token: str):
             error_data = response.json()
             assert "error" in error_data
             rate_limited = True
+            rate_limit_response = response
             logger.info(f"Rate limit hit at upload {i+1}")
             break
         elif response.status_code == 202:
-            # Upload succeeded
+            # Upload succeeded - save first successful response for header check
+            if successful_response is None:
+                successful_response = response
             continue
         else:
             # Unexpected status code
@@ -516,6 +522,28 @@ async def test_upload_rate_limiting(client: httpx.AsyncClient, auth_token: str):
 
     # Verify that rate limiting is working (hit at some point)
     assert rate_limited, "Rate limiting should have been triggered within 15 uploads"
+
+    # Verify SlowAPI middleware is providing rate limit headers (production behavior)
+    # These headers are ONLY added by SlowAPIMiddleware, not by the decorator alone
+    assert successful_response is not None, "Should have at least one successful upload"
+
+    # Check for rate limit headers in successful response (middleware adds these)
+    assert "X-RateLimit-Limit" in successful_response.headers, \
+        "Missing X-RateLimit-Limit header - SlowAPIMiddleware may not be installed"
+    assert "X-RateLimit-Remaining" in successful_response.headers, \
+        "Missing X-RateLimit-Remaining header - SlowAPIMiddleware may not be installed"
+    assert "X-RateLimit-Reset" in successful_response.headers, \
+        "Missing X-RateLimit-Reset header - SlowAPIMiddleware may not be installed"
+
+    # Check for Retry-After header in rate limited response (middleware adds this)
+    assert rate_limit_response is not None
+    assert "Retry-After" in rate_limit_response.headers, \
+        "Missing Retry-After header in 429 response - SlowAPIMiddleware may not be installed"
+
+    logger.info(f"Rate limit headers verified: Limit={successful_response.headers['X-RateLimit-Limit']}, "
+                f"Remaining={successful_response.headers['X-RateLimit-Remaining']}, "
+                f"Reset={successful_response.headers['X-RateLimit-Reset']}, "
+                f"Retry-After={rate_limit_response.headers['Retry-After']}")
 
 
 @pytest.mark.asyncio

@@ -14,10 +14,10 @@ class User(SQLAlchemyBaseUserTable[int], Base):
     first_name: Mapped[str] = mapped_column(String(50), nullable=True)
     last_name: Mapped[str] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now()
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
 class Upload(Base):
@@ -32,8 +32,8 @@ class Upload(Base):
     record_type: Mapped[str] = mapped_column(String(50), nullable=False)
     record_count: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="queued")
-    upload_timestamp: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
-    processing_started_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
-    processing_completed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    upload_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    processing_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    processing_completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     narrative_preview: Mapped[str] = mapped_column(Text, nullable=True)
     error_message: Mapped[str] = mapped_column(Text, nullable=True)

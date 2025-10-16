@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 import structlog
 import logging
 from contextlib import asynccontextmanager
@@ -81,6 +82,9 @@ app = FastAPI(
 
 # Add middleware to convert login 400 errors to 401
 app.add_middleware(LoginErrorMiddleware)
+
+# Add SlowAPI middleware for rate limiting
+app.add_middleware(SlowAPIMiddleware)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

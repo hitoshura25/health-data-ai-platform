@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.limiter import limiter
@@ -10,6 +10,7 @@ from app.config import settings
 from app.schemas import UploadResponse, UploadStatusResponse, UploadHistoryResponse, Pagination
 import structlog
 import uuid
+from datetime import datetime
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/v1", tags=["Health Data Upload"])
@@ -20,6 +21,7 @@ upload_processor = UploadProcessor()
 @limiter.limit(settings.UPLOAD_RATE_LIMIT)
 async def upload_health_data(
     request: Request,
+    response: Response,
     file: UploadFile = File(...),
     description: str = Form(None),
     user: User = Depends(get_current_active_user),
@@ -104,9 +106,11 @@ async def get_upload_history(
     if record_type is not None:
         query = query.where(Upload.record_type == record_type)
     if from_date is not None:
-        query = query.where(Upload.upload_timestamp >= from_date)
+        from_date_dt = datetime.fromisoformat(from_date.replace(' ', '+'))
+        query = query.where(Upload.upload_timestamp >= from_date_dt)
     if to_date is not None:
-        query = query.where(Upload.upload_timestamp <= to_date)
+        to_date_dt = datetime.fromisoformat(to_date.replace(' ', '+'))
+        query = query.where(Upload.upload_timestamp <= to_date_dt)
 
     total_query = select(func.count()).select_from(query.alias())
     
