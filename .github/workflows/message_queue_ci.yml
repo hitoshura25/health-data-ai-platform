@@ -7,13 +7,17 @@ on:
     branches: [ "main" ]
     paths:
       - 'services/message-queue/**'
+      - 'infrastructure/**'
+      - 'setup-all-services.sh'
   pull_request:
     branches: [ "main" ]
     paths:
       - 'services/message-queue/**'
+      - 'infrastructure/**'
+      - 'setup-all-services.sh'
 
 jobs:
-  run-message-queue-tests:
+  test-message-queue:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,23 +29,21 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Generate .env file
+      - name: Generate .env files
         run: |
-          bash setup-env.sh
-        working-directory: ./services/message-queue
+          chmod +x infrastructure/setup-secure-env.sh
+          chmod +x setup-all-services.sh
+          ./setup-all-services.sh
 
       - name: Install dependencies
         run: |
           python -m venv .venv
           source .venv/bin/activate
-          pip install -r requirements.txt
-        working-directory: ./services/message-queue
-
-      - name: Check disk space
-        run: df -h
+          pip install --upgrade pip
+          pip install -r services/message-queue/requirements.txt
 
       - name: Run tests
         run: |
           source .venv/bin/activate
-          pytest -v -s
-        working-directory: ./services/message-queue
+          chmod +x run-tests.sh
+          ./run-tests.sh message-queue -v -s
