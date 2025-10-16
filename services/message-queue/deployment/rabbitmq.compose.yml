@@ -31,6 +31,8 @@ services:
     command: python config/rabbitmq_setup.py
     environment:
       MQ_RABBITMQ_URL: amqp://${MQ_RABBITMQ_USER:-guest}:${MQ_RABBITMQ_PASS:-guest}@rabbitmq:5672
+      MQ_RABBITMQ_USER: ${MQ_RABBITMQ_USER:-guest}
+      MQ_RABBITMQ_PASS: ${MQ_RABBITMQ_PASS:-guest}
     depends_on:
       rabbitmq:
         condition: service_healthy

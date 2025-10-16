@@ -17,7 +17,8 @@ def docker_services():
     """Starts and stops the MinIO service for the integration tests."""
     # Use root docker-compose.yml which includes all services via include directive
     compose_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'docker-compose.yml'))
-    env_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.env'))
+    # Use root .env file which has all infrastructure variables
+    env_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '.env'))
 
     # Ensure the .env file exists before starting
     if not os.path.exists(env_file):

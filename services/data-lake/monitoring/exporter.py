@@ -23,16 +23,25 @@ async def update_metrics():
     except Exception as e:
         print(f"Error updating metrics: {e}")
 
-if __name__ == "__main__":
-    start_http_server(settings.metrics_port)
-    print(f"Prometheus metrics server started on port {settings.metrics_port}")
-
+async def main():
+    """Main function to run the metrics exporter."""
     scheduler = AsyncIOScheduler()
     scheduler.add_job(update_metrics, 'interval', seconds=60)
     scheduler.start()
 
-    # Keep the script running
+    # Keep running
     try:
-        asyncio.get_event_loop().run_forever()
+        while True:
+            await asyncio.sleep(3600)
+    except (KeyboardInterrupt, SystemExit):
+        scheduler.shutdown()
+
+if __name__ == "__main__":
+    start_http_server(settings.metrics_port)
+    print(f"Prometheus metrics server started on port {settings.metrics_port}")
+
+    # Run the async main function
+    try:
+        asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         pass

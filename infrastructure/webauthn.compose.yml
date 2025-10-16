@@ -1,27 +1,32 @@
 # MPO WebAuthn Authentication Server
 # Passkey-based authentication service (from external repo: mpo-api-authn-server)
+# Configuration reference: https://raw.githubusercontent.com/hitoshura25/mpo-api-authn-server/main/.ai-agents.json
 services:
   webauthn-server:
-    image: ghcr.io/hitoshura25/mpo-webauthn-server:${WEBAUTHN_VERSION:-latest}
+    image: hitoshura25/webauthn-server:${WEBAUTHN_VERSION:-latest}
     container_name: health-webauthn
     ports:
       - "${WEBAUTHN_PORT:-8080}:8080"
     environment:
-      # Database connection
-      - DATABASE_URL=jdbc:postgresql://postgres:5432/${WEBAUTHN_DB:-webauthn}
-      - DATABASE_USER=${POSTGRES_USER:-postgres}
-      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      # PostgreSQL Database Connection
+      - MPO_AUTHN_DB_HOST=postgres
+      - MPO_AUTHN_DB_PORT=5432
+      - MPO_AUTHN_DB_NAME=${WEBAUTHN_DB:-webauthn}
+      - MPO_AUTHN_DB_USERNAME=${POSTGRES_USER:-postgres}
+      - MPO_AUTHN_DB_PASSWORD=${POSTGRES_PASSWORD:-postgres}
 
-      # Redis for session storage
-      - REDIS_URL=redis://redis:6379
+      # Redis Session Storage
+      - MPO_AUTHN_REDIS_HOST=redis
+      - MPO_AUTHN_REDIS_PORT=6379
+      - MPO_AUTHN_REDIS_PASSWORD=${WEBAUTHN_REDIS_PASSWORD}
 
-      # Jaeger tracing (required by WebAuthn server)
-      - JAEGER_ENDPOINT=http://jaeger:4318
+      # WebAuthn Relying Party Configuration
+      - MPO_AUTHN_APP_RELYING_PARTY_ID=${WEBAUTHN_RP_ID:-localhost}
+      - MPO_AUTHN_APP_RELYING_PARTY_NAME=${WEBAUTHN_RP_NAME:-Health Data Platform}
 
-      # WebAuthn configuration
-      - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-localhost}
-      - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-Health Data Platform}
-      - WEBAUTHN_ORIGIN=${WEBAUTHN_ORIGIN:-http://localhost:8080}
+      # OpenTelemetry / Jaeger Tracing (optional)
+      - MPO_AUTHN_OPEN_TELEMETRY_SERVICE_NAME=health-webauthn
+      - MPO_AUTHN_OPEN_TELEMETRY_JAEGER_ENDPOINT=http://jaeger:4317
     depends_on:
       postgres:
         condition: service_healthy
@@ -36,4 +41,5 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     restart: unless-stopped

@@ -67,22 +67,29 @@ def docker_services():
             check=True
         )
 
-@pytest_asyncio.fixture(scope="session")
-async def db_setup(docker_services):
+@pytest.fixture(scope="session")
+def db_setup(docker_services):
     """Creates and tears down the test database tables for the test session."""
     # Use a temporary engine just for setup/teardown
-    setup_engine = get_test_engine()
-    try:
+    # Run async setup/teardown using asyncio.run() to avoid event loop issues
+    async def async_setup():
+        setup_engine = get_test_engine()
         async with setup_engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)
-        yield
-    finally:
+        await setup_engine.dispose()
+
+    async def async_teardown():
+        setup_engine = get_test_engine()
         async with setup_engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
         await setup_engine.dispose()
 
-@pytest_asyncio.fixture(scope="session")
+    asyncio.run(async_setup())
+    yield
+    asyncio.run(async_teardown())
+
+@pytest.fixture(scope="session")
 def s3_bucket_setup(docker_services):
     """Creates the S3 bucket for the tests."""
     setup_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'deployment/scripts/setup_bucket.py'))

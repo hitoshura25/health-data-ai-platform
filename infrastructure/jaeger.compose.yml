@@ -2,7 +2,7 @@
 # Used by: webauthn-server (required), health-api-service (future), etl-narrative-engine (future)
 services:
   jaeger:
-    image: jaegertracing/all-in-one:latest
+    image: jaegertracing/jaeger:2.11.0
     container_name: health-jaeger
     environment:
       COLLECTOR_OTLP_ENABLED: "true"

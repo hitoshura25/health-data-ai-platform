@@ -49,7 +49,8 @@ class DataLakeSettings(BaseSettings):
 
     model_config = {
         "env_prefix": "DATALAKE_",
-        "env_file": ".env"
+        "env_file": ".env",
+        "extra": "ignore"  # Ignore env vars meant for other services
     }
 
 settings = DataLakeSettings()

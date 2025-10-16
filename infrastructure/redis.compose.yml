@@ -8,9 +8,9 @@ services:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --requirepass ${WEBAUTHN_REDIS_PASSWORD}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "--pass", "${WEBAUTHN_REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 3

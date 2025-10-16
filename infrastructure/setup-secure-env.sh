@@ -28,9 +28,10 @@ DATALAKE_MINIO_ACCESS_KEY=$(generate_short_secret)
 DATALAKE_MINIO_SECRET_KEY=$(generate_long_secret)
 DATALAKE_MINIO_KMS_KEY=$(openssl rand -base64 32)
 SECRET_KEY=$(generate_long_secret)
+WEBAUTHN_REDIS_PASSWORD=$(generate_long_secret)
 
 # --- Static Configuration ---
-POSTGRES_DB="health"
+POSTGRES_DB="postgres"
 
 # --- Create the .env file ---
 cat > "$ENV_FILE" << EOL
@@ -68,7 +69,9 @@ WEBAUTHN_VERSION=latest
 # WebAuthn Relying Party Configuration
 WEBAUTHN_RP_ID=localhost
 WEBAUTHN_RP_NAME="Health Data AI Platform"
-WEBAUTHN_ORIGIN=http://localhost:8080
+
+# WebAuthn Redis Password
+WEBAUTHN_REDIS_PASSWORD=${WEBAUTHN_REDIS_PASSWORD}
 
 # --- Data Lake (MinIO) ---
 MINIO_API_PORT=9000
@@ -87,6 +90,11 @@ RABBITMQ_MGMT_PORT=15672
 MQ_RABBITMQ_USER=${MQ_RABBITMQ_USER}
 MQ_RABBITMQ_PASS=${MQ_RABBITMQ_PASS}
 RABBITMQ_MAIN_EXCHANGE=health-data
+
+# Message Queue URLs
+MQ_RABBITMQ_URL=amqp://${MQ_RABBITMQ_USER}:${MQ_RABBITMQ_PASS}@localhost:5672/
+MQ_RABBITMQ_MANAGEMENT_URL=http://localhost:15672
+MQ_REDIS_URL=redis://:${WEBAUTHN_REDIS_PASSWORD}@localhost:6379
 
 # --- Health API Service ---
 HEALTH_API_PORT=8000

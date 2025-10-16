@@ -1,0 +1,1 @@
+# Message queue core functionality

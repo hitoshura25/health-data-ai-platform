@@ -12,7 +12,7 @@ echo "=================================================="
 echo ""
 
 # Step 1: Generate shared infrastructure secrets
-echo "📦 Step 1/4: Setting up shared infrastructure (PostgreSQL, Redis, Jaeger, WebAuthn, MinIO, RabbitMQ)..."
+echo "📦 Step 1/5: Setting up shared infrastructure (PostgreSQL, Redis, Jaeger, WebAuthn, MinIO, RabbitMQ)..."
 cd "$SCRIPT_DIR/infrastructure"
 ./setup-secure-env.sh
 cd "$SCRIPT_DIR"
@@ -22,7 +22,7 @@ echo ""
 source "$SCRIPT_DIR/infrastructure/.env"
 
 # Step 2: Setup data-lake service
-echo "📦 Step 2/4: Setting up data-lake service..."
+echo "📦 Step 2/5: Setting up data-lake service..."
 cd "$SCRIPT_DIR/services/data-lake"
 
 # Override the data-lake setup script to use shared MinIO credentials
@@ -68,7 +68,7 @@ cd "$SCRIPT_DIR"
 echo ""
 
 # Step 3: Setup health-api-service
-echo "📦 Step 3/4: Setting up health-api-service..."
+echo "📦 Step 3/5: Setting up health-api-service..."
 cd "$SCRIPT_DIR/services/health-api-service"
 
 # Create .env using shared infrastructure credentials
@@ -78,7 +78,7 @@ SECRET_KEY=${SECRET_KEY}
 
 # Application Connection URLs (for running tests locally)
 DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${HEALTH_API_DB}
-REDIS_URL=redis://localhost:6379
+REDIS_URL=redis://:${WEBAUTHN_REDIS_PASSWORD}@localhost:6379
 S3_ENDPOINT_URL=http://localhost:9000
 S3_ACCESS_KEY=${DATALAKE_MINIO_ACCESS_KEY}
 S3_SECRET_KEY=${DATALAKE_MINIO_SECRET_KEY}
@@ -87,7 +87,7 @@ RABBITMQ_URL=amqp://${MQ_RABBITMQ_USER}:${MQ_RABBITMQ_PASS}@localhost:5672/
 
 # Rate Limiting and File Size
 UPLOAD_RATE_LIMIT=${UPLOAD_RATE_LIMIT}
-UPLOAD_RATE_LIMIT_STORAGE_URI=redis://localhost:6379
+UPLOAD_RATE_LIMIT_STORAGE_URI=redis://:${WEBAUTHN_REDIS_PASSWORD}@localhost:6379
 MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB}
 
 # --- Docker Compose Variables ---
@@ -112,8 +112,40 @@ echo "   ✅ Health-api .env created with shared credentials"
 cd "$SCRIPT_DIR"
 echo ""
 
-# Step 4: Create root .env symlink for docker compose
-echo "📦 Step 4/4: Creating root .env for docker-compose..."
+# Step 4: Setup message-queue service
+echo "📦 Step 4/5: Setting up message-queue service..."
+cd "$SCRIPT_DIR/services/message-queue"
+
+# Create .env using shared infrastructure credentials
+cat > .env << EOL
+# RabbitMQ Configuration
+MQ_RABBITMQ_URL=${MQ_RABBITMQ_URL}
+MQ_RABBITMQ_MANAGEMENT_URL=${MQ_RABBITMQ_MANAGEMENT_URL}
+MQ_RABBITMQ_USER=${MQ_RABBITMQ_USER}
+MQ_RABBITMQ_PASS=${MQ_RABBITMQ_PASS}
+
+# Redis Configuration
+MQ_REDIS_URL=${MQ_REDIS_URL}
+
+# Exchange Configuration
+MQ_MAIN_EXCHANGE=health_data_exchange
+MQ_DLX_EXCHANGE=health_data_dlx
+
+# Queue Configuration
+MQ_PROCESSING_QUEUE=health_data_processing
+MQ_FAILED_QUEUE=health_data_failed
+
+# Monitoring
+MQ_ENABLE_METRICS=true
+MQ_METRICS_PORT=8001
+EOL
+
+echo "   ✅ Message-queue .env created with shared credentials"
+cd "$SCRIPT_DIR"
+echo ""
+
+# Step 5: Create root .env symlink for docker compose
+echo "📦 Step 5/5: Creating root .env for docker-compose..."
 cp "$SCRIPT_DIR/infrastructure/.env" "$SCRIPT_DIR/.env"
 echo "   ✅ Root .env created (copy of infrastructure/.env)"
 echo ""
@@ -125,6 +157,7 @@ echo ""
 echo "📋 Summary:"
 echo "   - Infrastructure:      infrastructure/.env"
 echo "   - Data Lake:           services/data-lake/.env"
+echo "   - Message Queue:       services/message-queue/.env"
 echo "   - Health API:          services/health-api-service/.env"
 echo "   - Root (Docker):       .env"
 echo ""
