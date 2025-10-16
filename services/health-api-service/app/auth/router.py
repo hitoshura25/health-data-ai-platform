@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Response, status, Header
-from app.users import User, current_active_user as get_current_active_user
+from app.db.models import User
+from app.users import current_active_user as get_current_active_user
 from app.auth.blocklist import RedisBlocklist, get_blocklist
 
 from typing import Annotated

@@ -15,8 +15,8 @@ from core.message import HealthDataMessage
 from publisher.health_data_publisher import HealthDataPublisher
 from tests.helpers import MyConsumer
 
-@pytest_asyncio.fixture(scope="session")
-async def docker_services():
+@pytest.fixture(scope="session")
+def docker_services():
     """Ensures Redis and RabbitMQ services are running for integration tests."""
     # Use root docker-compose.yml which includes all services via include directive
     compose_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'docker-compose.yml'))
