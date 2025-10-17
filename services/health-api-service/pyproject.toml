@@ -1,0 +1,2 @@
+[tool.pytest_env]
+UPLOAD_RATE_LIMIT_STORAGE_URI = "memory://"

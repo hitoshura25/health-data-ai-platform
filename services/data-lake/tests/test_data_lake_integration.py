@@ -15,16 +15,19 @@ from config.settings import settings
 @pytest.fixture(scope="session")
 def docker_services():
     """Starts and stops the MinIO service for the integration tests."""
-    compose_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'deployment', 'docker-compose.yml'))
-    env_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.env'))
+    # Use root docker-compose.yml which includes all services via include directive
+    compose_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'docker-compose.yml'))
+    # Use root .env file which has all infrastructure variables
+    env_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '.env'))
 
     # Ensure the .env file exists before starting
     if not os.path.exists(env_file):
-        pytest.fail(".env file not found. Please run setup-secure-env.sh first.")
+        pytest.fail(".env file not found. Please run setup-all-services.sh from project root first.")
 
     try:
+        # Only start MinIO service (and its dependencies: data-lake-setup, data-lake-monitoring)
         subprocess.run(
-            ["docker", "compose", "-p", "data-lake", "-f", compose_file, "--env-file", env_file, "up", "-d", "--build", "--wait"],
+            ["docker", "compose", "-p", "data-lake", "-f", compose_file, "--env-file", env_file, "up", "-d", "--build", "--wait", "minio"],
             check=True
         )
         yield

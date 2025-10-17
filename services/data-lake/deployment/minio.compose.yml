@@ -1,0 +1,66 @@
+# MinIO S3-compatible object storage for health data
+# Used by: health-api-service (upload storage), etl-narrative-engine (data processing)
+services:
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: health-minio
+    environment:
+      MINIO_ROOT_USER: ${DATALAKE_MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${DATALAKE_MINIO_SECRET_KEY:-minioadmin}
+      MINIO_KMS_SECRET_KEY: ${DATALAKE_MINIO_KMS_SECRET_KEY}
+      MINIO_PROMETHEUS_AUTH_TYPE: public
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"      # API port
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"  # Console port
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - health-platform-net
+    restart: unless-stopped
+
+  data-lake-setup:
+    build:
+      context: ../
+      dockerfile: Dockerfile
+    environment:
+      DATALAKE_MINIO_ENDPOINT: minio:9000
+      DATALAKE_MINIO_ACCESS_KEY: ${DATALAKE_MINIO_ACCESS_KEY:-minioadmin}
+      DATALAKE_MINIO_SECRET_KEY: ${DATALAKE_MINIO_SECRET_KEY:-minioadmin}
+      DATALAKE_MINIO_KMS_SECRET_KEY: ${DATALAKE_MINIO_KMS_SECRET_KEY}
+      DATALAKE_BUCKET_NAME: ${DATALAKE_BUCKET_NAME:-health-data}
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - health-platform-net
+    restart: "no"
+
+  data-lake-monitoring:
+    build:
+      context: ../
+      dockerfile: Dockerfile
+    entrypoint: ["python", "-m"]
+    command: monitoring.exporter
+    environment:
+      DATALAKE_MINIO_ENDPOINT: minio:9000
+      DATALAKE_MINIO_ACCESS_KEY: ${DATALAKE_MINIO_ACCESS_KEY:-minioadmin}
+      DATALAKE_MINIO_SECRET_KEY: ${DATALAKE_MINIO_SECRET_KEY:-minioadmin}
+      DATALAKE_BUCKET_NAME: ${DATALAKE_BUCKET_NAME:-health-data}
+      DATALAKE_METRICS_PORT: ${DATALAKE_METRICS_PORT:-8002}
+    ports:
+      - "${DATALAKE_METRICS_PORT:-8002}:8002"
+    depends_on:
+      - minio
+    networks:
+      - health-platform-net
+    restart: unless-stopped
+
+volumes:
+  minio_data:
+    driver: local

@@ -1,7 +1,5 @@
-import time
 import pytest
 import pytest_asyncio
-import asyncio
 import uuid
 from datetime import datetime, timezone
 import subprocess
@@ -19,28 +17,42 @@ from tests.helpers import MyConsumer
 
 @pytest.fixture(scope="session")
 def docker_services():
-    """Starts and stops the Redis and RabbitMQ services for the integration tests."""
-    compose_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'deployment', 'docker-compose.yml'))
-    env_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.env'))
+    """Ensures Redis and RabbitMQ services are running for integration tests."""
+    # Use root docker-compose.yml which includes all services via include directive
+    compose_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'docker-compose.yml'))
+    # Use root .env file which has all infrastructure variables
+    env_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '.env'))
 
     # Ensure the .env file exists before starting
     if not os.path.exists(env_file):
-        pytest.fail(".env file not found. Please run setup-env.sh first.")
+        pytest.fail(".env file not found. Please run setup-all-services.sh from project root first.")
+
+    # Check if services are already running
+    result = subprocess.run(
+        ["docker", "compose", "-f", compose_file, "--env-file", env_file, "ps", "--services", "--filter", "status=running"],
+        capture_output=True,
+        text=True
+    )
+    running_services = set(result.stdout.strip().split('\n')) if result.stdout.strip() else set()
+    services_were_running = 'rabbitmq' in running_services and 'redis' in running_services
 
     try:
+        # Start services if not already running (or ensure they're up and healthy)
         subprocess.run(
             ["docker", "compose", "-f", compose_file, "--env-file", env_file, "up", "-d", "--wait", "rabbitmq", "redis"],
             check=True
         )
         yield
     finally:
-        subprocess.run(
-            ["docker", "compose", "-f", compose_file, "--env-file", env_file, "down"],
-            check=True,
-            capture_output=True
-        )
+        # Only stop services if we started them (don't interfere with user's running services)
+        if not services_were_running:
+            subprocess.run(
+                ["docker", "compose", "-f", compose_file, "--env-file", env_file, "stop", "rabbitmq", "redis"],
+                check=True,
+                capture_output=True
+            )
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture()
 async def test_env(docker_services):
     """Sets up a complete test environment for integration tests."""
     queue_name = f"test_queue_{uuid.uuid4()}"
@@ -78,7 +90,8 @@ async def test_env(docker_services):
 @pytest.mark.asyncio
 async def test_deduplication_integration(test_env):
     """Tests that a message published twice is processed only once."""
-    publisher, consumer, _ = test_env
+
+    publisher, consumer, queue_name = test_env
 
     message = HealthDataMessage(
         bucket="test-bucket",
@@ -89,7 +102,7 @@ async def test_deduplication_integration(test_env):
         correlation_id=f"corr-{uuid.uuid4()}",
         message_id=f"msg-{uuid.uuid4()}",
         content_hash="integration_test_hash",
-        idempotency_key="integration_test_idem_key",
+        idempotency_key=f"test_idem_key_{uuid.uuid4()}",
         file_size_bytes=123
     )
 
@@ -99,4 +112,4 @@ async def test_deduplication_integration(test_env):
     await consumer.start_consuming()
 
     assert len(consumer.processed_messages) == 1
-    assert consumer.processed_messages[0].idempotency_key == "integration_test_idem_key"
+    assert consumer.processed_messages[0].idempotency_key == message.idempotency_key

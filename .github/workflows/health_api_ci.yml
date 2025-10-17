@@ -1,23 +1,23 @@
-# This GitHub Actions workflow runs tests for the data-lake service.
+# This GitHub Actions workflow runs tests for the health-api-service.
 
-name: Data Lake CI
+name: Health API CI
 
 on:
   push:
     branches: [ "main" ]
     paths:
-      - 'services/data-lake/**'
+      - 'services/health-api-service/**'
       - 'infrastructure/**'
       - 'setup-all-services.sh'
   pull_request:
     branches: [ "main" ]
     paths:
-      - 'services/data-lake/**'
+      - 'services/health-api-service/**'
       - 'infrastructure/**'
       - 'setup-all-services.sh'
 
 jobs:
-  test-data-lake:
+  test-health-api:
     runs-on: ubuntu-latest
 
     steps:
@@ -40,10 +40,10 @@ jobs:
           python -m venv .venv
           source .venv/bin/activate
           pip install --upgrade pip
-          pip install -r services/data-lake/requirements.txt
+          pip install -r services/health-api-service/requirements.txt
 
       - name: Run tests
         run: |
           source .venv/bin/activate
           chmod +x run-tests.sh
-          ./run-tests.sh data-lake -v -s
+          ./run-tests.sh health-api -v -s

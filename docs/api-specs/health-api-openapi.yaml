@@ -1,0 +1,1035 @@
+openapi: 3.0.3
+info:
+  title: Health Data AI Platform - API Service
+  description: |
+    Secure health data upload and processing API for the Health Data AI Platform.
+
+    This API accepts health data files in Avro format from Android Health Connect,
+    validates them, stores them securely, and triggers processing workflows for
+    AI-powered clinical narrative generation.
+
+    ## Supported Health Data Types
+
+    - **Blood Glucose Records**: Glucose measurements with meal context
+    - **Heart Rate Records**: Heart rate measurements with temporal samples
+    - **Steps Records**: Physical activity step counts over time periods
+    - **Sleep Session Records**: Sleep sessions with stage analysis
+    - **Active Calories Burned Records**: Energy expenditure measurements
+    - **Heart Rate Variability Records**: HRV RMSSD measurements
+
+    ## Security
+
+    All endpoints require JWT authentication via the `Authorization: Bearer <token>` header.
+    Rate limiting is enforced to prevent abuse.
+
+    ## File Format Requirements
+
+    - **Format**: Apache Avro (.avro files)
+    - **Schema**: Must match Android Health Connect Avro schemas
+    - **Size Limit**: 50MB maximum per file
+    - **Content**: Health data records with proper metadata structure
+
+  version: 1.0.0
+  contact:
+    name: Health Data AI Platform
+    email: support@healthdata-ai.com
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: http://localhost:8000
+    description: Development server
+  - url: https://api.healthdata-ai.com
+    description: Production server
+
+security:
+  - BearerAuth: []
+
+paths:
+  # Authentication Endpoints
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user account
+      description: Create a new user account for accessing the health data platform
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRegistration'
+            example:
+              email: "user@example.com"
+              password: "SecurePassword123!"
+              first_name: "John"
+              last_name: "Doe"
+      responses:
+        '201':
+          description: User successfully registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /auth/jwt/login:
+    post:
+      tags:
+        - Authentication
+      summary: Login and receive JWT token
+      description: Authenticate with email/password and receive a JWT access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  format: email
+                  description: User email address
+                password:
+                  type: string
+                  description: User password
+            example:
+              username: "user@example.com"
+              password: "SecurePassword123!"
+      responses:
+        '200':
+          description: Successful authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/jwt/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Logout and invalidate token
+      description: Logout the current user and invalidate the JWT token
+      responses:
+        '204':
+          description: Successfully logged out
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # Health Data Upload Endpoints
+  /v1/upload:
+    post:
+      tags:
+        - Health Data Upload
+      summary: Upload health data file
+      description: |
+        Upload a health data file in Avro format for processing.
+
+        The file will be validated, stored securely, and queued for processing
+        into clinical narratives. Supported record types include blood glucose,
+        heart rate, steps, sleep sessions, calories burned, and HRV data.
+
+        **Rate Limit**: 10 uploads per minute per user
+
+        **File Requirements**:
+        - Avro format (.avro extension)
+        - Valid Android Health Connect schema
+        - Maximum size: 50MB
+        - Contains valid health data records
+
+      operationId: uploadHealthData
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Health data file in Avro format
+                  example: "BloodGlucoseRecord_1758407139312.avro"
+                description:
+                  type: string
+                  maxLength: 500
+                  description: Optional description of the uploaded data
+                  example: "Weekly glucose monitoring data from Dexcom sensor"
+            encoding:
+              file:
+                contentType: application/avro
+      responses:
+        '202':
+          description: File successfully uploaded and queued for processing
+          headers:
+            X-Correlation-ID:
+              description: Unique identifier for tracking this upload
+              schema:
+                type: string
+                format: uuid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+              example:
+                status: "accepted"
+                correlation_id: "123e4567-e89b-12d3-a456-426614174000"
+                object_key: "raw/BloodGlucoseRecord/2025/09/26/user123_20250926_143022_a1b2c3d4.avro"
+                record_type: "AvroBloodGlucoseRecord"
+                record_count: 287
+                file_size_bytes: 38517
+                upload_timestamp: "2025-09-26T14:30:22.123Z"
+                processing_status: "queued"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: File too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "File size 52428800 bytes exceeds maximum allowed 52428800 bytes"
+        '415':
+          description: Unsupported file format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Only .avro files are supported"
+        '422':
+          description: File validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /v1/upload/status/{correlation_id}:
+    get:
+      tags:
+        - Health Data Upload
+      summary: Get upload processing status
+      description: |
+        Check the processing status of a previously uploaded health data file.
+
+        Returns the current status of the upload and processing pipeline,
+        including any error messages or completion details.
+
+      operationId: getUploadStatus
+      parameters:
+        - name: correlation_id
+          in: path
+          required: true
+          description: Correlation ID returned from the upload request
+          schema:
+            type: string
+            format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+      responses:
+        '200':
+          description: Upload status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadStatusResponse'
+              examples:
+                processing:
+                  summary: File currently being processed
+                  value:
+                    correlation_id: "123e4567-e89b-12d3-a456-426614174000"
+                    status: "processing"
+                    upload_timestamp: "2025-09-26T14:30:22.123Z"
+                    object_key: "raw/BloodGlucoseRecord/2025/09/26/user123_20250926_143022_a1b2c3d4.avro"
+                    record_type: "AvroBloodGlucoseRecord"
+                    record_count: 287
+                    processing_started_at: "2025-09-26T14:30:25.456Z"
+                    estimated_completion: "2025-09-26T14:32:00.000Z"
+                completed:
+                  summary: Processing completed successfully
+                  value:
+                    correlation_id: "123e4567-e89b-12d3-a456-426614174000"
+                    status: "completed"
+                    upload_timestamp: "2025-09-26T14:30:22.123Z"
+                    object_key: "raw/BloodGlucoseRecord/2025/09/26/user123_20250926_143022_a1b2c3d4.avro"
+                    record_type: "AvroBloodGlucoseRecord"
+                    record_count: 287
+                    processing_started_at: "2025-09-26T14:30:25.456Z"
+                    processing_completed_at: "2025-09-26T14:31:42.789Z"
+                    narrative_preview: "Your glucose monitoring data from September 26, 2025 shows 287 readings with an average glucose level of 142.3 mg/dL..."
+                    training_data_generated: true
+                failed:
+                  summary: Processing failed with error
+                  value:
+                    correlation_id: "123e4567-e89b-12d3-a456-426614174000"
+                    status: "failed"
+                    upload_timestamp: "2025-09-26T14:30:22.123Z"
+                    object_key: "raw/BloodGlucoseRecord/2025/09/26/user123_20250926_143022_a1b2c3d4.avro"
+                    record_type: "AvroBloodGlucoseRecord"
+                    error_message: "Invalid glucose values detected: readings outside physiological range (0-1000 mg/dL)"
+                    retry_count: 2
+                    quarantined: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Upload not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Upload with correlation ID '123e4567-e89b-12d3-a456-426614174000' not found"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /v1/upload/history:
+    get:
+      tags:
+        - Health Data Upload
+      summary: Get user's upload history
+      description: |
+        Retrieve the upload history for the authenticated user.
+
+        Returns a paginated list of all uploads with their current status,
+        allowing users to track their health data submissions over time.
+
+      operationId: getUploadHistory
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of uploads to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          example: 20
+        - name: offset
+          in: query
+          description: Number of uploads to skip for pagination
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          example: 0
+        - name: status
+          in: query
+          description: Filter by upload status
+          schema:
+            type: string
+            enum: [queued, processing, completed, failed, quarantined]
+          example: "completed"
+        - name: record_type
+          in: query
+          description: Filter by health record type
+          schema:
+            type: string
+            enum:
+              - AvroBloodGlucoseRecord
+              - AvroHeartRateRecord
+              - AvroStepsRecord
+              - AvroSleepSessionRecord
+              - AvroActiveCaloriesBurnedRecord
+              - AvroHeartRateVariabilityRmssdRecord
+          example: "AvroBloodGlucoseRecord"
+        - name: from_date
+          in: query
+          description: Filter uploads from this date (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+          example: "2025-09-01T00:00:00Z"
+        - name: to_date
+          in: query
+          description: Filter uploads until this date (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+          example: "2025-09-30T23:59:59Z"
+      responses:
+        '200':
+          description: Upload history retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadHistoryResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # Health Check Endpoints
+  /health/live:
+    get:
+      tags:
+        - Health Checks
+      summary: Liveness probe
+      description: |
+        Simple liveness check to verify the service is running.
+
+        This endpoint returns 200 OK if the service process is alive and responding.
+        Used by orchestration platforms for basic health monitoring.
+
+      security: []
+      operationId: livenessCheck
+      responses:
+        '200':
+          description: Service is alive and responding
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2025-09-26T14:30:22.123Z"
+                  service:
+                    type: string
+                    example: "Health Data API"
+                  version:
+                    type: string
+                    example: "1.0.0"
+
+  /health/ready:
+    get:
+      tags:
+        - Health Checks
+      summary: Readiness probe
+      description: |
+        Comprehensive readiness check that verifies all dependencies.
+
+        This endpoint checks the health of all external dependencies including:
+        - Database connectivity
+        - Redis cache connectivity
+        - S3/MinIO object storage accessibility
+        - RabbitMQ message queue connectivity
+
+        Returns 200 OK only if all dependencies are healthy and the service
+        is ready to accept traffic.
+
+      security: []
+      operationId: readinessCheck
+      responses:
+        '200':
+          description: Service is ready to accept traffic
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+              example:
+                status: "healthy"
+                timestamp: "2025-09-26T14:30:22.123Z"
+                service: "Health Data API"
+                version: "1.0.0"
+                dependencies:
+                  database:
+                    status: "healthy"
+                    response_time_ms: 12
+                  redis:
+                    status: "healthy"
+                    response_time_ms: 3
+                  s3_storage:
+                    status: "healthy"
+                    response_time_ms: 45
+                  message_queue:
+                    status: "healthy"
+                    response_time_ms: 8
+        '503':
+          description: Service not ready - dependency issues
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+              example:
+                status: "unhealthy"
+                timestamp: "2025-09-26T14:30:22.123Z"
+                service: "Health Data API"
+                version: "1.0.0"
+                dependencies:
+                  database:
+                    status: "healthy"
+                    response_time_ms: 12
+                  redis:
+                    status: "unhealthy"
+                    error: "Connection timeout after 2000ms"
+                  s3_storage:
+                    status: "healthy"
+                    response_time_ms: 45
+                  message_queue:
+                    status: "unhealthy"
+                    error: "Connection refused"
+
+  # User Management Endpoints
+  /users/me:
+    get:
+      tags:
+        - User Management
+      summary: Get current user profile
+      description: Get the profile information for the authenticated user
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    patch:
+      tags:
+        - User Management
+      summary: Update current user profile
+      description: Update the profile information for the authenticated user
+      operationId: updateCurrentUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+            example:
+              first_name: "Jane"
+              last_name: "Smith"
+      responses:
+        '200':
+          description: User profile updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  # API Information Endpoints
+  /:
+    get:
+      tags:
+        - API Information
+      summary: API root endpoint
+      description: Basic API information and version
+      security: []
+      operationId: getApiInfo
+      responses:
+        '200':
+          description: API information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Health Data AI Platform API"
+                  version:
+                    type: string
+                    example: "1.0.0"
+                  documentation:
+                    type: string
+                    example: "https://api.healthdata-ai.com/docs"
+                  supported_formats:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Apache Avro"]
+                  supported_record_types:
+                    type: array
+                    items:
+                      type: string
+                    example:
+                      - "AvroBloodGlucoseRecord"
+                      - "AvroHeartRateRecord"
+                      - "AvroStepsRecord"
+                      - "AvroSleepSessionRecord"
+                      - "AvroActiveCaloriesBurnedRecord"
+                      - "AvroHeartRateVariabilityRmssdRecord"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from the /auth/jwt/login endpoint
+
+  schemas:
+    # Authentication Schemas
+    UserRegistration:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 320
+          description: User email address (must be unique)
+          example: "user@example.com"
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          description: User password (minimum 8 characters)
+          example: "SecurePassword123!"
+        first_name:
+          type: string
+          maxLength: 50
+          description: User's first name
+          example: "John"
+        last_name:
+          type: string
+          maxLength: 50
+          description: User's last name
+          example: "Doe"
+
+    UserUpdate:
+      type: object
+      properties:
+        first_name:
+          type: string
+          maxLength: 50
+          description: User's first name
+        last_name:
+          type: string
+          maxLength: 50
+          description: User's last name
+
+    UserResponse:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: "user@example.com"
+        first_name:
+          type: string
+          nullable: true
+          description: User's first name
+          example: "John"
+        last_name:
+          type: string
+          nullable: true
+          description: User's last name
+          example: "Doe"
+        is_active:
+          type: boolean
+          description: Whether the user account is active
+          example: true
+        is_verified:
+          type: boolean
+          description: Whether the user email is verified
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          description: Account creation timestamp
+          example: "2025-09-26T14:30:22.123Z"
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last profile update timestamp
+          example: "2025-09-26T14:30:22.123Z"
+
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: JWT access token
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        token_type:
+          type: string
+          description: Token type (always "bearer")
+          example: "bearer"
+        expires_in:
+          type: integer
+          description: Token expiration time in seconds
+          example: 3600
+
+    # Upload Schemas
+    UploadResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [accepted, rejected]
+          description: Upload acceptance status
+          example: "accepted"
+        correlation_id:
+          type: string
+          format: uuid
+          description: Unique identifier for tracking this upload
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        object_key:
+          type: string
+          description: S3 object key where the file is stored
+          example: "raw/BloodGlucoseRecord/2025/09/26/user123_20250926_143022_a1b2c3d4.avro"
+        record_type:
+          type: string
+          description: Detected Avro record type
+          example: "AvroBloodGlucoseRecord"
+        record_count:
+          type: integer
+          description: Number of health records in the file
+          example: 287
+        file_size_bytes:
+          type: integer
+          description: File size in bytes
+          example: 38517
+        upload_timestamp:
+          type: string
+          format: date-time
+          description: Upload completion timestamp
+          example: "2025-09-26T14:30:22.123Z"
+        processing_status:
+          type: string
+          enum: [queued, processing, completed, failed]
+          description: Current processing status
+          example: "queued"
+
+    UploadStatusResponse:
+      type: object
+      properties:
+        correlation_id:
+          type: string
+          format: uuid
+          description: Upload correlation identifier
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        status:
+          type: string
+          enum: [queued, processing, completed, failed, quarantined]
+          description: Current processing status
+          example: "completed"
+        upload_timestamp:
+          type: string
+          format: date-time
+          description: Original upload timestamp
+          example: "2025-09-26T14:30:22.123Z"
+        object_key:
+          type: string
+          description: S3 object key for the uploaded file
+          example: "raw/BloodGlucoseRecord/2025/09/26/user123_20250926_143022_a1b2c3d4.avro"
+        record_type:
+          type: string
+          description: Health record type
+          example: "AvroBloodGlucoseRecord"
+        record_count:
+          type: integer
+          description: Number of records processed
+          example: 287
+        description:
+          type: string
+          nullable: true
+          description: User-provided description of the uploaded data
+          example: "Weekly glucose monitoring data from Dexcom sensor"
+        processing_started_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Processing start timestamp
+          example: "2025-09-26T14:30:25.456Z"
+        processing_completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Processing completion timestamp
+          example: "2025-09-26T14:31:42.789Z"
+        narrative_preview:
+          type: string
+          nullable: true
+          description: Preview of generated clinical narrative (first 200 chars)
+          example: "Your glucose monitoring data from September 26, 2025 shows 287 readings with an average glucose level of 142.3 mg/dL. You spent 72.1% of time in the target glucose range..."
+        training_data_generated:
+          type: boolean
+          nullable: true
+          description: Whether training data was successfully generated
+          example: true
+        error_message:
+          type: string
+          nullable: true
+          description: Error message if processing failed
+          example: "Invalid glucose values detected: readings outside physiological range"
+        retry_count:
+          type: integer
+          nullable: true
+          description: Number of retry attempts made
+          example: 2
+        quarantined:
+          type: boolean
+          nullable: true
+          description: Whether the file was quarantined due to quality issues
+          example: false
+
+    UploadHistoryResponse:
+      type: object
+      properties:
+        uploads:
+          type: array
+          items:
+            $ref: '#/components/schemas/UploadStatusResponse'
+        pagination:
+          type: object
+          properties:
+            total:
+              type: integer
+              description: Total number of uploads for this user
+              example: 156
+            limit:
+              type: integer
+              description: Number of items per page
+              example: 20
+            offset:
+              type: integer
+              description: Current page offset
+              example: 0
+            has_more:
+              type: boolean
+              description: Whether there are more uploads to fetch
+              example: true
+
+    # Health Check Schemas
+    ReadinessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+          description: Overall service health status
+          example: "healthy"
+        timestamp:
+          type: string
+          format: date-time
+          description: Health check timestamp
+          example: "2025-09-26T14:30:22.123Z"
+        service:
+          type: string
+          description: Service name
+          example: "Health Data API"
+        version:
+          type: string
+          description: Service version
+          example: "1.0.0"
+        dependencies:
+          type: object
+          properties:
+            database:
+              $ref: '#/components/schemas/DependencyHealth'
+            redis:
+              $ref: '#/components/schemas/DependencyHealth'
+            s3_storage:
+              $ref: '#/components/schemas/DependencyHealth'
+            message_queue:
+              $ref: '#/components/schemas/DependencyHealth'
+
+    DependencyHealth:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+          description: Dependency health status
+          example: "healthy"
+        response_time_ms:
+          type: integer
+          nullable: true
+          description: Response time in milliseconds
+          example: 12
+        error:
+          type: string
+          nullable: true
+          description: Error message if unhealthy
+          example: "Connection timeout after 2000ms"
+
+    # Error Schemas
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: Human-readable error message
+          example: "Invalid file format. Only .avro files are supported."
+        error_code:
+          type: string
+          nullable: true
+          description: Machine-readable error code
+          example: "INVALID_FILE_FORMAT"
+        correlation_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Request correlation ID for tracking
+          example: "123e4567-e89b-12d3-a456-426614174000"
+
+    ValidationErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: Validation error summary
+          example: "File validation failed"
+        errors:
+          type: array
+          items:
+            type: string
+          description: List of specific validation errors
+          example:
+            - "No valid records found in Avro file"
+            - "Invalid schema: missing required field 'metadata'"
+        warnings:
+          type: array
+          items:
+            type: string
+          description: List of validation warnings
+          example:
+            - "Some glucose readings are outside typical range (50-400 mg/dL)"
+        correlation_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Request correlation ID for tracking
+          example: "123e4567-e89b-12d3-a456-426614174000"
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid input parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            detail: "Invalid input parameters"
+            error_code: "BAD_REQUEST"
+
+    Unauthorized:
+      description: Unauthorized - authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            detail: "Authentication required. Please provide a valid JWT token."
+            error_code: "UNAUTHORIZED"
+
+    ValidationError:
+      description: Validation error - invalid request data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationErrorResponse'
+
+    RateLimitExceeded:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          description: Request limit per time window
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          description: Number of requests remaining in current window
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          description: UTC timestamp when the rate limit resets
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            detail: "Rate limit exceeded. Maximum 10 uploads per minute."
+            error_code: "RATE_LIMIT_EXCEEDED"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            detail: "An unexpected error occurred. Please try again later."
+            error_code: "INTERNAL_SERVER_ERROR"
+
+  # Request/Response Examples
+  examples:
+    BloodGlucoseUpload:
+      summary: Blood Glucose File Upload
+      description: Example of uploading a blood glucose Avro file
+      value:
+        file: "BloodGlucoseRecord_1758407139312.avro"
+        description: "Weekly glucose monitoring data from Dexcom CGM"
+
+    HeartRateUpload:
+      summary: Heart Rate File Upload
+      description: Example of uploading a heart rate Avro file
+      value:
+        file: "HeartRateRecord_1758407139312.avro"
+        description: "Heart rate data from Samsung Health during workout"
+
+    StepsUpload:
+      summary: Steps File Upload
+      description: Example of uploading a steps count Avro file
+      value:
+        file: "StepsRecord_1758407139312.avro"
+        description: "Daily step count data from fitness tracker"
+
+tags:
+  - name: Authentication
+    description: User authentication and authorization endpoints
+  - name: Health Data Upload
+    description: Health data file upload and processing endpoints
+  - name: User Management
+    description: User profile management endpoints
+  - name: Health Checks
+    description: Service health and readiness monitoring endpoints
+  - name: API Information
+    description: General API information and metadata endpoints
+
+externalDocs:
+  description: Health Data AI Platform Documentation
+  url: https://docs.healthdata-ai.com

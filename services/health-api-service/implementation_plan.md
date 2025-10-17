@@ -836,47 +836,103 @@ volumes:
   postgres_data:
 ```
 
-### 15. Environment Configuration (.env.example)
-```bash
-# Application
-SECRET_KEY=your-very-secure-secret-key-here
-DEBUG=false
+## Getting Started
 
-# Database
-DATABASE_URL=postgresql+asyncpg://healthapi:password@localhost:5432/healthapi
+These instructions will get the health-api service running locally for development and testing.
 
-# External Services
-REDIS_URL=redis://localhost:6379
-S3_ENDPOINT_URL=http://localhost:9000
-S3_ACCESS_KEY=minioadmin
-S3_SECRET_KEY=your-minio-secret-key
-S3_BUCKET_NAME=health-data
-RABBITMQ_URL=amqp://localhost:5672
+### Prerequisites
 
-# Rate Limiting
-UPLOAD_RATE_LIMIT=10/minute
-DEFAULT_RATE_LIMIT=100/hour
+- Docker and Docker Compose
+- Python 3.11+
 
-# File Upload
-MAX_FILE_SIZE_MB=50
-```
+### Setup and Running
 
-## Deployment Instructions
+1.  **Generate Environment Files**: The platform uses coordinated `.env` files for secure credential management across all services. From the **project root directory**, run the setup script:
 
-### Development
-1. **Install dependencies:** `pip install -r requirements.txt`
-2. **Set up environment:** Copy `.env.example` to `.env` and configure
-3. **Start services:** `docker-compose up -d db redis rabbitmq`
-4. **Run application:** `uvicorn app.main:app --reload`
+    ```bash
+    ./setup-all-services.sh
+    ```
 
-### Production
-1. **Build image:** `docker build -t health-api:latest .`
-2. **Configure environment:** Set all required environment variables
-3. **Deploy:** `docker-compose up -d`
+    This will generate:
+    - Coordinated credentials for all infrastructure (PostgreSQL, Redis, RabbitMQ, MinIO)
+    - Service-specific `.env` files with shared credentials
+    - `.env` file at project root for docker-compose
+
+2.  **Start Services**: With the `.env` files created, start all required services from the **project root**:
+
+    ```bash
+    docker compose up -d
+    ```
+
+    This starts PostgreSQL, Redis, RabbitMQ, MinIO, WebAuthn server, and the Health API.
+
+3.  **Access the API**: You can now access the Health API at [http://localhost:8000/docs](http://localhost:8000/docs)
+
+### Development Mode
+
+To run the service in development mode with auto-reload:
+
+1.  **Create a Virtual Environment** (if not already done): From the **project root**, create a shared virtual environment:
+
+    ```bash
+    python -m venv .venv
+    ```
+
+2.  **Activate Environment and Install Dependencies**:
+
+    ```bash
+    source .venv/bin/activate
+    pip install -r services/health-api-service/requirements.txt
+    ```
+
+3.  **Run Development Server**: From the `services/health-api-service` directory:
+
+    ```bash
+    uvicorn app.main:app --reload
+    ```
 
 ## Testing
 
-### Unit Tests
+Tests are located in the `tests/` directory and are designed to be run with `pytest`. Integration tests automatically manage their own Docker containers.
+
+### Test Setup
+
+1.  **Generate Environment Files**: First ensure you've run the setup script from the project root (see Setup and Running above).
+
+2.  **Create a Virtual Environment** (if not already done): From the **project root**, create a shared virtual environment:
+
+    ```bash
+    python -m venv .venv
+    ```
+
+3.  **Activate Environment and Install Dependencies**:
+
+    ```bash
+    source .venv/bin/activate
+    pip install -r services/health-api-service/requirements.txt
+    ```
+
+### Running Tests
+
+**From project root**, with the virtual environment activated:
+
+```bash
+# Run all health-api tests
+./run-tests.sh health-api
+
+# Run with verbose output
+./run-tests.sh health-api -v
+
+# Run specific test file
+cd services/health-api-service
+pytest tests/test_health_api_integration.py -v
+```
+
+**Test types:**
+- **Unit tests**: Use mocks, no Docker required
+- **Integration tests**: Automatically start/stop Docker containers (PostgreSQL, Redis, WebAuthn) via fixtures
+
+### Unit Test Example
 ```python
 # tests/test_upload.py
 import pytest
@@ -895,8 +951,11 @@ def test_health_live():
     assert response.json()["status"] == "healthy"
 ```
 
-### Integration Testing
-Create test files for each major component and integration points with external services.
+## Production Deployment
+
+1. **Build image:** `docker build -t health-api:latest .`
+2. **Configure environment:** Set all required environment variables
+3. **Deploy:** `docker-compose up -d`
 
 ## Monitoring and Observability
 

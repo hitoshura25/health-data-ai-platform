@@ -4,10 +4,10 @@ from typing import Dict, Any, List
 
 class MessageQueueSettings(BaseSettings):
     # RabbitMQ Connection
-    rabbitmq_url: str = os.getenv("MQ_RABBITMQ_URL")
-    rabbitmq_management_url: str = os.getenv("MQ_RABBITMQ_MANAGEMENT_URL")
-    mq_rabbitmq_user: str = os.getenv("MQ_RABBITMQ_USER")
-    mq_rabbitmq_pass: str = os.getenv("MQ_RABBITMQ_PASS")
+    rabbitmq_url: str
+    rabbitmq_management_url: str
+    rabbitmq_user: str
+    rabbitmq_pass: str
 
     # Exchange Configuration
     main_exchange: str = "health_data_exchange"
@@ -22,7 +22,7 @@ class MessageQueueSettings(BaseSettings):
     retry_delays: List[int] = [30, 300, 900]  # 30s, 5m, 15m
 
     # Redis
-    redis_url: str = os.getenv("MQ_REDIS_URL")
+    redis_url: str
 
     # Deduplication
 
@@ -38,7 +38,8 @@ class MessageQueueSettings(BaseSettings):
 
     model_config = {
         "env_file": ".env",
-        "env_prefix": "MQ_"
+        "env_prefix": "MQ_",
+        "extra": "ignore"  # Ignore env vars meant for other services
     }
 
 settings = MessageQueueSettings()
