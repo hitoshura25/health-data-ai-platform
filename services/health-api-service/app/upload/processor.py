@@ -84,7 +84,7 @@ class UploadProcessor:
                     "file_hash": file_hash,
                     "record_count": record_count,
                     "idempotency_key": self._generate_idempotency_key(
-                        str(user.id), file_hash, timestamp
+                        str(user.id), file_hash
                     )
                 }
 
@@ -203,9 +203,8 @@ class UploadProcessor:
         filename = f"{user_id}_{timestamp_str}_{short_hash}.avro"
         return f"raw/{record_type}/{date_path}/{filename}"
 
-    def _generate_idempotency_key(self, user_id: str, file_hash: str,
-                                timestamp: datetime) -> str:
+    def _generate_idempotency_key(self, user_id: str, file_hash: str) -> str:
         """Generate idempotency key for deduplication"""
         import hashlib
-        key_input = f"{user_id}:{file_hash}:{timestamp.isoformat()}"
+        key_input = f"{user_id}:{file_hash}"
         return hashlib.sha256(key_input.encode()).hexdigest()[:16]
