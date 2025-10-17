@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, EmailStr
 from uuid import UUID
 
 class UserRead(schemas.BaseUser[int]):
+    id: int = Field(exclude=True)  # Exclude user ID from API responses for security (prevents enumeration attacks)
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     created_at: datetime
