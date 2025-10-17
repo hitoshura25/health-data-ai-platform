@@ -10,7 +10,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.health.router import router as health_router
 from app.limiter import limiter
-from app.users import fastapi_users, auth_backend
+from app.users import fastapi_users
 from app.schemas import UserRead, UserCreate, UserUpdate
 from app.upload.router import router as upload_router
 from app.db.session import Base, engine
@@ -89,12 +89,16 @@ app.add_middleware(SlowAPIMiddleware)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# Include application routers
 app.include_router(health_router)
 app.include_router(upload_router)
+
+# Authentication & User Management Routers
+# Custom auth router provides /auth/jwt/login and /auth/jwt/logout with token blocklisting
+# Future: /auth/webauthn/exchange for passkey-based authentication
 app.include_router(auth_router)
-app.include_router(
-    fastapi_users.get_auth_router(auth_backend), prefix="/auth/jwt", tags=["Authentication"]
-)
+
+# FastAPI Users routers for registration and user management
 app.include_router(
     fastapi_users.get_register_router(UserRead, UserCreate),
     prefix="/auth",
