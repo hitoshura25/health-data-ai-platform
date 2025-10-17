@@ -36,6 +36,54 @@ class S3StorageService:
             logger.error("S3 upload failed", error=str(e), object_key=object_key)
             raise
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10)
+    )
+    async def upload_file_streaming(self, file_obj, object_key: str, content_length: int = None) -> bool:
+        """
+        Stream upload file to MinIO with automatic chunked transfer.
+
+        Memory efficient: File is read in chunks automatically by MinIO client.
+        For files >8MB, MinIO may use multipart upload internally.
+
+        Args:
+            file_obj: File-like object (e.g., SpooledTemporaryFile from UploadFile)
+            object_key: S3 object key where file should be stored
+            content_length: Optional content length (if known, helps S3 client)
+
+        Returns:
+            True if upload successful
+        """
+        try:
+            async with self.session.client(
+                's3',
+                endpoint_url=settings.S3_ENDPOINT_URL,
+                aws_access_key_id=settings.S3_ACCESS_KEY,
+                aws_secret_access_key=settings.S3_SECRET_KEY
+            ) as s3:
+                # Prepare put_object kwargs
+                put_kwargs = {
+                    'Bucket': settings.S3_BUCKET_NAME,
+                    'Key': object_key,
+                    'Body': file_obj
+                }
+
+                # Add ContentLength if provided (helps with upload performance)
+                if content_length is not None:
+                    put_kwargs['ContentLength'] = content_length
+
+                # put_object accepts file-like objects and streams them automatically
+                # MinIO client handles chunked transfer encoding internally
+                await s3.put_object(**put_kwargs)
+
+                logger.info("File streamed successfully", object_key=object_key)
+                return True
+
+        except ClientError as e:
+            logger.error("S3 streaming upload failed", error=str(e), object_key=object_key)
+            raise
+
     async def check_bucket_exists(self) -> bool:
         """Check if S3 bucket is accessible"""
         try:
