@@ -17,4 +17,13 @@ class Settings(BaseSettings):
     UPLOAD_RATE_LIMIT_STORAGE_URI: str
     MAX_FILE_SIZE_MB: int = 50
 
+    # Jaeger Distributed Tracing (points to webauthn-stack Jaeger)
+    JAEGER_OTLP_ENDPOINT: str = "http://host.docker.internal:4319"
+    JAEGER_SERVICE_NAME: str = "health-api-service"
+
+    # WebAuthn Integration (for token exchange)
+    # Uses JWKS endpoint (RFC 7517) for automatic key fetching and rotation support
+    WEBAUTHN_JWKS_URL: str = "http://host.docker.internal:8000/.well-known/jwks.json"
+    WEBAUTHN_ISSUER: str = "mpo-webauthn"
+
 settings = Settings()

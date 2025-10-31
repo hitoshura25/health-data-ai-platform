@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
+from fastapi_limiter.depends import RateLimiter
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from app.limiter import limiter
+from app.limiter import UPLOAD_RATE_LIMIT
 from app.users import current_active_user as get_current_active_user
 from app.db.models import User, Upload
 from app.db.session import get_async_session
@@ -17,11 +18,26 @@ router = APIRouter(prefix="/v1", tags=["Health Data Upload"])
 
 upload_processor = UploadProcessor()
 
-@router.post("/upload", response_model=UploadResponse, status_code=status.HTTP_202_ACCEPTED)
-@limiter.limit(settings.UPLOAD_RATE_LIMIT)
+# Parse rate limit string (e.g., "10/minute")
+rate_parts = UPLOAD_RATE_LIMIT.split("/")
+rate_times = int(rate_parts[0])
+rate_period = rate_parts[1] if len(rate_parts) > 1 else "minute"
+
+# Convert period to seconds for RateLimiter
+period_seconds = {
+    "second": 1,
+    "minute": 60,
+    "hour": 3600,
+    "day": 86400
+}.get(rate_period, 60)
+
+@router.post(
+    "/upload",
+    response_model=UploadResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(RateLimiter(times=rate_times, seconds=period_seconds))]
+)
 async def upload_health_data(
-    request: Request,
-    response: Response,
     file: UploadFile = File(...),
     description: str = Form(None),
     user: User = Depends(get_current_active_user),

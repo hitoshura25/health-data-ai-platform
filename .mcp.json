@@ -1,0 +1,11 @@
+{
+    "mcpServers": {
+        "webauthn-client-generator": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@vmenon25/mcp-server-webauthn-client@0.0.5"
+            ]
+        }
+    }
+}

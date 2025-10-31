@@ -1,0 +1,507 @@
+// Import published API client library
+import { Configuration, RegistrationApi, AuthenticationApi, HealthApi } from '@vmenon25/mpo-webauthn-client';
+import type {
+    RegistrationRequest,
+    RegistrationCompleteRequest,
+    AuthenticationRequest,
+    AuthenticationCompleteRequest,
+    WebAuthnClientOptions,
+    WebAuthnResult,
+    ConnectionTestResult
+} from './types';
+import { AuthStorage } from './auth-storage';
+
+export class WebAuthnClient {
+    private registrationApi: RegistrationApi;
+    private authenticationApi: AuthenticationApi;
+    private healthApi: HealthApi;
+
+    constructor(options: WebAuthnClientOptions | string = {}) {
+        // Support both string URL and options object for backward compatibility
+        // Default to Envoy Gateway for zero-trust architecture
+        const serverUrl = typeof options === 'string' ? options : (options.serverUrl || 'http://localhost:8000');
+        const configuration = new Configuration({
+            basePath: serverUrl
+        });
+
+        this.registrationApi = new RegistrationApi(configuration);
+        this.authenticationApi = new AuthenticationApi(configuration);
+        this.healthApi = new HealthApi(configuration);
+    }
+
+    /**
+     * Test server connection
+     */
+    async testConnection(): Promise<ConnectionTestResult> {
+        try {
+            const response = await this.healthApi.getHealth();
+            return {
+                success: true,
+                message: '✅ Server connection successful!'
+            };
+        } catch (error: any) {
+            return {
+                success: false,
+                message: `❌ Connection failed: ${error.message}`
+            };
+        }
+    }
+
+    /**
+     * Register a new passkey
+     * This preserves the critical WebAuthn integration pattern documented in CLAUDE.md
+     */
+    async registerPasskey(username: string, displayName: string): Promise<WebAuthnResult> {
+        try {
+            // Step 1: Start registration using generated client
+            const registrationRequest: RegistrationRequest = {
+                username,
+                displayName
+            };
+
+            const startResponse = await this.registrationApi.startRegistration(registrationRequest);
+
+            console.log('Registration options received:', startResponse);
+
+            // CRITICAL: Parse the JSON string as documented in CLAUDE.md
+            let publicKeyOptions: any;
+            if (typeof startResponse.publicKeyCredentialCreationOptions === 'string') {
+                publicKeyOptions = JSON.parse(startResponse.publicKeyCredentialCreationOptions);
+            } else {
+                publicKeyOptions = startResponse.publicKeyCredentialCreationOptions;
+            }
+
+            // Step 2: Create credential using SimpleWebAuthn (preserving critical pattern)
+            const credential = await window.SimpleWebAuthnBrowser.startRegistration(publicKeyOptions.publicKey);
+
+            // Step 3: Complete registration using generated client
+            const completeRequest: RegistrationCompleteRequest = {
+                requestId: startResponse.requestId,
+                credential: JSON.stringify(credential)  // CRITICAL: Must stringify as per CLAUDE.md
+            };
+
+            const completeResponse = await this.registrationApi.completeRegistration(completeRequest);
+
+            if (completeResponse.success) {
+                return {
+                    success: true,
+                    message: '✅ Registration successful! You can now authenticate.',
+                    username
+                };
+            } else {
+                return {
+                    success: false,
+                    message: `❌ Registration failed: ${completeResponse.message || 'Unknown error'}`
+                };
+            }
+
+        } catch (error: any) {
+            console.error('Registration error:', error);
+
+            // Handle specific WebAuthn errors
+            if (error.name === 'InvalidStateError') {
+                return {
+                    success: false,
+                    message: '⚠️ A passkey for this account already exists on this device'
+                };
+            } else if (error.name === 'NotAllowedError') {
+                return {
+                    success: false,
+                    message: '❌ Registration was cancelled or timed out'
+                };
+            } else if (error.name === 'NotSupportedError') {
+                return {
+                    success: false,
+                    message: '❌ WebAuthn is not supported on this device/browser'
+                };
+            } else {
+                return {
+                    success: false,
+                    message: `❌ Registration failed: ${error.message}`
+                };
+            }
+        }
+    }
+
+    /**
+     * Authenticate with a passkey
+     * This preserves the critical WebAuthn integration pattern documented in CLAUDE.md
+     */
+    async authenticatePasskey(username?: string): Promise<WebAuthnResult> {
+        try {
+            // Step 1: Start authentication using generated client
+            const authenticationRequest: AuthenticationRequest = {
+                username: username || null  // null for usernameless authentication
+            };
+
+            const startResponse = await this.authenticationApi.startAuthentication(authenticationRequest);
+
+            console.log('Authentication options received:', startResponse);
+
+            // CRITICAL: Parse the JSON string as documented in CLAUDE.md
+            let publicKeyOptions: any;
+            if (typeof startResponse.publicKeyCredentialRequestOptions === 'string') {
+                publicKeyOptions = JSON.parse(startResponse.publicKeyCredentialRequestOptions);
+            } else {
+                publicKeyOptions = startResponse.publicKeyCredentialRequestOptions;
+            }
+
+            // Step 2: Get authentication assertion using SimpleWebAuthn (preserving critical pattern)
+            const assertion = await window.SimpleWebAuthnBrowser.startAuthentication(publicKeyOptions.publicKey);
+
+            // Step 3: Complete authentication using generated client
+            const completeRequest: AuthenticationCompleteRequest = {
+                requestId: startResponse.requestId,
+                credential: JSON.stringify(assertion)  // CRITICAL: Must stringify as per CLAUDE.md
+            };
+
+            const completeResponse = await this.authenticationApi.completeAuthentication(completeRequest);
+
+            if (completeResponse.success) {
+                return {
+                    success: true,
+                    message: `✅ Authentication successful! Welcome, ${completeResponse.username || 'user'}!`,
+                    username: completeResponse.username,
+                    accessToken: completeResponse.accessToken,
+                    tokenType: completeResponse.tokenType,
+                    expiresIn: completeResponse.expiresIn
+                };
+            } else {
+                return {
+                    success: false,
+                    message: `❌ Authentication failed: Server returned success=false`
+                };
+            }
+
+        } catch (error: any) {
+            console.error('Authentication error:', error);
+
+            // Handle specific WebAuthn errors
+            if (error.name === 'InvalidStateError') {
+                return {
+                    success: false,
+                    message: '⚠️ No passkey found for this account on this device'
+                };
+            } else if (error.name === 'NotAllowedError') {
+                return {
+                    success: false,
+                    message: '❌ Authentication was cancelled or timed out'
+                };
+            } else if (error.name === 'NotSupportedError') {
+                return {
+                    success: false,
+                    message: '❌ WebAuthn is not supported on this device/browser'
+                };
+            } else {
+                return {
+                    success: false,
+                    message: `❌ Authentication failed: ${error.message}`
+                };
+            }
+        }
+    }
+}
+
+// Global functions for UI compatibility
+export function initializeWebAuthnClient(): void {
+    const client = new WebAuthnClient();
+
+    // Status display function
+    (window as any).showStatus = function(elementId: string, message: string, type: string = 'info') {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.className = `status ${type}`;
+            element.textContent = message;
+            console.log(`[${type.toUpperCase()}] ${elementId}: ${message}`);
+        }
+    };
+
+    // Get server URL function
+    (window as any).getServerUrl = function(): string {
+        const serverUrlElement = document.getElementById('serverUrl') as HTMLInputElement;
+        return serverUrlElement ? serverUrlElement.value.trim() : 'http://localhost:8000';
+    };
+
+    // Test server connection
+    (window as any).testServerConnection = async function() {
+        const showStatus = (window as any).showStatus;
+        const serverUrl = (window as any).getServerUrl();
+
+        showStatus('connectionStatus', 'Testing server connection...', 'info');
+
+        const testClient = new WebAuthnClient(serverUrl);
+        const result = await testClient.testConnection();
+
+        showStatus('connectionStatus', result.message, result.success ? 'success' : 'error');
+    };
+
+    // Registration function
+    (window as any).registerPasskey = async function() {
+        const showStatus = (window as any).showStatus;
+        const serverUrl = (window as any).getServerUrl();
+
+        const usernameElement = document.getElementById('regUsername') as HTMLInputElement;
+        const displayNameElement = document.getElementById('regDisplayName') as HTMLInputElement;
+
+        const username = usernameElement?.value.trim() || '';
+        const displayName = displayNameElement?.value.trim() || '';
+
+        if (!username || !displayName) {
+            showStatus('registrationStatus', '⚠️ Please enter both username and display name', 'error');
+            return;
+        }
+
+        showStatus('registrationStatus', '🔄 Starting registration...', 'info');
+
+        const registrationClient = new WebAuthnClient(serverUrl);
+
+        showStatus('registrationStatus', '🔑 Creating passkey...', 'info');
+        const result = await registrationClient.registerPasskey(username, displayName);
+
+        if (result.success) {
+            showStatus('registrationStatus', result.message, 'success');
+            // Pre-fill authentication username field
+            const authUsernameElement = document.getElementById('authUsername') as HTMLInputElement;
+            if (authUsernameElement && result.username) {
+                authUsernameElement.value = result.username;
+            }
+        } else {
+            showStatus('registrationStatus', result.message, 'error');
+        }
+    };
+
+    // Authentication function
+    (window as any).authenticatePasskey = async function() {
+        const showStatus = (window as any).showStatus;
+        const serverUrl = (window as any).getServerUrl();
+
+        const usernameElement = document.getElementById('authUsername') as HTMLInputElement;
+        const username = usernameElement?.value.trim() || undefined;
+
+        showStatus('authenticationStatus', '🔄 Starting authentication...', 'info');
+
+        const authenticationClient = new WebAuthnClient(serverUrl);
+
+        showStatus('authenticationStatus', '🔐 Please use your passkey...', 'info');
+        const result = await authenticationClient.authenticatePasskey(username);
+
+        // PRODUCTION CHANGE: Store JWT using AuthStorage (jwt-decode + native sessionStorage)
+        if (result.success && result.accessToken) {
+            AuthStorage.store({
+                accessToken: result.accessToken,
+                tokenType: result.tokenType || 'Bearer',
+                expiresIn: result.expiresIn || 900,
+                username: result.username || username || 'user'
+            });
+
+            showStatus('authenticationStatus', result.message, 'success');
+            updateUIForAuthState(true);  // Update UI to show authenticated state
+        } else {
+            showStatus('authenticationStatus', result.message, 'error');
+        }
+    };
+
+    // Logout function
+    (window as any).logout = async function() {
+        const showStatus = (window as any).showStatus;
+
+        AuthStorage.clear();
+        updateUIForAuthState(false);
+
+        showStatus('authenticationStatus', '🔓 Logged out successfully', 'info');
+
+        // Clear authentication form
+        const authUsernameElement = document.getElementById('authUsername') as HTMLInputElement;
+        if (authUsernameElement) {
+            authUsernameElement.value = '';
+        }
+    };
+
+    // Call protected API endpoint
+    // SECURITY: Resets inactivity timer on API calls (user is active)
+    (window as any).callProtectedApi = async function() {
+        const showStatus = (window as any).showStatus;
+        const serverUrl = (window as any).getServerUrl();
+
+        const endpointElement = document.getElementById('apiEndpoint') as HTMLInputElement;
+        const endpoint = endpointElement?.value.trim() || '/api/user/profile';
+
+        showStatus('apiStatus', '🔄 Calling protected endpoint...', 'info');
+
+        const authHeader = AuthStorage.getAuthorizationHeader();
+        if (!authHeader) {
+            showStatus('apiStatus', '❌ Not authenticated. Please authenticate first.', 'error');
+            return;
+        }
+
+        // Reset inactivity timer - user is making API call (active)
+        resetInactivityTimer();
+
+        try {
+            const response = await fetch(`${serverUrl}${endpoint}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': authHeader,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.status === 401) {
+                showStatus('apiStatus', '❌ Token expired or invalid. Please re-authenticate.', 'error');
+                AuthStorage.clear();
+                updateUIForAuthState(false);
+                return;
+            }
+
+            if (!response.ok) {
+                showStatus('apiStatus', `❌ API call failed: ${response.status} ${response.statusText}`, 'error');
+                return;
+            }
+
+            const data = await response.json();
+            showStatus('apiStatus', `✅ API call successful!`, 'success');
+
+            // Display response in output area
+            const outputElement = document.getElementById('apiOutput');
+            if (outputElement) {
+                outputElement.textContent = JSON.stringify(data, null, 2);
+            }
+        } catch (error: any) {
+            showStatus('apiStatus', `❌ Network error: ${error.message}`, 'error');
+        }
+    };
+}
+
+// Update UI based on authentication state
+function updateUIForAuthState(isAuthenticated: boolean): void {
+    const protectedSection = document.getElementById('protectedSection');
+    const authSection = document.getElementById('authenticationSection');
+    const sessionInfo = document.getElementById('sessionInfo');
+
+    if (protectedSection) {
+        protectedSection.style.display = isAuthenticated ? 'block' : 'none';
+    }
+
+    if (authSection) {
+        authSection.style.display = isAuthenticated ? 'none' : 'block';
+    }
+
+    if (sessionInfo && isAuthenticated) {
+        const session = AuthStorage.get();
+        if (session) {
+            const expirationDate = AuthStorage.getExpirationDate();
+            sessionInfo.innerHTML = `
+                <strong>Authenticated as:</strong> ${session.username}<br>
+                <strong>Token expires in:</strong> <span id="tokenTimer">${session.expiresIn}s</span><br>
+                <strong>Expiration time:</strong> ${expirationDate?.toLocaleTimeString() || 'N/A'}
+            `;
+            startTokenTimer();
+        }
+    }
+
+    // Reset inactivity timer when auth state changes
+    if (isAuthenticated) {
+        resetInactivityTimer();
+    } else {
+        clearInactivityTimer();
+    }
+}
+
+// Start countdown timer for token expiration
+function startTokenTimer(): void {
+    const updateTimer = () => {
+        const remaining = AuthStorage.getTimeRemaining();
+        const timerElement = document.getElementById('tokenTimer');
+
+        if (remaining === null || remaining <= 0) {
+            if (timerElement) {
+                timerElement.textContent = 'expired';
+                timerElement.style.color = '#dc3545';
+            }
+            updateUIForAuthState(false);
+            return;
+        }
+
+        if (timerElement) {
+            timerElement.textContent = `${remaining}s`;
+            if (remaining < 60) {
+                timerElement.style.color = '#dc3545';  // Red for last minute
+            } else if (remaining < 300) {
+                timerElement.style.color = '#ffc107';  // Yellow for last 5 minutes
+            }
+        }
+
+        setTimeout(updateTimer, 1000);
+    };
+
+    updateTimer();
+}
+
+// Auto-logout on inactivity (5 minutes idle timeout)
+// SECURITY: Critical for health data - prevents unauthorized access if user walks away
+let inactivityTimer: number | null = null;
+const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+
+function resetInactivityTimer(): void {
+    clearInactivityTimer();
+
+    // Only set timer if authenticated
+    if (!AuthStorage.isAuthenticated()) return;
+
+    inactivityTimer = window.setTimeout(() => {
+        console.warn('[SECURITY] Auto-logout due to inactivity (5 min idle)');
+        AuthStorage.clear();
+        updateUIForAuthState(false);
+
+        const showStatus = (window as any).showStatus;
+        if (showStatus) {
+            showStatus('authenticationStatus', '🔒 Logged out due to inactivity', 'info');
+        }
+    }, INACTIVITY_TIMEOUT);
+}
+
+function clearInactivityTimer(): void {
+    if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+        inactivityTimer = null;
+    }
+}
+
+// Track user activity to reset timer
+['mousedown', 'keydown', 'scroll', 'touchstart'].forEach(event => {
+    document.addEventListener(event, resetInactivityTimer, true);
+});
+
+// Initialize when DOM is loaded
+if (typeof window !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('🚀 WebAuthn Test Client (TypeScript) loaded');
+        console.log('📋 SimpleWebAuthn library:', window.SimpleWebAuthnBrowser ? 'loaded' : 'not loaded');
+
+        initializeWebAuthnClient();
+
+        // Check authentication state and update UI
+        const isAuthenticated = AuthStorage.isAuthenticated();
+        updateUIForAuthState(isAuthenticated);
+
+        if (isAuthenticated) {
+            const session = AuthStorage.get();
+            const remaining = AuthStorage.getTimeRemaining();
+            console.log('✅ Existing session found:', {
+                username: session?.username,
+                remainingSeconds: remaining
+            });
+
+            // SECURITY: Start inactivity timer for existing session
+            resetInactivityTimer();
+        }
+
+        // Auto-test server connection
+        setTimeout(() => {
+            const testServerConnection = (window as any).testServerConnection;
+            if (testServerConnection) {
+                testServerConnection();
+            }
+        }, 1000);
+    });
+}

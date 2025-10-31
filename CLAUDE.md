@@ -6,6 +6,7 @@
 - **✅ Data Lake Service (2025-09-26)**: Complete MinIO-based object storage with lifecycle management, intelligent naming, and integration tests
 - **✅ Message Queue Service (2025-09-25)**: RabbitMQ-based message processing with containerization
 - **✅ Initial CI/CD Pipeline**: GitHub Actions workflows for data-lake and message-queue services
+- **✅ WebAuthn Authentication Stack (2025-10-21)**: MCP-generated zero-trust WebAuthn stack with Jaeger tracing, separate from health services
 
 ### Planned Development
 - **Health API Service** - FastAPI upload service for Android Health Connect data
@@ -19,8 +20,10 @@ This is a Python-based microservices platform that processes health data from An
 ### Key Technologies
 - **Language**: Python 3.11+ with Pydantic for data validation
 - **Framework**: FastAPI for API services
+- **Authentication**: WebAuthn/Passkeys (zero-trust stack in `webauthn-stack/`)
 - **Storage**: MinIO (S3-compatible) for data lake, PostgreSQL for structured data
 - **Message Queue**: RabbitMQ for async processing
+- **Observability**: Jaeger distributed tracing (provided by webauthn-stack)
 - **AI/ML**: MLflow for model management, transformers for NLP
 - **Testing**: pytest with asyncio support, Docker for integration tests
 - **Containerization**: Docker with docker-compose for local development
@@ -28,11 +31,31 @@ This is a Python-based microservices platform that processes health data from An
 
 ### Architecture Overview
 ```
-Health API ──→ Message Queue ──→ Data Lake
-    │              │               │
-    ▼              ▼               ▼
-AI Query ◀─── ETL Narrative ◀─── Raw Processing
-Interface      Engine            Service
+┌──────────────────────────────────────────────────────────┐
+│  WebAuthn Stack (webauthn-stack/)                        │
+│  - Envoy Gateway (port 8000)                             │
+│  - WebAuthn Server (FIDO2 + JWT)                         │
+│  - PostgreSQL (port 5433) - credentials only             │
+│  - Redis (port 6380) - sessions only                     │
+│  - Jaeger (port 16687) - distributed tracing             │
+└────────────────────┬─────────────────────────────────────┘
+                     │ (JWT verification)
+                     ▼
+┌──────────────────────────────────────────────────────────┐
+│  Health Services Stack (main docker-compose.yml)         │
+│                                                           │
+│  Health API ──→ Message Queue ──→ Data Lake              │
+│      │              │               │                     │
+│      ▼              ▼               ▼                     │
+│  AI Query ◀─── ETL Narrative ◀─── Raw Processing         │
+│  Interface      Engine            Service                │
+│                                                           │
+│  Infrastructure:                                          │
+│  - PostgreSQL (port 5432) - health data                  │
+│  - Redis (port 6379) - rate limiting                     │
+│  - MinIO (port 9000/9001) - data lake                    │
+│  - RabbitMQ (port 5672/15672) - message queue            │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ## Development Commands
@@ -61,9 +84,37 @@ source .venv/bin/activate
 - **Run Service**: `docker-compose up -d rabbitmq`
 
 ### Docker Development
-- **All Services**: `docker-compose up -d`
-- **Individual Service**: `docker-compose up -d {service-name}`
-- **Logs**: `docker-compose logs -f {service-name}`
+
+#### Starting the Complete Platform
+```bash
+# 1. Start WebAuthn stack (authentication + Jaeger tracing)
+cd webauthn-stack/docker && docker compose up -d && cd ../..
+
+# 2. Start health services
+docker compose up -d
+
+# 3. Verify all services are running
+docker ps
+```
+
+#### Individual Service Management
+- **Health Services**: `docker compose up -d {service-name}`
+- **WebAuthn Stack**: `cd webauthn-stack/docker && docker compose up -d`
+- **Logs**: `docker compose logs -f {service-name}`
+
+#### Port Reference
+**WebAuthn Stack:**
+- Gateway (Envoy): `http://localhost:8000`
+- Jaeger UI: `http://localhost:16687`
+- PostgreSQL: `localhost:5433`
+- Redis: `localhost:6380`
+
+**Health Services:**
+- PostgreSQL: `localhost:5432`
+- Redis: `localhost:6379`
+- MinIO API: `localhost:9000`
+- MinIO Console: `localhost:9001`
+- RabbitMQ: `localhost:5672` (AMQP), `localhost:15672` (Management UI)
 
 ## 🚨 TOP 5 CRITICAL PATTERNS (Essential for Immediate Productivity)
 
@@ -153,6 +204,41 @@ services/{service-name}/
 
 ## Critical Development Reminders
 
+### 🔐 CRITICAL: WebAuthn Stack Integration
+
+**The platform uses a separate WebAuthn stack for authentication and observability.**
+
+#### Architecture Decision
+- **Separate Stacks**: WebAuthn stack (`webauthn-stack/`) is isolated from health services
+- **Shared Jaeger**: Single Jaeger instance (in webauthn-stack) for unified distributed tracing
+- **Separate Databases**: WebAuthn PostgreSQL (port 5433) vs Health PostgreSQL (port 5432)
+- **Separate Redis**: WebAuthn Redis (port 6380) vs Health Redis (port 6379)
+
+#### Integration Pattern
+```bash
+# Always start WebAuthn stack first
+cd webauthn-stack/docker && docker compose up -d && cd ../..
+
+# Then start health services
+docker compose up -d
+```
+
+#### Adding Jaeger Tracing to Health Services
+When implementing distributed tracing in health services:
+
+```python
+# Use the shared Jaeger from webauthn-stack
+JAEGER_OTLP_ENDPOINT = "http://localhost:4319"  # gRPC
+# or
+JAEGER_OTLP_ENDPOINT = "http://localhost:4320"  # HTTP
+```
+
+#### JWT Verification (Future)
+Health API will verify WebAuthn JWTs:
+- WebAuthn issues JWTs via gateway at `http://localhost:8000`
+- Health API verifies using public key from `http://localhost:8000/public-key`
+- See `webauthn-stack/docs/INTEGRATION.md` for detailed integration guide
+
 ### 🚨 CRITICAL: Git Commit Policy - NEVER Auto-Commit
 
 **🛑 MANDATORY: User Must Review and Commit All Changes**
@@ -201,12 +287,20 @@ class Settings(BaseSettings):
 
 ## Port Assignments
 
-- **Health API Service**: 8000 (FastAPI default)
+**WebAuthn Stack:**
+- **Envoy Gateway**: 8000 (Zero-trust entry point)
+- **Jaeger UI**: 16687 (Distributed tracing)
+- **PostgreSQL**: 5433 (Credentials only)
+- **Redis**: 6380 (Sessions only)
+
+**Health Services:**
+- **Health API Service**: 8001 (FastAPI)
+- **PostgreSQL**: 5432 (Health data)
+- **Redis**: 6379 (Rate limiting)
 - **Data Lake (MinIO)**: 9000 (API), 9001 (Console)
 - **Message Queue (RabbitMQ)**: 5672 (AMQP), 15672 (Management)
-- **ETL Narrative Engine**: 8001
-- **AI Query Interface**: 8002
-- **PostgreSQL**: 5432 (when added)
+- **ETL Narrative Engine**: 8002 (planned)
+- **AI Query Interface**: 8003 (planned)
 
 ## Testing Architecture
 

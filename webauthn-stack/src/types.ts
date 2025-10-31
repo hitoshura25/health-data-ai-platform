@@ -1,0 +1,49 @@
+// Re-export types from published client for convenience
+export type {
+    RegistrationRequest,
+    RegistrationCompleteRequest,
+    RegistrationResponse,
+    RegistrationCompleteResponse,
+    AuthenticationRequest,
+    AuthenticationCompleteRequest,
+    AuthenticationResponse,
+    AuthenticationCompleteResponse,
+    ErrorResponse,
+    HealthResponse
+} from '@vmenon25/mpo-webauthn-client';
+
+// WebAuthn Client specific types
+export interface WebAuthnClientOptions {
+    serverUrl?: string;
+}
+
+export interface WebAuthnResult {
+    success: boolean;
+    message: string;
+    username?: string;
+    accessToken?: string;
+    tokenType?: string;
+    expiresIn?: number;
+}
+
+export interface ConnectionTestResult {
+    success: boolean;
+    message: string;
+}
+
+// SimpleWebAuthn Browser types (for compatibility)
+export interface SimpleWebAuthnBrowser {
+    startRegistration: (options: any) => Promise<any>;
+    startAuthentication: (options: any) => Promise<any>;
+}
+
+// Global SimpleWebAuthn interface
+declare global {
+    interface Window {
+        SimpleWebAuthnBrowser: SimpleWebAuthnBrowser;
+    }
+}
+
+// Export auth storage types for convenience
+export type { AuthSession } from './auth-storage';
+export { AuthStorage } from './auth-storage';

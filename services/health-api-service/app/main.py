@@ -1,20 +1,20 @@
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
+from fastapi_limiter import FastAPILimiter
+from fastapi_limiter.depends import RateLimiter
 import structlog
 import logging
 from contextlib import asynccontextmanager
 from starlette.middleware.base import BaseHTTPMiddleware
+import redis.asyncio as redis
 
 from app.health.router import router as health_router
-from app.limiter import limiter
 from app.users import fastapi_users
 from app.schemas import UserRead, UserCreate, UserUpdate
 from app.upload.router import router as upload_router
 from app.db.session import Base, engine
 from app.supported_record_types import SUPPORTED_RECORD_TYPES
+from app.config import settings
 
 from app.auth.router import router as auth_router
 
@@ -69,9 +69,17 @@ async def lifespan(app: FastAPI):
     # Create database tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Initialize rate limiter with async Redis
+    redis_connection = redis.from_url(settings.REDIS_URL, decode_responses=True)
+    await FastAPILimiter.init(redis_connection)
+
     logger.info("Health API service started", version="1.0.0")
     yield
-    # any shutdown logic would go here
+
+    # Cleanup
+    await FastAPILimiter.close()
+    await redis_connection.close()
 
 app = FastAPI(
     title="Health Data AI Platform - API Service",
@@ -83,19 +91,17 @@ app = FastAPI(
 # Add middleware to convert login 400 errors to 401
 app.add_middleware(LoginErrorMiddleware)
 
-# Add SlowAPI middleware for rate limiting
-app.add_middleware(SlowAPIMiddleware)
-
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# Note: Rate limiting is handled by fastapi-limiter via route dependencies
+# No global middleware needed - rate limits are applied per-route using RateLimiter dependency
 
 # Include application routers
 app.include_router(health_router)
 app.include_router(upload_router)
 
 # Authentication & User Management Routers
-# Custom auth router provides /auth/jwt/login and /auth/jwt/logout with token blocklisting
-# Future: /auth/webauthn/exchange for passkey-based authentication
+# Custom auth router provides:
+# - /auth/jwt/login and /auth/jwt/logout (password-based with token blocklisting)
+# - /auth/webauthn/exchange (passkey-based token exchange)
 app.include_router(auth_router)
 
 # FastAPI Users routers for registration and user management

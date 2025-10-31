@@ -21,7 +21,7 @@ fastapi==0.104.1
 fastapi-users[sqlalchemy]==12.1.2
 uvicorn[standard]==0.24.0
 gunicorn==21.2.0
-slowapi==0.1.9
+fastapi-limiter==0.1.6  # Async-native rate limiting
 structlog==23.2.0
 tenacity==8.2.3
 prometheus-client==0.19.0
@@ -536,9 +536,8 @@ class UploadProcessor:
 
 ### 11. Upload Router (app/upload/router.py)
 ```python
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi_limiter.depends import RateLimiter
 from app.auth import current_active_user
 from app.auth.models import User
 from app.upload.processor import UploadProcessor
@@ -547,19 +546,22 @@ import structlog
 
 logger = structlog.get_logger()
 
-# Rate limiter
-limiter = Limiter(
-    key_func=get_remote_address,
-    storage_uri=settings.redis_url,
-    default_limits=[settings.default_rate_limit]
-)
-
 router = APIRouter(prefix="/v1", tags=["upload"])
 
 upload_processor = UploadProcessor()
 
-@router.post("/upload")
-@limiter.limit(settings.upload_rate_limit)
+# Parse rate limit string for fastapi-limiter
+rate_parts = settings.upload_rate_limit.split("/")
+rate_times = int(rate_parts[0])
+rate_period = rate_parts[1] if len(rate_parts) > 1 else "minute"
+period_seconds = {"second": 1, "minute": 60, "hour": 3600, "day": 86400}.get(rate_period, 60)
+
+@router.post(
+    "/upload",
+    response_model=UploadResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(RateLimiter(times=rate_times, seconds=period_seconds))]
+)
 async def upload_health_data(
     file: UploadFile = File(...),
     current_user: User = Depends(current_active_user)
@@ -660,10 +662,9 @@ async def readiness_check():
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_users import FastAPIUsers
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
+from fastapi_limiter import FastAPILimiter
 from prometheus_client import make_asgi_app
+import redis.asyncio as redis
 import structlog
 
 from app.config import settings

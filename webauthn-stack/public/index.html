@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebAuthn Test Client</title>
+
+    <!-- SECURITY: Content Security Policy to prevent XSS attacks -->
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self';
+                   script-src 'self' 'unsafe-inline' https://unpkg.com;
+                   connect-src 'self' http://localhost:8000;
+                   style-src 'self' 'unsafe-inline';">
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #555;
+        }
+        .form-group {
+            margin: 15px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .success {
+            color: #28a745;
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .info {
+            color: #0c5460;
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status {
+            margin: 15px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        #serverUrl {
+            font-family: monospace;
+        }
+        .app-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🔐 WebAuthn Passkey Test Client</h1>
+    <p class="subtitle">Test your WebAuthn implementation with real passkey authentication</p>
+
+    <div class="app-info">
+        <strong>📱 Instructions:</strong>
+        <ol>
+            <li>Make sure your WebAuthn server is running at the configured URL</li>
+            <li>Register a new passkey by entering a username and display name</li>
+            <li>Use the passkey to authenticate (with or without username)</li>
+            <li>Test both registration and authentication flows end-to-end</li>
+        </ol>
+    </div>
+
+    <div class="section">
+        <h2>🔧 Server Configuration</h2>
+        <div class="form-group">
+            <label for="serverUrl">Server URL (Envoy Gateway):</label>
+            <input type="text" id="serverUrl" value="http://localhost:8000" placeholder="http://localhost:8000">
+        </div>
+        <button onclick="testServerConnection()">Test Connection</button>
+        <div id="connectionStatus" class="status"></div>
+    </div>
+
+    <div class="section">
+        <h2>📝 Registration (Create Passkey)</h2>
+        <div class="form-group">
+            <label for="regUsername">Username:</label>
+            <input type="text" id="regUsername" placeholder="Enter username" value="">
+        </div>
+        <div class="form-group">
+            <label for="regDisplayName">Display Name:</label>
+            <input type="text" id="regDisplayName" placeholder="Enter display name" value="">
+        </div>
+        <button onclick="registerPasskey()">🔑 Register Passkey</button>
+        <div id="registrationStatus" class="status"></div>
+    </div>
+
+    <div id="authenticationSection" class="section">
+        <h2>🔓 Authentication (Use Passkey)</h2>
+        <div class="form-group">
+            <label for="authUsername">Username (optional for usernameless flow):</label>
+            <input type="text" id="authUsername"
+                   placeholder="Enter username or leave blank for usernameless authentication">
+        </div>
+        <button onclick="authenticatePasskey()">🛡️ Authenticate with Passkey</button>
+        <div id="authenticationStatus" class="status"></div>
+    </div>
+
+    <!-- NEW: Protected API Access Section -->
+    <div id="protectedSection" class="section" style="display: none;">
+        <h2>🔒 Protected API Access</h2>
+
+        <div class="app-info">
+            <div id="sessionInfo"></div>
+            <button onclick="logout()" style="background-color: #dc3545; margin-top: 10px;">
+                🔓 Logout
+            </button>
+        </div>
+
+        <div class="form-group">
+            <label for="apiEndpoint">API Endpoint:</label>
+            <input type="text" id="apiEndpoint"
+                   value="/api/user/profile"
+                   placeholder="Enter API endpoint path">
+            <small style="color: #666; display: block; margin-top: 5px;">
+                Example endpoints: /api/user/profile, /api/example/data
+            </small>
+        </div>
+
+        <button onclick="callProtectedApi()">📡 Call Protected API</button>
+
+        <div id="apiStatus" class="status"></div>
+
+        <div class="form-group" style="margin-top: 20px;">
+            <label>API Response:</label>
+            <pre id="apiOutput" style="
+                background-color: #f5f5f5;
+                padding: 15px;
+                border-radius: 4px;
+                border: 1px solid #ddd;
+                overflow-x: auto;
+                max-height: 300px;
+                font-family: 'Courier New', monospace;
+                font-size: 14px;
+            ">No response yet</pre>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/@simplewebauthn/browser@10.0.0/dist/bundle/index.umd.min.js"></script>
+<script src="umd/webauthn-client.umd.js"></script>
+</body>
+</html>

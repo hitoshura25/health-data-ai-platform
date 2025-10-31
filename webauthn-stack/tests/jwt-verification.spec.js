@@ -1,0 +1,333 @@
+const { test, expect } = require('@playwright/test');
+const crypto = require('crypto');
+
+// Timeout configuration for WebAuthn operations (max wait time, actual wait is condition-based)
+const WEBAUTHN_OPERATION_TIMEOUT = 10000; // 10 seconds max for WebAuthn operations
+
+// Base URL - All traffic goes through Envoy Gateway in zero-trust architecture
+const GATEWAY_URL = 'http://localhost:8000';
+
+/**
+ * JWT Verification E2E Tests
+ *
+ * These tests verify the zero-trust JWT architecture using REAL WebAuthn flows:
+ * - Virtual authenticator for genuine WebAuthn credentials
+ * - JWT token issuance on successful WebAuthn authentication
+ * - Protected endpoint access with valid JWT
+ * - Rejection of requests without JWT
+ * - Rejection of requests with invalid JWT
+ * - PyJWKClient compatibility (kid header verification)
+ *
+ * CRITICAL: All tests use virtual authenticator + browser UI interaction
+ * NO mock credentials - ensures tests accurately reflect production behavior
+ */
+
+// Helper function to generate unique usernames for parallel test execution
+function generateUniqueUsername(testName, workerIndex = 0) {
+  const timestamp = Date.now();
+  const randomBytes = crypto.randomBytes(4).toString('hex');
+  const processId = process.pid;
+  const workerId = workerIndex || Math.floor(Math.random() / 1000);
+
+  // Create a short hash of the test name for readability
+  const testHash = crypto.createHash('md5').update(testName).digest('hex').substring(0, 6);
+
+  return `pw-${testHash}-${timestamp}-${processId}-${workerId}-${randomBytes}`;
+}
+
+/**
+ * Helper function to register and authenticate a user using virtual authenticator
+ * Returns the JWT token from sessionStorage after successful authentication
+ */
+async function registerAndAuthenticate(page, testInfo) {
+  const username = generateUniqueUsername(testInfo.title, testInfo.workerIndex);
+
+  // Step 1: Register a new passkey
+  await page.fill('#regUsername', username);
+  await page.fill('#regDisplayName', 'JWT Test User');
+  await page.click('button:has-text("Register Passkey")');
+
+  // Wait for registration to complete (production-grade auto-waiting with expect)
+  await expect(page.locator('#registrationStatus')).toContainText('successful', { timeout: WEBAUTHN_OPERATION_TIMEOUT });
+
+  // Step 2: Authenticate with the newly registered passkey
+  await page.fill('#authUsername', username);
+  await page.click('button:has-text("Authenticate with Passkey")');
+
+  // Wait for authentication to complete (production-grade auto-waiting with expect)
+  await expect(page.locator('#authenticationStatus')).toContainText('successful', { timeout: WEBAUTHN_OPERATION_TIMEOUT });
+
+  // Step 3: Extract JWT from sessionStorage
+  const sessionData = await page.evaluate(() => {
+    const stored = sessionStorage.getItem('webauthn_auth_session');
+    return stored ? JSON.parse(stored) : null;
+  });
+
+  expect(sessionData).toBeTruthy();
+  expect(sessionData.accessToken).toBeTruthy();
+
+  return { username, token: sessionData.accessToken, sessionData };
+}
+
+test.describe('JWT Token Issuance', () => {
+  test.beforeEach(async ({ page, context }) => {
+    // Set up CDP (Chrome DevTools Protocol) virtual authenticator
+    const client = await context.newCDPSession(page);
+    await client.send('WebAuthn.enable');
+    const { authenticatorId } = await client.send('WebAuthn.addVirtualAuthenticator', {
+      options: {
+        protocol: 'ctap2',
+        ctap2Version: 'ctap2_1',
+        transport: 'internal',
+        hasResidentKey: true,
+        hasUserVerification: true,
+        hasLargeBlob: false,
+        hasCredBlob: false,
+        hasMinPinLength: false,
+        hasPrf: false,
+        automaticPresenceSimulation: true,
+        isUserVerified: true
+      }
+    });
+    page.authenticatorId = authenticatorId;
+
+    // Navigate to the test client web application
+    await page.goto('http://localhost:8082');
+    await page.waitForLoadState('networkidle');
+  });
+
+  test('should issue JWT on successful authentication', async ({ page, request }, testInfo) => {
+    const { username, token, sessionData } = await registerAndAuthenticate(page, testInfo);
+
+    // Verify JWT token structure from sessionStorage
+    // sessionStorage schema: { accessToken, tokenType, expiresIn, username, issuedAt }
+    expect(sessionData.tokenType).toBe('Bearer');
+    expect(sessionData.expiresIn).toBe(900); // 15 minutes
+    expect(sessionData.username).toBe(username);
+
+    // Verify JWT format (3 parts separated by dots)
+    const tokenParts = token.split('.');
+    expect(tokenParts.length).toBe(3);
+
+    // Verify JWT header (base64url decoded)
+    const header = JSON.parse(Buffer.from(tokenParts[0], 'base64url').toString());
+
+    // DEBUG: Log the actual JWT header contents
+    console.log('🔍 JWT Header:', JSON.stringify(header, null, 2));
+    console.log('🔍 Token (first 50 chars):', token.substring(0, 50));
+
+    expect(header.alg).toBe('RS256');
+    expect(header.typ).toBe('JWT');
+
+    // CRITICAL: Verify 'kid' (Key ID) header for PyJWKClient compatibility
+    // Without 'kid', Python JWT libraries fail with:
+    // "Unable to find a signing key that matches: 'None'"
+    console.log('🔍 Checking for kid header...');
+    console.log('🔍 header.kid value:', header.kid);
+    expect(header).toHaveProperty('kid');
+    expect(header.kid).toBeDefined();
+    expect(typeof header.kid).toBe('string');
+    expect(header.kid.length).toBeGreaterThan(0);
+
+    // Verify kid matches a key in JWKS (supports key rotation - kid changes over time)
+    const jwksResponse = await request.get(`${GATEWAY_URL}/.well-known/jwks.json`);
+    expect(jwksResponse.ok()).toBeTruthy();
+    const jwks = await jwksResponse.json();
+    const keyIds = jwks.keys.map(key => key.kid);
+    expect(keyIds).toContain(header.kid);
+    console.log(`✅ JWT kid '${header.kid}' found in JWKS (${keyIds.length} total keys)`);
+
+    // Verify JWT payload
+    const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64url').toString());
+    expect(payload.iss).toBe('mpo-webauthn');
+    expect(payload.sub).toBe(username);
+    expect(payload.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
+
+    console.log(`✅ JWT issued successfully for user: ${username}`);
+  });
+});
+
+test.describe('Protected Endpoint Access', () => {
+  test.beforeEach(async ({ page, context }) => {
+    const client = await context.newCDPSession(page);
+    await client.send('WebAuthn.enable');
+    const { authenticatorId } = await client.send('WebAuthn.addVirtualAuthenticator', {
+      options: {
+        protocol: 'ctap2',
+        ctap2Version: 'ctap2_1',
+        transport: 'internal',
+        hasResidentKey: true,
+        hasUserVerification: true,
+        automaticPresenceSimulation: true,
+        isUserVerified: true
+      }
+    });
+    page.authenticatorId = authenticatorId;
+    await page.goto('http://localhost:8082');
+    await page.waitForLoadState('networkidle');
+  });
+
+  test('should access protected endpoint with valid JWT', async ({ page, request }, testInfo) => {
+    const { username, token } = await registerAndAuthenticate(page, testInfo);
+
+    // Access protected endpoint through Envoy Gateway
+    const profileResponse = await request.get(`${GATEWAY_URL}/api/user/profile`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    expect(profileResponse.ok()).toBeTruthy();
+
+    const profileData = await profileResponse.json();
+    expect(profileData).toHaveProperty('username');
+    expect(profileData.username).toBe(username);
+    expect(profileData).toHaveProperty('message');
+  });
+
+  test('should reject request without JWT', async ({ request }) => {
+    // Try to access protected endpoint without Authorization header
+    const response = await request.get(`${GATEWAY_URL}/api/user/profile`);
+
+    // Should be rejected with 401 Unauthorized
+    expect(response.status()).toBe(401);
+  });
+
+  test('should reject request with invalid JWT', async ({ request }) => {
+    // Try with malformed token
+    const invalidToken = 'invalid.jwt.token';
+
+    const response = await request.get(`${GATEWAY_URL}/api/user/profile`, {
+      headers: {
+        'Authorization': `Bearer ${invalidToken}`
+      }
+    });
+
+    // Should be rejected with 401 Unauthorized
+    expect(response.status()).toBe(401);
+  });
+
+  test('should reject request with wrong token format', async ({ request }) => {
+    // Try without "Bearer " prefix
+    const token = 'some-random-token';
+
+    const response = await request.get(`${GATEWAY_URL}/api/user/profile`, {
+      headers: {
+        'Authorization': token
+      }
+    });
+
+    // Should be rejected with 401 Unauthorized
+    expect(response.status()).toBe(401);
+  });
+});
+
+test.describe('Envoy Gateway Routing', () => {
+  test('should route public endpoints without JWT', async ({ request }) => {
+    // Health check should work without JWT
+    const healthResponse = await request.get(`${GATEWAY_URL}/health`);
+    expect(healthResponse.ok()).toBeTruthy();
+
+    // JWKS endpoint should work without JWT (replaces deprecated /public-key)
+    const jwksResponse = await request.get(`${GATEWAY_URL}/.well-known/jwks.json`);
+    expect(jwksResponse.ok()).toBeTruthy();
+  });
+
+  test('should protect /api/* endpoints', async ({ request }) => {
+    // All /api/* endpoints should require JWT
+    const endpoints = [
+      '/api/user/profile',
+      '/api/example/data'
+    ];
+
+    for (const endpoint of endpoints) {
+      const response = await request.get(`${GATEWAY_URL}${endpoint}`);
+      expect(response.status()).toBe(401);
+    }
+  });
+});
+
+test.describe('PyJWKClient Compatibility via Example Service', () => {
+  test.beforeEach(async ({ page, context }) => {
+    const client = await context.newCDPSession(page);
+    await client.send('WebAuthn.enable');
+    const { authenticatorId } = await client.send('WebAuthn.addVirtualAuthenticator', {
+      options: {
+        protocol: 'ctap2',
+        ctap2Version: 'ctap2_1',
+        transport: 'internal',
+        hasResidentKey: true,
+        hasUserVerification: true,
+        automaticPresenceSimulation: true,
+        isUserVerified: true
+      }
+    });
+    page.authenticatorId = authenticatorId;
+    await page.goto('http://localhost:8082');
+    await page.waitForLoadState('networkidle');
+  });
+
+  test('example service should verify JWT using PyJWKClient', async ({ page, request }, testInfo) => {
+    /**
+     * CRITICAL TEST: Verifies Python PyJWKClient can extract 'kid' from JWT header
+     *
+     * Flow:
+     * 1. User authenticates → WebAuthn server issues JWT
+     * 2. Client sends JWT to /api/example/data
+     * 3. Envoy Gateway forwards to example-service (Python FastAPI)
+     * 4. Example service uses PyJWKClient.get_signing_key_from_jwt(token)
+     *    - PyJWKClient extracts 'kid' from JWT header
+     *    - Matches 'kid' against JWKS keys
+     *    - Returns matching public key for verification
+     * 5. Example service verifies JWT signature
+     *
+     * Without 'kid' in JWT header:
+     * - PyJWKClient throws: "Unable to find a signing key that matches: 'None'"
+     * - Example service returns 401 Unauthorized
+     * - Test FAILS (proving the issue exists)
+     */
+    const { username, token } = await registerAndAuthenticate(page, testInfo);
+
+    // Access example service endpoint that uses PyJWKClient
+    // Route: Browser -> Envoy Gateway -> Example Service (Python FastAPI)
+    const exampleResponse = await request.get(`${GATEWAY_URL}/api/example/data`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    // If PyJWKClient can't extract 'kid' from JWT header, this will fail with 401
+    expect(exampleResponse.ok()).toBeTruthy();
+
+    const data = await exampleResponse.json();
+    expect(data).toHaveProperty('data');
+    expect(data).toHaveProperty('user');
+    expect(data.user).toBe(username);
+    expect(data).toHaveProperty('note');
+
+    console.log('✅ PyJWKClient successfully verified JWT with kid header');
+  });
+
+  test('example service /api/user/profile should also use PyJWKClient', async ({ page, request }, testInfo) => {
+    /**
+     * Additional test to verify ALL protected endpoints use PyJWKClient
+     */
+    const { username, token } = await registerAndAuthenticate(page, testInfo);
+
+    // Access user profile endpoint via example service
+    const profileResponse = await request.get(`${GATEWAY_URL}/api/user/profile`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    expect(profileResponse.ok()).toBeTruthy();
+
+    const data = await profileResponse.json();
+    expect(data).toHaveProperty('username');
+    expect(data.username).toBe(username);
+    expect(data).toHaveProperty('message');
+
+    console.log('✅ PyJWKClient verified JWT for /api/user/profile endpoint');
+  });
+});

@@ -28,6 +28,14 @@ services:
       # RabbitMQ (for message queue)
       - RABBITMQ_URL=amqp://${MQ_RABBITMQ_USER:-guest}:${MQ_RABBITMQ_PASS:-guest}@rabbitmq:5672/
       - RABBITMQ_MAIN_EXCHANGE=${RABBITMQ_MAIN_EXCHANGE:-health-data}
+
+      # Jaeger Distributed Tracing (points to webauthn-stack Jaeger)
+      - JAEGER_OTLP_ENDPOINT=http://host.docker.internal:4319
+      - JAEGER_SERVICE_NAME=health-api-service
+
+      # WebAuthn Integration (for token exchange via JWKS)
+      - WEBAUTHN_JWKS_URL=http://host.docker.internal:8000/.well-known/jwks.json
+      - WEBAUTHN_ISSUER=mpo-webauthn
     depends_on:
       postgres:
         condition: service_healthy

@@ -3,13 +3,21 @@
 # This file orchestrates all microservices and infrastructure for the platform.
 #
 # Services included:
-# - Infrastructure: PostgreSQL, Redis, Jaeger (monitoring)
-# - Authentication: WebAuthn Server (passkey-based auth)
+# - Infrastructure: PostgreSQL, Redis (shared data stores)
 # - Data Storage: MinIO S3-compatible object storage
 # - Message Queue: RabbitMQ for async processing
 # - API Services: Health API (upload & query)
 #
+# Authentication & Observability:
+#   WebAuthn authentication and Jaeger tracing are provided by the
+#   webauthn-stack (see webauthn-stack/docker/docker-compose.yml).
+#   Start that stack first for authentication and distributed tracing.
+#
 # Usage:
+#   # Start WebAuthn stack (authentication + Jaeger)
+#   cd webauthn-stack/docker && docker compose up -d && cd ../..
+#
+#   # Start health services
 #   docker compose up -d                    # Start all services
 #   docker compose up -d health-api         # Start health-api and dependencies only
 #   docker compose logs -f health-api       # View health-api logs
@@ -24,10 +32,6 @@ include:
   # Shared infrastructure (used by multiple services)
   - path: infrastructure/postgres.compose.yml
   - path: infrastructure/redis.compose.yml
-  - path: infrastructure/jaeger.compose.yml
-
-  # Authentication service (WebAuthn/Passkeys)
-  - path: infrastructure/webauthn.compose.yml
 
   # Data storage (MinIO S3-compatible object storage)
   - path: services/data-lake/deployment/minio.compose.yml

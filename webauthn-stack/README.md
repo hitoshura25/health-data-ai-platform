@@ -1,0 +1,1223 @@
+# WebAuthn Web Client
+
+A complete WebAuthn (Passkeys/FIDO2) web client generated for testing authentication with your WebAuthn server.
+
+## Quick Start
+
+### 1. Install Dependencies
+
+```bash
+npm install
+```
+
+### 2. Install yq (Required for Service Addition)
+
+If you plan to add additional services using `./scripts/add-service.sh`, you need `yq` v4+:
+
+```bash
+# macOS
+brew install yq
+
+# Linux
+wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+chmod +x /usr/local/bin/yq
+
+# Verify installation
+yq --version  # Should show v4.x.x
+```
+
+*Note: yq is only needed for adding services, not for running the existing stack.*
+
+### 3. Build the Client
+
+```bash
+npm run build
+```
+
+### 3. Start the Development Server
+
+```bash
+npm start
+```
+
+The client will be available at: **http://localhost:8082**
+
+## Configuration
+
+The client is configured to connect to the zero-trust stack at:
+- **Gateway URL**: `http://localhost:8000` (Envoy Gateway - entry point)
+- **Client Port**: `8082`
+- **WebAuthn Server**: `http://localhost:8000` (internal, accessed via gateway)
+
+You can change the server URL in the web UI or by modifying the configuration.
+
+### Port Assignments (Customizable)
+- **8000** - Envoy Gateway (default: 8000)
+- **9901** - Envoy admin (default: 9901)
+- **8082** - Web client dev server (default: 8082)
+- **5433** - PostgreSQL (default: 5432)
+- **6380** - Redis (default: 6379)
+- **16687** - Jaeger UI (default: 16686)
+- **14268** - Jaeger collector HTTP (default: 14268)
+- **4319** - Jaeger OTLP gRPC (default: 4317)
+- **4320** - Jaeger OTLP HTTP (default: 4318)
+- **9000** - Service sidecars (mTLS, internal only)
+- **9001+** - Application ports (internal only)
+
+**Avoiding Port Conflicts:**
+All host ports are customizable via CLI parameters to avoid conflicts with existing services.
+Use `npx @vmenon25/mcp-server-webauthn-client --help` to see all port options.
+
+## Features
+
+### Registration Flow
+1. Enter a username and display name
+2. Click "Register Passkey"
+3. Follow your browser/device prompt to create a passkey
+4. The passkey is securely stored on your device
+
+### Authentication Flow
+1. Enter username (or leave blank for usernameless authentication)
+2. Click "Authenticate with Passkey"
+3. Follow your browser/device prompt to use your passkey
+4. Successfully authenticate with the server
+
+## Critical Integration Patterns
+
+This client preserves all critical WebAuthn integration patterns:
+
+### JSON Parsing
+Server responses contain JSON strings that must be parsed before passing to SimpleWebAuthn:
+```typescript
+const publicKeyOptions = JSON.parse(startResponse.publicKeyCredentialCreationOptions);
+```
+
+### SimpleWebAuthn Integration
+Uses the SimpleWebAuthn browser library for WebAuthn API calls:
+```typescript
+const credential = await window.SimpleWebAuthnBrowser.startRegistration(publicKeyOptions.publicKey);
+```
+
+### Credential Serialization
+Credentials must be stringified before sending to the server:
+```typescript
+credential: JSON.stringify(credential)
+```
+
+## JWT Authentication & Session Management (Production-Ready)
+
+### Overview
+
+After successful WebAuthn authentication, the client receives a JWT (JSON Web Token) from the server. This implementation uses **industry-standard libraries** for secure token management:
+
+- **jwt-decode** (~2KB) - Safe JWT parsing and expiration validation
+- **Native sessionStorage** (0KB) - Browser-native storage API
+
+**Total bundle impact**: ~2KB minified (~1KB gzipped)
+
+### Security Architecture
+
+#### JWT in sessionStorage vs HttpOnly Cookies
+
+This client uses **JWT in sessionStorage** instead of HttpOnly cookies:
+
+**Advantages**:
+- ✅ No backend changes required
+- ✅ Simple CORS configuration
+- ✅ Standard Bearer token pattern
+- ✅ Works seamlessly with SPAs
+- ✅ No CSRF vulnerability
+
+**Security Considerations**:
+- ⚠️ Vulnerable to XSS attacks (mitigated by CSP headers)
+- ⚠️ Requires manual token management (handled by libraries)
+
+**HttpOnly Cookies Alternative**:
+HttpOnly cookies provide XSS immunity but require significant backend changes. See INTEGRATION.md for complete details on:
+- Set-Cookie headers instead of JSON response
+- CORS credentials configuration
+- CSRF token management
+- Cookie-based token extraction
+
+**Verdict**: JWT in sessionStorage with **strict CSP headers** provides a good security/complexity balance for this use case.
+
+### JWT Token Structure
+
+```json
+{
+  "accessToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "tokenType": "Bearer",
+  "expiresIn": 900,
+  "username": "user@example.com"
+}
+```
+
+- **accessToken**: RS256-signed JWT containing user claims
+- **tokenType**: Always "Bearer" (standard OAuth 2.0)
+- **expiresIn**: Token lifetime in seconds (default: 900 = 15 minutes)
+- **username**: Authenticated user identifier
+
+### Session Storage (Using Native sessionStorage)
+
+JWT tokens are stored using **native browser sessionStorage** which provides:
+- ✅ Zero external dependencies
+- ✅ Native browser support (all modern browsers)
+- ✅ Automatic session cleanup on tab/window close
+- ✅ Simple, well-understood API
+- ✅ Manual JSON serialization (explicit and transparent)
+
+```typescript
+// Stored automatically after successful authentication
+import { AuthStorage } from './auth-storage';
+
+AuthStorage.store({
+  accessToken: "...",
+  tokenType: "Bearer",
+  expiresIn: 900,
+  username: "user@example.com"
+});
+```
+
+**Why sessionStorage?**
+- Cleared when browser tab closes (better security)
+- Appropriate for short-lived tokens (15 minutes)
+- Standard production pattern for JWT storage
+
+### Safe JWT Parsing (Using jwt-decode)
+
+The `jwt-decode` library provides **safe token parsing**:
+
+```typescript
+import { jwtDecode } from 'jwt-decode';
+
+// Safe parsing - validates structure and handles errors
+try {
+  const decoded = jwtDecode<{ exp: number }>(token);
+
+  // Check expiration using decoded 'exp' claim
+  if (decoded.exp * 1000 < Date.now()) {
+    console.log('Token expired');
+  }
+} catch (error) {
+  // Malformed token - handle gracefully
+  console.error('Invalid JWT:', error);
+}
+```
+
+**Benefits over manual parsing**:
+- ✅ Validates JWT structure (3 parts)
+- ✅ Handles malformed base64
+- ✅ Prevents crashes from invalid tokens
+- ✅ Industry standard (5,700+ dependent packages)
+
+### Protected API Calls
+
+Use AuthStorage to call protected endpoints:
+
+```typescript
+import { AuthStorage } from './auth-storage';
+
+// Get authorization header
+const authHeader = AuthStorage.getAuthorizationHeader();
+// Returns: "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+// Make authenticated API call
+const response = await fetch('http://localhost:8000/api/user/profile', {
+  method: 'GET',
+  headers: {
+    'Authorization': authHeader,
+    'Content-Type': 'application/json'
+  }
+});
+
+if (response.status === 401) {
+  // Token expired or invalid - re-authenticate
+  AuthStorage.clear();
+  // Show authentication UI
+}
+
+const data = await response.json();
+console.log('Profile:', data);
+```
+
+### Session Management API
+
+#### Check Authentication Status
+
+```typescript
+if (AuthStorage.isAuthenticated()) {
+  console.log('User is authenticated');
+  const session = AuthStorage.get();
+  console.log('Username:', session.username);
+} else {
+  console.log('User is not authenticated');
+}
+```
+
+#### Get Token Expiration
+
+```typescript
+// Time remaining in seconds
+const remaining = AuthStorage.getTimeRemaining();
+console.log(`Token expires in ${remaining} seconds`);
+
+// Expiration as Date object
+const expirationDate = AuthStorage.getExpirationDate();
+console.log('Expires at:', expirationDate.toLocaleTimeString());
+```
+
+#### Logout
+
+```typescript
+// Clear session (logout)
+AuthStorage.clear();
+
+// Update UI to unauthenticated state
+updateUIForAuthState(false);
+```
+
+### Auto-Logout on Inactivity (Health Data Security)
+
+**CRITICAL for health data applications**: The client implements auto-logout after 5 minutes of inactivity to prevent unauthorized access if the user walks away from their device.
+
+```typescript
+// Configured for 5-minute inactivity timeout
+const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+
+// Tracks user activity
+['mousedown', 'keydown', 'scroll', 'touchstart'].forEach(event => {
+  document.addEventListener(event, resetInactivityTimer, true);
+});
+```
+
+**Why this is critical**:
+- Health data should not remain accessible on an idle browser
+- Prevents unauthorized access if user walks away
+- 5-minute timeout balances security and UX
+- Activity tracking (mouse, keyboard, scroll, touch) resets timer
+
+### Security Best Practices
+
+#### 1. XSS Protection (Content Security Policy)
+
+**CRITICAL**: CSP headers prevent XSS attacks that could steal JWT tokens:
+
+```html
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+               script-src 'self' https://unpkg.com;
+               connect-src 'self' https://http://localhost:8000;">
+```
+
+This is **automatically included** in the generated HTML template.
+
+**What CSP does**:
+- ✅ Blocks inline JavaScript (prevents injected scripts)
+- ✅ Whitelists trusted script sources only
+- ✅ Prevents token exfiltration to attacker domains
+
+**Additional XSS Protection**:
+- Sanitize all user input before rendering
+- Use framework-provided escaping (React, Vue, Angular)
+- Never use `innerHTML` with user-provided data
+- Validate and encode output
+
+#### 2. HTTPS Enforcement
+
+**CRITICAL**: Always use HTTPS in production:
+
+```yaml
+# Envoy Gateway - Force HTTPS redirect
+redirect:
+  https_redirect: true
+```
+
+JWT tokens in Authorization headers are **plain text over HTTP** = easily intercepted.
+
+#### 3. Token Expiration
+
+- Default: 900 seconds (15 minutes)
+- Tokens automatically expire (checked via jwt-decode)
+- Show countdown timer to user
+- Clear expired tokens immediately
+
+```typescript
+// Example: Warning before expiration
+const remaining = AuthStorage.getTimeRemaining();
+
+if (remaining !== null && remaining < 60) {
+  showWarning(`Session expires in ${remaining} seconds`);
+}
+```
+
+#### 4. Input Validation
+
+**Always validate and sanitize**:
+
+```typescript
+// BAD - XSS vulnerable
+element.innerHTML = userInput;
+
+// GOOD - Safe
+element.textContent = userInput;
+
+// GOOD - Framework escaping
+<div>{username}</div>  // React/Vue auto-escapes
+```
+
+#### 5. Secure Token Storage
+
+**sessionStorage vs localStorage**:
+
+| Storage | Security | Use Case |
+|---------|----------|----------|
+| **sessionStorage** | ✅ Better (clears on tab close) | Short-lived tokens (< 1 hour) |
+| **localStorage** | ⚠️ Lower (persists forever) | Long-lived tokens (with refresh) |
+| **HttpOnly Cookies** | ✅ Best (XSS immune) | High-security apps (requires backend changes) |
+
+**Recommendation**: Use sessionStorage (default in this implementation)
+
+### Production Integration Patterns
+
+#### Pattern 1: API Service with Auto-Retry
+
+```typescript
+import { AuthStorage } from './auth-storage';
+
+class ApiService {
+  private baseUrl: string;
+
+  constructor(baseUrl: string) {
+    this.baseUrl = baseUrl;
+  }
+
+  async callProtectedEndpoint(endpoint: string, options: RequestInit = {}): Promise<any> {
+    const authHeader = AuthStorage.getAuthorizationHeader();
+
+    if (!authHeader) {
+      throw new Error('Not authenticated');
+    }
+
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Authorization': authHeader,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (response.status === 401) {
+      // Token expired - clear session and throw
+      AuthStorage.clear();
+      throw new Error('Session expired - please re-authenticate');
+    }
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+}
+
+// Usage
+const api = new ApiService('http://localhost:8000');
+
+try {
+  const profile = await api.callProtectedEndpoint('/api/user/profile');
+  console.log('Profile:', profile);
+} catch (error) {
+  if (error.message.includes('Session expired')) {
+    // Show login UI or redirect to authentication
+    showLoginModal();
+  } else {
+    console.error('API error:', error);
+  }
+}
+```
+
+#### Pattern 2: Fetch Wrapper with Auto-Auth
+
+```typescript
+import { AuthStorage } from './auth-storage';
+
+// Wrap fetch to automatically add auth headers
+async function authenticatedFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const authHeader = AuthStorage.getAuthorizationHeader();
+
+  if (!authHeader) {
+    throw new Error('Not authenticated');
+  }
+
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      'Authorization': authHeader
+    }
+  });
+}
+
+// Usage (identical to fetch)
+const response = await authenticatedFetch('http://localhost:8000/api/user/profile');
+const data = await response.json();
+```
+
+### Common Security Mistakes to Avoid
+
+❌ **DON'T**:
+- Store JWT in localStorage without considering XSS risk
+- Skip CSP headers in production
+- Use HTTP instead of HTTPS
+- Render JWT contents in UI (tokens are NOT encrypted!)
+- Trust client-side expiration only (server must validate)
+- Forget to clear tokens on logout
+
+✅ **DO**:
+- Use sessionStorage for short-lived tokens
+- Implement strict CSP headers
+- Enforce HTTPS in production
+- Use jwt-decode for safe parsing
+- Validate tokens server-side
+- Clear tokens on logout and expiration
+
+### E2E Testing Coverage
+
+See `tests/webauthn.spec.js` for complete test examples:
+
+- ✅ JWT storage verification after authentication
+- ✅ Protected API calls with stored JWT
+- ✅ Logout clears session
+- ✅ Expired token handling (jwt-decode)
+- ✅ Malformed token handling (jwt-decode safety)
+- ✅ 401 response triggers re-authentication
+
+### Android Mobile App Integration (Reference)
+
+**Note**: The MCP-generated client is a web client. However, since your primary use case may involve an Android mobile app uploading health data, here are security recommendations for JWT storage on Android.
+
+**Mobile apps should NOT use HttpOnly cookies**:
+- ❌ Native Android apps don't have browser cookie management
+- ❌ OkHttp (Android HTTP client) requires manual CookieJar implementation
+- ❌ More complex than standard Authorization headers
+- ✅ JWT with Authorization headers is the industry standard for mobile APIs
+
+**Secure JWT Storage on Android**:
+
+Use **EncryptedSharedPreferences with Android Keystore** for JWT storage:
+
+```kotlin
+// build.gradle.kts
+dependencies {
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+}
+
+// SecureTokenStorage.kt
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+
+class SecureTokenStorage(context: Context) {
+    private val masterKey = MasterKey.Builder(context)
+        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+        .build()
+
+    private val encryptedPrefs = EncryptedSharedPreferences.create(
+        context,
+        "webauthn_secure_prefs",
+        masterKey,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+    )
+
+    fun saveJwtToken(token: String, expiresIn: Int) {
+        val expiresAt = System.currentTimeMillis() + (expiresIn * 1000)
+        encryptedPrefs.edit()
+            .putString("jwt_token", token)
+            .putLong("expires_at", expiresAt)
+            .apply()
+    }
+
+    fun getJwtToken(): String? {
+        val token = encryptedPrefs.getString("jwt_token", null)
+        val expiresAt = encryptedPrefs.getLong("expires_at", 0)
+
+        if (System.currentTimeMillis() >= expiresAt) {
+            clearToken()
+            return null
+        }
+
+        return token
+    }
+}
+```
+
+**Security Benefits**:
+- ✅ Hardware-backed AES-256 encryption
+- ✅ XSS immune (native app)
+- ✅ OS-level app sandboxing
+- ✅ Optional biometric gating
+
+For complete Android implementation details, see `PRODUCTION_READY_PLAN.md`.
+
+## Architecture
+
+### Zero-Trust Architecture Overview
+
+This project implements a **complete zero-trust architecture** with JWT-based authentication:
+
+```
+┌─────────────┐
+│   Client    │
+│  (Browser)  │
+└──────┬──────┘
+       │
+       ▼
+┌──────────────────────────────────────────┐
+│        Envoy Gateway (Port 8000)         │
+│  - JWT Verification for /api/* routes   │
+│  - Public routes: /register, /authen... │
+└──────┬───────────────────────────────────┘
+       │
+       ├─────────────────┬─────────────────┐
+       ▼                 ▼                 ▼
+┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+│  WebAuthn   │   │  Example    │   │  Your       │
+│  Server     │   │  Service    │   │  Services   │
+│  (JWT       │   │  (Protected │   │  (Add       │
+│   Issuer)   │   │   APIs)     │   │   More)     │
+└─────────────┘   └─────────────┘   └─────────────┘
+```
+
+**Key Components**:
+
+1. **Envoy Gateway** - Entry point for all traffic
+   - Validates JWT signatures using WebAuthn server's public key
+   - Routes public endpoints (registration, authentication) without JWT
+   - Requires JWT for all `/api/*` protected endpoints
+
+2. **WebAuthn Server** - FIDO2 authentication + JWT issuer
+   - Issues RS256-signed JWT tokens on successful authentication
+   - Exports public key at `/public-key` endpoint
+   - 15-minute token expiration for security
+
+3. **Example Service** - Python FastAPI demonstrating JWT integration
+   - Verifies JWT tokens using public key from WebAuthn server
+   - Provides protected `/api/*` endpoints
+   - Template for adding your own services
+
+**Security Benefits**:
+- ✅ No session state (stateless authentication)
+- ✅ Short-lived tokens (15 minutes)
+- ✅ Public key cryptography (RS256)
+- ✅ Gateway-level JWT validation
+- ✅ Zero-trust principle (verify every request)
+
+## Adding Additional Services
+
+Use the automated helper script to add new services to the zero-trust stack:
+
+```bash
+# Auto-detect next available port
+./scripts/add-service.sh my-service
+
+# Specify custom port
+./scripts/add-service.sh my-service --app-port 9005
+
+# Custom API route prefix
+./scripts/add-service.sh billing-api --route /api/billing
+
+# Show help and options
+./scripts/add-service.sh --help
+```
+
+**Requirements:**
+- `yq` v4+ installed (see installation instructions above)
+
+**What the script does automatically:**
+1. Scaffolds service directory from `example-service` template
+2. Generates mTLS certificates (CA-signed)
+3. Creates Envoy sidecar configuration
+4. Updates `docker-compose.yml` with service and sidecar containers
+5. Updates `envoy-gateway.yaml` with explicit routing and mTLS cluster
+6. Validates port conflicts and configuration
+7. Creates backup files (`.backup`) before modifying YAML files
+
+**See `docs/INTEGRATION.md` for comprehensive integration guide and manual setup options.**
+
+### Server Design: Express vs webpack-dev-server
+
+This project uses **Express server** (`src/server.ts`) instead of webpack-dev-server for serving the application. This design choice provides:
+
+1. **Production-like environment** - Same server code in dev and production
+2. **Custom middleware** - CORS, health checks, static file serving
+3. **Deployment-ready** - Express server can be deployed as-is
+4. **Flexibility** - Easy to add API endpoints, authentication, etc.
+
+The Express server serves:
+- Static files from `dist/` (webpack bundles)
+- HTML from source `public/` directory
+- Health check endpoint at `/health`
+
+### Dependencies
+- **@vmenon25/mpo-webauthn-client** - Published npm client library for API communication
+- **@simplewebauthn/browser** - Browser WebAuthn implementation (loaded via CDN)
+- **Express** - Development and production server
+- **Webpack** - Module bundling and optimization
+- **TypeScript** - Type-safe development
+
+### File Structure
+```
+├── src/
+│   ├── webauthn-client.ts    # WebAuthn client implementation
+│   ├── types.ts               # TypeScript type definitions
+│   ├── server.ts              # Express development server
+│   └── index.ts               # Entry point
+├── public/
+│   └── index.html             # Web UI
+├── dist/                      # Compiled output
+├── package.json
+├── webpack.config.js
+└── tsconfig.json
+```
+
+## Development Scripts
+
+### Production Workflow
+- `npm run build` - Full production build (webpack + TypeScript server compilation)
+- `npm start` - Start the Express server (requires prior build)
+
+### Development Workflow
+- `npm run dev` - Quick development build and start (webpack dev mode + TypeScript server compilation)
+- `npm run dev:watch` - Hot-reload development server using ts-node (no build required, watches for changes)
+
+### Individual Build Steps
+- `npm run build:dev` - Development webpack build + server compilation
+- `npm run build:server` - Compile TypeScript server only
+
+### Recommended Workflows
+
+**Production deployment:**
+```bash
+npm install
+npm run build
+npm start
+```
+
+**Development (quick iteration):**
+```bash
+npm install
+npm run dev:watch  # Hot-reload with ts-node
+```
+
+**Development (test production-like build):**
+```bash
+npm install
+npm run dev  # Build dev bundle + start
+```
+
+## Testing
+
+### Automated End-to-End Tests
+
+The generated client includes Playwright tests to validate WebAuthn functionality end-to-end.
+
+**Prerequisites:**
+- WebAuthn server running at `http://localhost:8000`
+- Client built and ready to start
+
+**Running Tests:**
+```bash
+# Ensure client is built
+npm run build
+
+# Run all E2E tests
+npm test
+
+# Run with interactive UI (great for debugging)
+npm run test:ui
+
+# Run in headed mode (see browser)
+npm run test:headed
+
+# View test report after run
+npm run test:report
+```
+
+**What the Tests Cover:**
+- ✅ Complete registration flow (create passkey)
+- ✅ Complete authentication flow (use passkey)
+- ✅ Uses Chromium virtual authenticator (no real device needed)
+- ✅ Validates both flows work end-to-end with your server
+
+**How It Works:**
+1. Playwright starts the web client automatically
+2. Sets up a virtual authenticator (simulates passkey device)
+3. Tests full registration and authentication flows
+4. Cleans up after tests complete
+
+**Note**: Tests use Chromium's virtual authenticator, so no physical security key or biometric device is required. The tests validate your WebAuthn server integration is working correctly.
+
+### Manual Testing
+
+1. **Test Connection**: Click "Test Connection" to verify server availability
+2. **Register**: Create a new passkey with username and display name
+3. **Authenticate**: Use your passkey to authenticate
+
+## JWT Authentication Flow
+
+After successfully completing WebAuthn authentication, you receive a JWT token that can be used to access protected API endpoints.
+
+### Obtaining a JWT Token
+
+1. **Authenticate with WebAuthn**:
+```bash
+# 1. Start authentication
+curl -X POST http://localhost:8000/authenticate/start \
+  -H "Content-Type: application/json" \
+  -d '{"username": "user@example.com"}'
+
+# 2. Complete authentication (with WebAuthn credential)
+curl -X POST http://localhost:8000/authenticate/complete \
+  -H "Content-Type: application/json" \
+  -d '{"requestId": "...", "credential": "..."}'
+```
+
+2. **Extract JWT from Response**:
+```json
+{
+  "success": true,
+  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "Bearer",
+  "expires_in": 900,
+  "username": "user@example.com"
+}
+```
+
+### Using JWT to Access Protected Endpoints
+
+All `/api/*` routes require a valid JWT token in the Authorization header:
+
+```bash
+# Store the token
+TOKEN="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+# Call protected endpoint
+curl http://localhost:8000/api/user/profile \
+  -H "Authorization: Bearer $TOKEN"
+
+# Response
+{
+  "username": "user@example.com",
+  "message": "This is protected data from the example service",
+  "authenticated_at": 1234567890,
+  "expires_at": 1234568790
+}
+```
+
+### Token Expiration
+
+- **Lifetime**: 15 minutes (900 seconds)
+- **Handling Expiration**: Re-authenticate with WebAuthn to get a new token
+- **No Refresh Tokens**: For security, you must re-authenticate (passwordless is fast!)
+
+## Protected API Endpoints
+
+The generated project includes an example service with protected endpoints demonstrating JWT integration:
+
+### Available Endpoints
+
+#### Public Endpoints (No JWT Required)
+- `GET /health` - Health check
+- `POST /register/start` - Start WebAuthn registration
+- `POST /register/complete` - Complete WebAuthn registration
+- `POST /authenticate/start` - Start WebAuthn authentication
+- `POST /authenticate/complete` - Complete WebAuthn authentication (returns JWT)
+- `GET /public-key` - Get RSA public key for JWT verification
+
+#### Protected Endpoints (JWT Required)
+- `GET /api/user/profile` - Get authenticated user profile
+- `GET /api/example/data` - Get example protected data
+
+### Example: Calling Protected Endpoints
+
+```bash
+# 1. Authenticate and get token (via web UI or API)
+TOKEN=$(curl -s http://localhost:8000/authenticate/complete \
+  -H "Content-Type: application/json" \
+  -d '{"requestId":"...","credential":"..."}' \
+  | jq -r '.access_token')
+
+# 2. Call protected endpoint with JWT
+curl http://localhost:8000/api/user/profile \
+  -H "Authorization: Bearer $TOKEN"
+
+# 3. Try without JWT (will fail with 401)
+curl http://localhost:8000/api/user/profile
+# Response: 401 Unauthorized
+```
+
+### Adding Custom Protected Endpoints
+
+See `example-service/README.md` for detailed instructions on:
+- Adding new protected endpoints to the example service
+- Creating additional services in the stack
+- JWT verification patterns in Python/TypeScript/etc.
+
+All endpoints under `/api/*` are automatically protected by Envoy Gateway's JWT filter - no additional code needed!
+
+## Troubleshooting
+
+### Connection Issues
+- Verify WebAuthn server is running at `http://localhost:8000`
+- Check CORS configuration on the server
+- Ensure ports are not conflicting
+
+### WebAuthn Errors
+- **InvalidStateError**: Passkey already exists for this account
+- **NotAllowedError**: User cancelled or timeout
+- **NotSupportedError**: WebAuthn not supported in this browser
+
+### Browser Support
+WebAuthn is supported in modern browsers:
+- Chrome/Edge 67+
+- Firefox 60+
+- Safari 13+
+- Opera 54+
+
+**Note**: This project excludes IE 11 from transpilation targets since WebAuthn is not supported on IE 11.
+
+## Security Notes
+
+### WebAuthn Security
+- Passkeys are stored securely on your device
+- Private keys never leave your device
+- Server validates all credentials
+- Replay attacks are prevented
+- Username enumeration is protected
+
+### Docker Secrets Management
+
+This project uses **Docker Compose secrets** for secure credential management:
+
+#### How It Works
+- Passwords are auto-generated using cryptographically secure random bytes
+- Secrets are stored in `docker/secrets/` directory (gitignored)
+- Secrets are mounted as read-only files at `/run/secrets/` in containers
+- No hardcoded passwords in docker-compose.yml or source code
+
+#### Secret Files
+```
+docker/secrets/
+├── .gitignore          # Prevents accidental commits
+├── postgres_password   # PostgreSQL password (auto-generated)
+└── redis_password      # Redis password (auto-generated)
+```
+
+#### Secret Rotation
+To rotate secrets (change passwords):
+
+1. Generate new passwords:
+```bash
+openssl rand -base64 32 | cut -c1-32 > docker/secrets/postgres_password
+openssl rand -base64 32 | cut -c1-32 > docker/secrets/redis_password
+```
+
+2. Restart services:
+```bash
+cd docker && docker compose restart
+```
+
+#### Verification
+Run the setup script to verify secrets:
+```bash
+cd docker && bash setup-secrets.sh
+```
+
+**Important**: The `docker/secrets/` directory is automatically excluded from git via `.gitignore` to prevent accidental exposure of credentials.
+
+## JWT Key Rotation Configuration
+
+The WebAuthn server supports automatic JWT signing key rotation for enhanced security. Keys are stored in PostgreSQL with AES-256-GCM encryption and rotate automatically based on age.
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MPO_AUTHN_JWT_KEY_ROTATION_ENABLED` | `true` | Enable automatic key rotation |
+| `MPO_AUTHN_JWT_KEY_ROTATION_INTERVAL_DAYS` | `180` | Rotation interval in days (6 months default) |
+| `MPO_AUTHN_JWT_KEY_GRACE_PERIOD_MINUTES` | `60` | Grace period for clients to refresh caches (1 hour) |
+| `MPO_AUTHN_JWT_KEY_RETENTION_MINUTES` | `60` | How long to keep RETIRED keys after activation (1 hour) |
+| `MPO_AUTHN_JWT_KEY_SIZE` | `2048` | RSA key size in bits (2048, 3072, or 4096) |
+| `MPO_AUTHN_JWT_KEY_ID_PREFIX` | `webauthn` | Prefix for generated key IDs |
+| `MPO_AUTHN_JWT_MASTER_ENCRYPTION_KEY` | (auto-generated) | Master key for encrypting private keys at-rest (stored in `docker/secrets/jwt_master_key`) |
+| `MPO_AUTHN_JWT_ROTATION_INTERVAL_SECONDS` | (none) | **Test mode**: Override interval in seconds for accelerated testing |
+
+These variables are pre-configured in `docker/docker-compose.yml` with secure defaults.
+
+### Testing Key Rotation
+
+For E2E testing with accelerated rotation, uncomment the test mode configuration in `docker/docker-compose.yml`:
+
+```yaml
+# Uncomment for testing with accelerated rotation (e.g., every 60 seconds):
+# MPO_AUTHN_JWT_ROTATION_INTERVAL_SECONDS: "60"
+```
+
+Then restart the stack:
+
+```bash
+cd docker && docker compose restart webauthn-server
+```
+
+With 60-second rotation, you can observe key rotation in real-time:
+
+```bash
+# Watch JWKS endpoint for key changes
+watch -n 5 'curl -s http://localhost:8000/.well-known/jwks.json | jq ".keys | length"'
+```
+
+### Key Lifecycle
+
+Keys progress through 4 states during rotation:
+
+1. **PENDING**: Newly generated key, published in JWKS but not yet used for signing
+   - Duration: Grace period (default 1 hour, or 15 seconds in test mode)
+   - Purpose: Allow clients to refresh their JWKS cache before activation
+
+2. **ACTIVE**: Currently used for signing new JWT tokens
+   - Duration: Rotation interval (default 6 months, or 60 seconds in test mode)
+   - Only one key is ACTIVE at any time
+
+3. **RETIRED**: No longer used for signing, but still published in JWKS for verification
+   - Duration: Retention period (default 1 hour, or 1 minute in test mode)
+   - Purpose: Allow existing tokens to be verified during their lifetime
+
+4. **DELETED**: Permanently removed from JWKS and database
+   - Cleanup happens automatically after retention period expires
+
+### Key Rotation Flow
+
+```
+Time 0:00  - Key A is ACTIVE (signing new tokens)
+Time 6:00m - Rotation triggered: Key B generated as PENDING
+           - JWKS now returns: [Key A (ACTIVE), Key B (PENDING)]
+Time 6:01h - Grace period ends: Key B becomes ACTIVE, Key A becomes RETIRED
+           - JWKS now returns: [Key B (ACTIVE), Key A (RETIRED)]
+           - New tokens signed with Key B
+           - Old tokens (signed with Key A) still verifiable
+Time 7:01h - Retention period ends: Key A is DELETED
+           - JWKS now returns: [Key B (ACTIVE)]
+```
+
+**Zero Client Impact**: Clients automatically use the correct key via the `kid` (Key ID) header in JWT tokens.
+
+### JWKS Endpoint
+
+The server publishes all active and retired keys at `/.well-known/jwks.json`:
+
+```bash
+curl http://localhost:8000/.well-known/jwks.json | jq
+```
+
+Response during rotation (multiple keys):
+```json
+{
+  "keys": [
+    {
+      "kty": "RSA",
+      "use": "sig",
+      "kid": "webauthn-2025-10-24-143052",
+      "alg": "RS256",
+      "n": "0vx7agoebGcQSuuPiLJXZpt...",
+      "e": "AQAB"
+    },
+    {
+      "kty": "RSA",
+      "use": "sig",
+      "kid": "webauthn-2024-01",
+      "alg": "RS256",
+      "n": "xjlCRBqkOL958PhIgB5EhX...",
+      "e": "AQAB"
+    }
+  ]
+}
+```
+
+**Cache-Control Headers**: The JWKS endpoint includes caching directives:
+- `max-age=300` (5 minutes) - Standard cache duration
+- `stale-if-error=3600` (1 hour) - Serve stale keys if endpoint fails
+- `public` - Allow shared caching (CDN, proxies)
+
+### Security Best Practices
+
+#### 1. Master Key Protection
+
+The JWT master encryption key is auto-generated and stored in `docker/secrets/jwt_master_key`. This key encrypts all private signing keys at-rest in PostgreSQL.
+
+**Important**:
+- ✅ Auto-generated with cryptographically secure random bytes (32 bytes = 256 bits)
+- ✅ Stored as Docker secret (mounted read-only at `/run/secrets/`)
+- ✅ Never committed to git (excluded via `.gitignore`)
+- ⚠️ **Backup this key** - If lost, you cannot decrypt existing private keys
+
+**Backup Procedure**:
+```bash
+# Backup master key to secure location
+cp docker/secrets/jwt_master_key /path/to/secure/backup/jwt_master_key.$(date +%Y%m%d)
+```
+
+#### 2. Key Size Recommendations
+
+| Key Size | Security Level | Use Case |
+|----------|---------------|----------|
+| **2048** | Standard (default) | General production use, balances security and performance |
+| **3072** | High security | Financial services, healthcare, compliance-heavy industries |
+| **4096** | Maximum security | Military, government, highly sensitive data (slower performance) |
+
+Default (2048) is sufficient for most use cases per NIST recommendations.
+
+#### 3. Rotation Frequency
+
+The default 6-month rotation interval follows industry best practices:
+
+- **NIST SP 800-57**: Recommends 1-3 year rotation for signing keys
+- **PCI DSS**: Requires annual rotation minimum
+- **Industry Standard**: 6 months balances security and operational complexity
+
+**When to rotate more frequently**:
+- ⚠️ Suspected key compromise
+- ⚠️ Insider threat incidents
+- ⚠️ Compliance requirements
+- ⚠️ High-value target applications
+
+#### 4. Audit Trail
+
+All key lifecycle events are logged in the `jwt_key_audit_log` table:
+
+```sql
+SELECT key_id, event, timestamp, metadata
+FROM jwt_key_audit_log
+ORDER BY timestamp DESC
+LIMIT 10;
+```
+
+Events tracked:
+- `GENERATED` - New key created
+- `ACTIVATED` - Key promoted to ACTIVE status
+- `RETIRED` - Key demoted from ACTIVE to RETIRED
+- `DELETED` - Key permanently removed
+- `MANUAL_ROTATION` - Admin-triggered rotation
+
+### Manual Key Rotation
+
+**Emergency rotation** (e.g., suspected compromise) can be triggered via the admin API:
+
+```bash
+# Requires admin authentication
+TOKEN="your-admin-jwt-token"
+
+curl -X POST http://localhost:8000/admin/jwt/rotate-key \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reason": "Security incident - suspected key compromise"
+  }'
+```
+
+**Note**: Manual rotation endpoint is planned for Phase 8 (Admin API). For now, rotation occurs automatically based on key age.
+
+### Troubleshooting
+
+#### "Unable to find a signing key that matches" Error
+
+**Symptom**: Python clients (PyJWKClient) fail with this error
+
+**Cause**: JWT `kid` header doesn't match any key in JWKS
+
+**Solutions**:
+1. Verify JWKS endpoint is accessible:
+   ```bash
+   curl http://localhost:8000/.well-known/jwks.json
+   ```
+
+2. Check JWT `kid` header:
+   ```bash
+   echo "YOUR_JWT_TOKEN" | cut -d. -f1 | base64 -d | jq
+   # Should show: {"alg":"RS256","typ":"JWT","kid":"webauthn-..."}
+   ```
+
+3. Verify `kid` exists in JWKS:
+   ```bash
+   curl -s http://localhost:8000/.well-known/jwks.json | jq '.keys[].kid'
+   ```
+
+#### Key Rotation Not Occurring
+
+**Check rotation configuration**:
+```bash
+docker exec webauthn-server env | grep MPO_AUTHN_JWT
+```
+
+**Check logs**:
+```bash
+docker logs webauthn-server | grep "rotation"
+```
+
+**Verify database**:
+```bash
+docker exec -it webauthn-postgres psql -U webauthn_user -d webauthn \
+  -c "SELECT key_id, status, created_at, activated_at FROM jwt_signing_keys ORDER BY created_at DESC;"
+```
+
+## Integration with Zero-Trust Stack
+
+This client connects to a complete zero-trust architecture stack via Envoy Gateway at `http://localhost:8000`.
+
+### Docker Stack Components
+
+The generated `docker/docker-compose.yml` includes:
+
+1. **Envoy Gateway** (port 8000) - Entry point with JWT verification
+2. **WebAuthn Server** (internal) - FIDO2 authentication + JWT issuer
+3. **Example Service** (internal) - Python FastAPI with JWT verification
+4. **PostgreSQL** (port 5432) - Credential storage
+5. **Redis** (port 6379) - Session cache
+
+### Starting the Stack
+
+```bash
+cd docker
+docker compose up -d
+
+# Verify all services are healthy
+docker compose ps
+
+# View logs
+docker compose logs -f
+```
+
+### WebAuthn Endpoints (via Gateway)
+
+#### Registration
+- `POST http://localhost:8000/register/start` - Start passkey registration
+- `POST http://localhost:8000/register/complete` - Complete passkey registration
+
+#### Authentication
+- `POST http://localhost:8000/authenticate/start` - Start passkey authentication
+- `POST http://localhost:8000/authenticate/complete` - Complete passkey authentication (returns JWT)
+
+#### Zero-Trust Endpoints
+- `GET http://localhost:8000/public-key` - Get RSA public key for JWT verification
+- `GET http://localhost:8000/api/user/profile` - Protected endpoint (requires JWT)
+
+### Health Check
+- `GET http://localhost:8000/health` - Server health status
+
+## License
+
+Apache-2.0
+
+## Generated By
+
+This client was generated using the [@vmenon25/mcp-server-webauthn-client](https://github.com/hitoshura25/mpo-api-authn-server/tree/main/mcp-server-webauthn-client) MCP server.
