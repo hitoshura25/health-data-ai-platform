@@ -1,6 +1,5 @@
 # Shared Redis cache and session store
-# Used by: health-api-service (rate limiting), message-queue service
-# Note: WebAuthn stack uses separate Redis (webauthn-redis on port 6380)
+# Used by: health-api-service (rate limiting), webauthn-server (sessions), message-queue
 services:
   redis:
     image: redis:7-alpine
@@ -9,9 +8,9 @@ services:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes --requirepass ${HEALTH_REDIS_PASSWORD}
+    command: redis-server --appendonly yes --requirepass ${WEBAUTHN_REDIS_PASSWORD}
     healthcheck:
-      test: ["CMD", "redis-cli", "--pass", "${HEALTH_REDIS_PASSWORD}", "ping"]
+      test: ["CMD", "redis-cli", "--pass", "${WEBAUTHN_REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 3

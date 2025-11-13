@@ -16,8 +16,8 @@ services:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${HEALTH_API_DB:-healthapi}
 
       # Redis (for rate limiting)
-      - REDIS_URL=redis://:${HEALTH_REDIS_PASSWORD}@redis:6379
-      - UPLOAD_RATE_LIMIT_STORAGE_URI=redis://:${HEALTH_REDIS_PASSWORD}@redis:6379
+      - REDIS_URL=redis://:${WEBAUTHN_REDIS_PASSWORD}@redis:6379
+      - UPLOAD_RATE_LIMIT_STORAGE_URI=redis://:${WEBAUTHN_REDIS_PASSWORD}@redis:6379
 
       # S3/MinIO (for file storage)
       - S3_ENDPOINT_URL=http://minio:9000
