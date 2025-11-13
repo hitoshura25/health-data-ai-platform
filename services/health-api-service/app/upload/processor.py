@@ -5,6 +5,7 @@ import avro.datafile
 from datetime import datetime, timezone
 from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
+from opentelemetry import trace
 from app.db.models import User, Upload
 from app.db.session import rollback_session_if_active
 from app.upload.validator import HealthDataValidator
@@ -14,6 +15,7 @@ from app.config import settings
 import structlog
 
 logger = structlog.get_logger()
+tracer = trace.get_tracer(__name__)
 
 class UploadProcessor:
     def __init__(self):
@@ -35,82 +37,99 @@ class UploadProcessor:
             user_id=str(user.id),
             filename=file.filename
         ):
-            logger.info("Upload processing started (streaming mode)")
+            # Create parent span for entire upload processing
+            with tracer.start_as_current_span("process_upload") as span:
+                span.set_attribute("user_id", str(user.id))
+                span.set_attribute("filename", file.filename)
+                span.set_attribute("correlation_id", str(correlation_id))
 
-            try:
-                # 1. Lightweight validation (only reads header + samples first 10 records)
-                validation = await self.validator.validate_upload_streaming(file)
-                if not validation.is_valid:
-                    logger.warning("File validation failed", errors=validation.errors)
-                    raise ValueError(f"Validation failed: {', '.join(validation.errors)}")
+                logger.info("Upload processing started (streaming mode)")
 
-                # 2. Generate timestamp and object key
-                timestamp = datetime.now(timezone.utc)
+                try:
+                    # 1. Lightweight validation (only reads header + samples first 10 records)
+                    with tracer.start_as_current_span("validate_upload"):
+                        validation = await self.validator.validate_upload_streaming(file)
+                        if not validation.is_valid:
+                            logger.warning("File validation failed", errors=validation.errors)
+                            raise ValueError(f"Validation failed: {', '.join(validation.errors)}")
+                        span.set_attribute("record_type", validation.record_type)
 
-                # 3. Stream to MinIO + calculate hash + count records simultaneously
-                file_obj = file.file
-                object_key, file_size, file_hash, record_count = await self._stream_with_metadata(
-                    file_obj,
-                    validation.record_type,
-                    str(user.id),
-                    timestamp
-                )
+                    # 2. Generate timestamp and object key
+                    timestamp = datetime.now(timezone.utc)
 
-                # 5. Create upload record in database
-                upload = Upload(
-                    correlation_id=correlation_id,
-                    user_id=user.id,
-                    object_key=object_key,
-                    file_name=file.filename,
-                    file_size_bytes=file_size,
-                    record_type=validation.record_type,
-                    record_count=record_count,
-                    status="queued",
-                    description=description,
-                )
-                db.add(upload)
-                await db.commit()
+                    # 3. Stream to MinIO + calculate hash + count records simultaneously
+                    file_obj = file.file
+                    with tracer.start_as_current_span("stream_to_storage") as storage_span:
+                        object_key, file_size, file_hash, record_count = await self._stream_with_metadata(
+                            file_obj,
+                            validation.record_type,
+                            str(user.id),
+                            timestamp
+                        )
+                        storage_span.set_attribute("object_key", object_key)
+                        storage_span.set_attribute("file_size_bytes", file_size)
+                        storage_span.set_attribute("record_count", record_count)
 
-                # 6. Publish processing message
-                await self.messaging.initialize()
-                message_data = {
-                    "bucket": settings.S3_BUCKET_NAME,
-                    "key": object_key,
-                    "user_id": str(user.id),
-                    "record_type": validation.record_type,
-                    "upload_timestamp_utc": timestamp.isoformat(),
-                    "correlation_id": str(correlation_id),
-                    "file_size_bytes": file_size,
-                    "file_hash": file_hash,
-                    "record_count": record_count,
-                    "idempotency_key": self._generate_idempotency_key(
-                        str(user.id), file_hash
-                    )
-                }
+                    # 5. Create upload record in database
+                    with tracer.start_as_current_span("persist_upload_metadata"):
+                        upload = Upload(
+                            correlation_id=correlation_id,
+                            user_id=user.id,
+                            object_key=object_key,
+                            file_name=file.filename,
+                            file_size_bytes=file_size,
+                            record_type=validation.record_type,
+                            record_count=record_count,
+                            status="queued",
+                            description=description,
+                        )
+                        db.add(upload)
+                        await db.commit()
 
-                await self.messaging.publish_health_data_message(message_data)
-                await self.messaging.close()
+                    # 6. Publish processing message
+                    with tracer.start_as_current_span("publish_to_message_queue") as msg_span:
+                        await self.messaging.initialize()
+                        message_data = {
+                            "bucket": settings.S3_BUCKET_NAME,
+                            "key": object_key,
+                            "user_id": str(user.id),
+                            "record_type": validation.record_type,
+                            "upload_timestamp_utc": timestamp.isoformat(),
+                            "correlation_id": str(correlation_id),
+                            "file_size_bytes": file_size,
+                            "file_hash": file_hash,
+                            "record_count": record_count,
+                            "idempotency_key": self._generate_idempotency_key(
+                                str(user.id), file_hash
+                            )
+                        }
 
-                logger.info("Upload processing completed (streaming)",
-                           object_key=object_key,
-                           file_size=file_size,
-                           record_count=record_count)
+                        await self.messaging.publish_health_data_message(message_data)
+                        await self.messaging.close()
+                        msg_span.set_attribute("routing_key", f"health.processing.{validation.record_type.lower()}")
 
-                return {
-                    "status": "accepted",
-                    "object_key": object_key,
-                    "correlation_id": correlation_id,
-                    "record_type": validation.record_type,
-                    "record_count": record_count,
-                    "file_size_bytes": file_size,
-                    "upload_timestamp": timestamp,
-                    "processing_status": "queued",
-                }
+                    logger.info("Upload processing completed (streaming)",
+                               object_key=object_key,
+                               file_size=file_size,
+                               record_count=record_count)
 
-            except Exception as e:
-                logger.error("Upload processing failed", error=str(e))
-                await rollback_session_if_active(db)
-                raise
+                    return {
+                        "status": "accepted",
+                        "object_key": object_key,
+                        "correlation_id": correlation_id,
+                        "record_type": validation.record_type,
+                        "record_count": record_count,
+                        "file_size_bytes": file_size,
+                        "upload_timestamp": timestamp,
+                        "processing_status": "queued",
+                    }
+
+                except Exception as e:
+                    span.record_exception(e)
+                    span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                    logger.error("Upload processing failed", error=str(e))
+                    await rollback_session_if_active(db)
+                    raise
 
     async def _stream_with_metadata(self, file_obj, record_type: str, user_id: str, timestamp: datetime) -> tuple[str, int, str, int]:
         """

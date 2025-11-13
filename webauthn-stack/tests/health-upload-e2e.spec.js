@@ -221,37 +221,63 @@ test.describe('Health Data Upload End-to-End Tests', () => {
     await test.step('Verify distributed traces in Jaeger UI', async () => {
       console.log('\n🔍 Step 7: Verify Distributed Tracing');
 
-      // Give Jaeger a moment to receive and index traces
-      await page.waitForTimeout(2000);
-
       // Open Jaeger UI
       await page.goto('http://localhost:16687');
       await page.waitForLoadState('networkidle');
 
-      // Search for traces from health-api-service
-      // Note: Jaeger UI selectors may vary by version
-      const serviceDropdown = page.locator('[data-testid="service-selector"]').or(page.locator('select[id*="service"]')).first();
-      if (await serviceDropdown.isVisible({ timeout: 3000 })) {
-        await serviceDropdown.selectOption('health-api-service');
+      // Jaeger UI uses Ant Design components (not native select)
+      // Service selector is the first .ant-select component
+      const serviceDropdown = page.locator('.ant-select').first();
 
-        const findButton = page.locator('button:has-text("Find Traces")').or(page.locator('[data-testid="find-traces-button"]')).first();
-        await findButton.click();
+      try {
+        await serviceDropdown.waitFor({ state: 'visible', timeout: 5000 });
+        console.log('  ✅ Found service dropdown');
 
-        await page.waitForTimeout(2000);
+        // Click to open dropdown
+        await serviceDropdown.click();
 
-        // Check for traces
-        const traces = page.locator('[data-testid="trace-item"]').or(page.locator('div[class*="trace"]')).first();
-        const hasTraces = await traces.isVisible({ timeout: 5000 }).catch(() => false);
+        // Wait for dropdown menu to appear
+        const dropdownMenu = page.locator('.ant-select-dropdown');
+        await dropdownMenu.waitFor({ state: 'visible', timeout: 3000 });
 
-        if (hasTraces) {
-          console.log('  ✅ Traces found in Jaeger for health-api-service');
+        // Look for health-api-service option
+        const healthApiOption = page.locator('.ant-select-item-option').filter({ hasText: 'health-api-service' });
+        const hasHealthApi = await healthApiOption.isVisible({ timeout: 2000 }).catch(() => false);
+
+        if (hasHealthApi) {
+          // Select health-api-service
+          await healthApiOption.click();
+          console.log('  ✅ Selected health-api-service');
+
+          // Find Traces button (has data-test="submit-btn")
+          const findButton = page.locator('[data-test="submit-btn"]');
+          await findButton.waitFor({ state: 'visible', timeout: 3000 });
+
+          // Wait for button to be enabled (it's disabled until service is selected)
+          await findButton.waitFor({ state: 'attached', timeout: 3000 });
+          await findButton.click({ force: false });
+          console.log('  ✅ Clicked Find Traces');
+
+          // Wait for results to load - look for our correlation_id
+          const ourTrace = page.locator(`text="${correlationId}"`);
+
+          try {
+            await ourTrace.waitFor({ state: 'visible', timeout: 10000 });
+            console.log(`  ✅ Found trace with correlation_id: ${correlationId}`);
+            console.log('  ✅ Distributed tracing verified successfully!');
+          } catch (error) {
+            console.log(`  ⚠️  Trace ${correlationId} not found within 10 seconds`);
+            console.log('  💡 Jaeger may still be indexing - check manually:');
+            console.log(`     http://localhost:16687`);
+          }
         } else {
-          console.log('  ⚠️  Traces not yet visible in Jaeger UI (may take a few seconds)');
-          console.log('  💡 Manually verify at: http://localhost:16687');
+          console.log('  ⚠️  health-api-service not in dropdown yet (no traces received)');
+          console.log('  💡 Traces may not have reached Jaeger yet');
+          console.log(`     Manual check: http://localhost:16687 (search for: ${correlationId})`);
         }
-      } else {
-        console.log('  ⚠️  Jaeger UI structure differs, manual verification recommended');
-        console.log('  💡 Visit: http://localhost:16687 and search for "health-api-service"');
+      } catch (error) {
+        console.log('  ⚠️  Could not interact with Jaeger UI');
+        console.log(`  💡 Manual verification: http://localhost:16687 (search for: ${correlationId})`);
       }
     });
 

@@ -15,6 +15,7 @@ from app.upload.router import router as upload_router
 from app.db.session import Base, engine
 from app.supported_record_types import SUPPORTED_RECORD_TYPES
 from app.config import settings
+from app.tracing import setup_tracing
 
 from app.auth.router import router as auth_router
 
@@ -73,6 +74,17 @@ async def lifespan(app: FastAPI):
     # Initialize rate limiter with async Redis
     redis_connection = redis.from_url(settings.REDIS_URL, decode_responses=True)
     await FastAPILimiter.init(redis_connection)
+
+    # Initialize distributed tracing
+    tracer = setup_tracing(app)
+    if tracer:
+        logger.info(
+            "Distributed tracing initialized",
+            jaeger_endpoint=settings.JAEGER_OTLP_ENDPOINT,
+            jaeger_ui="http://localhost:16687"
+        )
+    else:
+        logger.warning("Distributed tracing not available - continuing without tracing")
 
     logger.info("Health API service started", version="1.0.0")
     yield
