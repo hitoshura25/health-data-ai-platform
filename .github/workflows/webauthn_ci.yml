@@ -35,6 +35,7 @@ jobs:
           openssl rand -base64 32 | cut -c1-32 > webauthn-stack/docker/secrets/postgres_password
           openssl rand -base64 32 | cut -c1-32 > webauthn-stack/docker/secrets/redis_password
           openssl rand -base64 32 | cut -c1-32 > webauthn-stack/docker/secrets/jwt_master_key
+          chmod 600 webauthn-stack/docker/secrets/*
           echo "✅ Docker secrets generated"
 
       - name: Verify Secrets

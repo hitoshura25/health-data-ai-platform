@@ -143,6 +143,12 @@ services:
       - ./certs:/etc/certs:ro  # mTLS certificates
     command: ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "example-service"]
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9902/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
 
   # Example Service - Demonstrates JWT verification (runs behind mTLS sidecar)
   example-service:
