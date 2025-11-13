@@ -36,6 +36,7 @@ services:
       # WebAuthn Integration (for token exchange via JWKS)
       - WEBAUTHN_JWKS_URL=http://host.docker.internal:8000/.well-known/jwks.json
       - WEBAUTHN_ISSUER=mpo-webauthn
+      - SSO_USER_EMAIL_DOMAIN=${SSO_USER_EMAIL_DOMAIN:-sso.example.com}
     depends_on:
       postgres:
         condition: service_healthy

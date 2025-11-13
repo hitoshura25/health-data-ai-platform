@@ -14,12 +14,14 @@ from app.users import (
 from app.auth.blocklist import RedisBlocklist, get_blocklist
 from app.auth.webauthn_config import webauthn_config
 from app.schemas import UserRead, UserCreate
+from app.config import settings
 from fastapi_users import models
 from fastapi_users.manager import BaseUserManager
 from fastapi_users.authentication import JWTStrategy
 import jwt
 
 from typing import Annotated
+import secrets
 import structlog
 
 router = APIRouter(tags=["Authentication"])
@@ -133,9 +135,9 @@ async def exchange_webauthn_token(
 
         # Convert username to email format if not already an email
         # WebAuthn usernames may not be email addresses, so we normalize them
-        # Using example.com which is reserved for documentation/testing per RFC 2606
+        # Uses configurable SSO domain (not example.com for production)
         if "@" not in webauthn_username:
-            user_email = f"{webauthn_username}@example.com"
+            user_email = f"{webauthn_username}@{settings.SSO_USER_EMAIL_DOMAIN}"
         else:
             user_email = webauthn_username
 
@@ -178,9 +180,14 @@ async def exchange_webauthn_token(
         # Auto-create user from WebAuthn identity
         logger.info("Creating new user from WebAuthn identity", email=user_email)
 
+        # Generate cryptographically random password for WebAuthn SSO users
+        # This prevents security risk if password-based login is accidentally enabled
+        # WebAuthn users authenticate via passkeys, not passwords
+        random_password = secrets.token_urlsafe(32)
+
         user_create = UserCreate(
             email=user_email,
-            password="webauthn-sso-user-no-password",  # Placeholder for WebAuthn users
+            password=random_password,
             is_verified=True  # Pre-verified via WebAuthn
         )
 

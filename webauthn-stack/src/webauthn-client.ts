@@ -34,7 +34,7 @@ export class WebAuthnClient {
      */
     async testConnection(): Promise<ConnectionTestResult> {
         try {
-            const response = await this.healthApi.getHealth();
+            await this.healthApi.getHealth();
             return {
                 success: true,
                 message: '✅ Server connection successful!'
@@ -204,7 +204,8 @@ export class WebAuthnClient {
 
 // Global functions for UI compatibility
 export function initializeWebAuthnClient(): void {
-    const client = new WebAuthnClient();
+    // Initialize WebAuthn client (used by global window functions below)
+    new WebAuthnClient();
 
     // Status display function
     (window as any).showStatus = function(elementId: string, message: string, type: string = 'info') {

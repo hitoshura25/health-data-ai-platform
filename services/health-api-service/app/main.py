@@ -1,7 +1,6 @@
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi_limiter import FastAPILimiter
-from fastapi_limiter.depends import RateLimiter
 import structlog
 import logging
 from contextlib import asynccontextmanager

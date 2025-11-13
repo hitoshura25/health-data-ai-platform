@@ -194,7 +194,6 @@ test.describe('JWT Key Rotation End-to-End Tests', () => {
     const maxWaitMs = 65000; // Maximum timeout
     const pollIntervalMs = 2000; // Check every 2 seconds
     const startTime = Date.now();
-    let k1Rejected = false;
 
     while (Date.now() - startTime < maxWaitMs) {
       const responseWithK1Test = await request.get('http://localhost:8000/api/user/profile', {
@@ -204,7 +203,6 @@ test.describe('JWT Key Rotation End-to-End Tests', () => {
       });
 
       if (responseWithK1Test.status() === 401) {
-        k1Rejected = true;
         const elapsedMs = Date.now() - startTime;
         console.log(`Phase 3: K1 JWT rejected after ${(elapsedMs / 1000).toFixed(1)}s (polling detected cleanup)`);
         break;
@@ -239,7 +237,7 @@ test.describe('JWT Key Rotation End-to-End Tests', () => {
 
     // Wait for first rotation (K1 → K2) by polling
     console.log('Phase 4: Waiting for first rotation (K1 → K2)...');
-    const { kid: kidK2, jwt: jwtK2, waitTime: wait1 } = await waitForKeyRotation(page, uniqueUsername, kidK1);
+    const { kid: kidK2, waitTime: wait1 } = await waitForKeyRotation(page, uniqueUsername, kidK1);
 
     console.log(`Phase 4: After first rotation, key changed: ${kidK1} → ${kidK2} (waited ${Math.round(wait1 / 1000)}s)`);
 
