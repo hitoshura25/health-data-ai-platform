@@ -49,6 +49,45 @@ jobs:
           docker compose up -d --wait
           echo "✅ Docker services started and healthy"
 
+      - name: Debug Container Status (if startup fails)
+        if: failure()
+        working-directory: webauthn-stack/docker
+        run: |
+          echo "======================================"
+          echo "Container Status:"
+          echo "======================================"
+          docker compose ps
+
+          echo ""
+          echo "======================================"
+          echo "Sidecar Logs:"
+          echo "======================================"
+          docker logs example-service-sidecar 2>&1 || echo "Sidecar not running"
+
+          echo ""
+          echo "======================================"
+          echo "Example Service Logs:"
+          echo "======================================"
+          docker logs example-service 2>&1 || echo "Example service not running"
+
+          echo ""
+          echo "======================================"
+          echo "Gateway Logs:"
+          echo "======================================"
+          docker logs envoy-gateway 2>&1 || echo "Gateway not running"
+
+          echo ""
+          echo "======================================"
+          echo "WebAuthn Server Logs:"
+          echo "======================================"
+          docker logs webauthn-server 2>&1 || echo "WebAuthn server not running"
+
+          echo ""
+          echo "======================================"
+          echo "Testing bash /dev/tcp in CI environment:"
+          echo "======================================"
+          docker run --rm envoyproxy/envoy:v1.29-latest bash -c '(echo > /dev/tcp/google.com/80) >/dev/null 2>&1 && echo "✅ /dev/tcp works in CI" || echo "❌ /dev/tcp does NOT work in CI"'
+
       - name: Wait for Services to be Ready
         run: |
           echo "⏳ Waiting for WebAuthn server to be ready..."

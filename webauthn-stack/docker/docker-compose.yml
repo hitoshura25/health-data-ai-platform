@@ -148,7 +148,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
-      start_period: 10s
+      start_period: 30s  # Increased for CI environment (was 10s)
 
   # Example Service - Demonstrates JWT verification (runs behind mTLS sidecar)
   example-service:
