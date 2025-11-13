@@ -45,8 +45,8 @@ jobs:
       - name: Start Docker Services
         working-directory: webauthn-stack/docker
         run: |
-          docker compose up -d
-          echo "✅ Docker services started"
+          docker compose up -d --wait
+          echo "✅ Docker services started and healthy"
 
       - name: Wait for Services to be Ready
         run: |
