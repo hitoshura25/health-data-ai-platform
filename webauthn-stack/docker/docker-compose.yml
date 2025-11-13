@@ -144,7 +144,7 @@ services:
     command: ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "example-service"]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9902/ready"]
+      test: ["CMD-SHELL", "bash -c '(echo > /dev/tcp/localhost/9902) >/dev/null 2>&1'"]
       interval: 5s
       timeout: 3s
       retries: 5
