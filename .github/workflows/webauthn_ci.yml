@@ -156,8 +156,6 @@ jobs:
           ./setup-all-services.sh
           # Override port to avoid conflict with WebAuthn Gateway (8000)
           echo "HEALTH_API_PORT=8001" >> .env
-          # Override WEBAUTHN_JWKS_URL for CI environment (localhost instead of host.docker.internal)
-          echo "WEBAUTHN_JWKS_URL=http://localhost:8000/.well-known/jwks.json" >> .env
           # Set JWKS cache to 15 seconds (half of 30s rotation interval)
           # This ensures health-api detects key rotation quickly and cache stays fresh
           echo "WEBAUTHN_JWKS_CACHE_LIFESPAN=15" >> .env
@@ -221,10 +219,10 @@ jobs:
           echo "🔍 Verifying health-api environment variables..."
           docker compose exec -T health-api printenv | grep WEBAUTHN || echo "❌ WEBAUTHN vars not found"
           echo ""
-          echo "📋 Testing JWKS endpoint from health-api container..."
-          docker compose exec -T health-api curl -f -s -m 5 http://localhost:8000/.well-known/jwks.json | head -20 || echo "❌ JWKS not reachable from container (5s timeout)"
+          echo "📋 Testing JWKS endpoint from health-api container (using host.docker.internal)..."
+          docker compose exec -T health-api curl -f -s -m 5 http://host.docker.internal:8000/.well-known/jwks.json | head -20 || echo "❌ JWKS not reachable from container (5s timeout)"
           echo ""
-          echo "📋 Testing JWKS endpoint from CI host..."
+          echo "📋 Testing JWKS endpoint from CI host (using localhost)..."
           curl -f -s -m 5 http://localhost:8000/.well-known/jwks.json | head -20 || echo "❌ JWKS not reachable from host (5s timeout)"
           echo ""
           echo "📋 Testing health-api health endpoint..."
