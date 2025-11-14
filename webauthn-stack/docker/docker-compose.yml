@@ -117,10 +117,12 @@ services:
       MPO_AUTHN_APP_RELYING_PARTY_ID: localhost
       MPO_AUTHN_APP_RELYING_PARTY_NAME: "Health Data AI Platform"
       # JWT Key Rotation Configuration (HOCON duration format)
-      MPO_AUTHN_JWT_KEY_ROTATION_ENABLED: "true"
-      MPO_AUTHN_JWT_KEY_ROTATION_INTERVAL: "180d"
-      MPO_AUTHN_JWT_KEY_GRACE_PERIOD: "1h"
-      MPO_AUTHN_JWT_KEY_RETENTION: "1h"
+      # Defaults: 180d rotation, 1h grace/retention (production values)
+      # Override via .env file for testing (e.g., CI uses 30s rotation)
+      MPO_AUTHN_JWT_KEY_ROTATION_ENABLED: "${MPO_AUTHN_JWT_KEY_ROTATION_ENABLED:-true}"
+      MPO_AUTHN_JWT_KEY_ROTATION_INTERVAL: "${MPO_AUTHN_JWT_KEY_ROTATION_INTERVAL:-180d}"
+      MPO_AUTHN_JWT_KEY_GRACE_PERIOD: "${MPO_AUTHN_JWT_KEY_GRACE_PERIOD:-1h}"
+      MPO_AUTHN_JWT_KEY_RETENTION: "${MPO_AUTHN_JWT_KEY_RETENTION:-1h}"
       MPO_AUTHN_JWT_KEY_SIZE: "2048"
       MPO_AUTHN_JWT_KEY_ID_PREFIX: "webauthn"
     secrets:

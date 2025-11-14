@@ -49,6 +49,24 @@ jobs:
           bash generate-certs.sh
           echo "✅ mTLS certificates generated"
 
+      - name: Verify Certificates
+        working-directory: webauthn-stack/docker
+        run: |
+          echo "Verifying certificate files..."
+          ls -lh certs/*.pem | grep -E "gateway-|service-|ca-"
+          echo "✅ All certificate files present and readable"
+
+      - name: Configure JWT Rotation for CI Testing
+        working-directory: webauthn-stack/docker
+        run: |
+          cat > .env <<EOF
+          # CI-specific JWT key rotation (accelerated for testing)
+          MPO_AUTHN_JWT_KEY_ROTATION_INTERVAL=30s
+          MPO_AUTHN_JWT_KEY_GRACE_PERIOD=15s
+          MPO_AUTHN_JWT_KEY_RETENTION=30s
+          EOF
+          echo "✅ CI environment configuration created"
+
       - name: Start Docker Services
         working-directory: webauthn-stack/docker
         run: |

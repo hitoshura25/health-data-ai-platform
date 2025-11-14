@@ -92,13 +92,14 @@ else
 fi
 
 # Step 4: Set proper permissions
+# Note: Using 644 for all files (including private keys) for CI compatibility
+# These are development/test certificates only, not production secrets
 echo ""
 echo "Step 4: Setting permissions..."
-chmod 644 ca-cert.pem
-chmod 600 ca-key.pem
-chmod 644 gateway-cert.pem gateway-csr.pem service-cert.pem service-csr.pem
-chmod 600 gateway-key.pem service-key.pem
-echo "✅ Permissions set (644 for public certs, 600 for private keys)"
+chmod 644 ca-cert.pem ca-key.pem
+chmod 644 gateway-cert.pem gateway-csr.pem gateway-key.pem
+chmod 644 service-cert.pem service-csr.pem service-key.pem
+echo "✅ Permissions set (644 for all certificates - CI compatible)"
 
 # Step 5: Verification
 echo ""
