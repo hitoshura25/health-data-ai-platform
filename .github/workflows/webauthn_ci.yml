@@ -151,6 +151,66 @@ jobs:
           npx playwright install --with-deps chromium
           echo "✅ Playwright browsers installed"
 
+      - name: Generate Health Services Environment
+        run: |
+          ./setup-all-services.sh
+          # Override port to avoid conflict with WebAuthn Gateway (8000)
+          echo "HEALTH_API_PORT=8001" >> .env
+          echo "✅ Health services environment configured"
+
+      - name: Start Health Services Dependencies
+        run: |
+          # Start infrastructure required by health-api
+          docker compose up -d postgres redis minio rabbitmq
+          echo "✅ Health services dependencies started"
+
+      - name: Wait for Health Dependencies
+        run: |
+          echo "⏳ Waiting for MinIO..."
+          timeout=60
+          elapsed=0
+          interval=2
+
+          while [ $elapsed -lt $timeout ]; do
+            if curl -f -s http://localhost:9000/minio/health/live > /dev/null 2>&1; then
+              echo "✅ MinIO ready (${elapsed}s)"
+              break
+            fi
+            sleep $interval
+            elapsed=$((elapsed + interval))
+          done
+
+          echo "✅ Waiting for PostgreSQL..."
+          docker compose exec -T postgres pg_isready -U healthapi_user -d healthapi || true
+
+          echo "✅ All dependencies ready"
+
+      - name: Start Health API Service
+        run: |
+          docker compose up -d health-api
+          echo "✅ Health API started"
+
+      - name: Wait for Health API
+        run: |
+          echo "⏳ Waiting for Health API on port 8001..."
+          timeout=120
+          elapsed=0
+          interval=2
+
+          while [ $elapsed -lt $timeout ]; do
+            if curl -f -s http://localhost:8001/health/live > /dev/null 2>&1; then
+              echo "✅ Health API ready (${elapsed}s)"
+              exit 0
+            fi
+            echo "⏳ Waiting... (${elapsed}s)"
+            sleep $interval
+            elapsed=$((elapsed + interval))
+          done
+
+          echo "❌ Health API failed to start after ${timeout}s"
+          docker compose logs health-api
+          exit 1
+
       - name: Run Playwright E2E Tests
         working-directory: webauthn-stack
         timeout-minutes: 10
@@ -177,7 +237,13 @@ jobs:
 
       - name: Stop Docker Services
         if: always()
-        working-directory: webauthn-stack/docker
         run: |
+          # Stop health services stack (from root directory)
           docker compose down -v
-          echo "✅ Docker services stopped and cleaned up"
+          echo "✅ Health services stopped"
+
+          # Stop webauthn stack
+          cd webauthn-stack/docker && docker compose down -v
+          echo "✅ WebAuthn services stopped"
+
+          echo "✅ All Docker services stopped and cleaned up"
