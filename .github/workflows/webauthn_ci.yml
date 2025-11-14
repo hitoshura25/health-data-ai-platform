@@ -213,6 +213,17 @@ jobs:
           docker compose logs health-api
           exit 1
 
+      - name: Verify Health API Configuration
+        run: |
+          echo "🔍 Verifying health-api environment variables..."
+          docker compose exec -T health-api printenv | grep WEBAUTHN_JWKS_URL || echo "❌ WEBAUTHN_JWKS_URL not set"
+          echo ""
+          echo "📋 Testing JWKS endpoint accessibility from health-api container..."
+          docker compose exec -T health-api curl -f -s http://localhost:8000/.well-known/jwks.json | head -20 || echo "❌ JWKS endpoint not reachable from container"
+          echo ""
+          echo "📋 Testing JWKS endpoint from CI host..."
+          curl -f -s http://localhost:8000/.well-known/jwks.json | head -20 || echo "❌ JWKS endpoint not reachable from host"
+
       - name: Run Playwright E2E Tests
         working-directory: webauthn-stack
         timeout-minutes: 10
