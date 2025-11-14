@@ -158,6 +158,9 @@ jobs:
           echo "HEALTH_API_PORT=8001" >> .env
           # Override WEBAUTHN_JWKS_URL for CI environment (localhost instead of host.docker.internal)
           echo "WEBAUTHN_JWKS_URL=http://localhost:8000/.well-known/jwks.json" >> .env
+          # Set JWKS cache to 15 seconds (half of 30s rotation interval)
+          # This ensures health-api detects key rotation quickly and cache stays fresh
+          echo "WEBAUTHN_JWKS_CACHE_LIFESPAN=15" >> .env
           echo "✅ Health services environment configured"
 
       - name: Start Health Services Dependencies

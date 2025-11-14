@@ -113,10 +113,24 @@ async def exchange_webauthn_token(
     """
 
     try:
+        import time
+        start_time = time.time()
+
         # Verify WebAuthn JWT using JWKS
         # PyJWKClient automatically fetches the signing key from JWKS endpoint
-        signing_key = webauthn_config.get_signing_key_from_jwt(request.webauthn_token)
+        logger.info("Starting JWT verification",
+                   jwks_url=webauthn_config.jwks_url,
+                   cache_lifespan=webauthn_config.cache_lifespan)
 
+        jwks_fetch_start = time.time()
+        signing_key = webauthn_config.get_signing_key_from_jwt(request.webauthn_token)
+        jwks_fetch_duration = time.time() - jwks_fetch_start
+
+        logger.info("JWKS signing key fetched",
+                   duration_ms=round(jwks_fetch_duration * 1000, 2),
+                   key_id=getattr(signing_key, '_jwk_data', {}).get('kid', 'unknown'))
+
+        decode_start = time.time()
         payload = jwt.decode(
             request.webauthn_token,
             signing_key.key,
@@ -130,6 +144,10 @@ async def exchange_webauthn_token(
                 "verify_aud": True,
             }
         )
+        decode_duration = time.time() - decode_start
+
+        logger.info("JWT decoded and verified",
+                   duration_ms=round(decode_duration * 1000, 2))
 
         webauthn_username = payload["sub"]  # Username from WebAuthn
 
@@ -164,7 +182,11 @@ async def exchange_webauthn_token(
             detail="Invalid token issuer"
         )
     except Exception as e:
-        logger.error("Token verification failed", error=str(e))
+        duration = time.time() - start_time
+        logger.error("Token verification failed",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    duration_ms=round(duration * 1000, 2))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Token verification failed: {e}"
@@ -206,9 +228,11 @@ async def exchange_webauthn_token(
     # Generate Health API JWT
     token = await strategy.write_token(user)
 
+    total_duration = time.time() - start_time
     logger.info("Token exchange successful",
                health_user_id=user.id,
-               webauthn_user=webauthn_username)
+               webauthn_user=webauthn_username,
+               total_duration_ms=round(total_duration * 1000, 2))
 
     return TokenExchangeResponse(
         access_token=token,

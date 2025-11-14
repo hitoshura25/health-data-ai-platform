@@ -27,10 +27,19 @@ class WebAuthnConfig:
     def __init__(self):
         self.jwks_url = settings.WEBAUTHN_JWKS_URL
         self.issuer = settings.WEBAUTHN_ISSUER
+        self.cache_lifespan = settings.WEBAUTHN_JWKS_CACHE_LIFESPAN
 
         # PyJWKClient automatically fetches and caches JWKS
-        logger.info("Initializing JWKS client", jwks_url=self.jwks_url)
-        self.jwks_client = PyJWKClient(self.jwks_url)
+        # Cache lifespan should be < JWT key rotation interval to detect key changes quickly
+        logger.info("Initializing JWKS client",
+                   jwks_url=self.jwks_url,
+                   cache_lifespan_seconds=self.cache_lifespan,
+                   issuer=self.issuer)
+        self.jwks_client = PyJWKClient(
+            self.jwks_url,
+            cache_jwk_set=True,
+            lifespan=self.cache_lifespan
+        )
         logger.info("JWKS client initialized successfully")
 
     def get_signing_key_from_jwt(self, token: str):

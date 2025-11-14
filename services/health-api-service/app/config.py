@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     # WebAuthn Integration (for token exchange)
     # Uses JWKS endpoint (RFC 7517) for automatic key fetching and rotation support
     WEBAUTHN_JWKS_URL: str = "http://host.docker.internal:8000/.well-known/jwks.json"
+    WEBAUTHN_JWKS_CACHE_LIFESPAN: int = 300  # JWKS cache duration in seconds (default: 5 minutes for production)
     WEBAUTHN_ISSUER: str = "mpo-webauthn"
 
     # SSO User Email Domain (for WebAuthn users without email addresses)
