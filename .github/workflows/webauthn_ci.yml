@@ -64,6 +64,10 @@ jobs:
           MPO_AUTHN_JWT_KEY_ROTATION_INTERVAL=30s
           MPO_AUTHN_JWT_KEY_GRACE_PERIOD=15s
           MPO_AUTHN_JWT_KEY_RETENTION=30s
+
+          # PyJWKClient cache duration (must be < rotation interval for cache coherency)
+          # Set to 15s (half of 30s rotation) to detect key changes quickly
+          WEBAUTHN_JWKS_CACHE_LIFESPAN=15
           EOF
           echo "✅ CI environment configuration created"
 

@@ -140,6 +140,8 @@ services:
   example-service-sidecar:
     image: envoyproxy/envoy:v1.29-latest
     container_name: example-service-sidecar
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./istio/example-service-envoy.yaml:/etc/envoy/envoy.yaml:ro
       - ./certs:/etc/certs:ro  # mTLS certificates
@@ -161,7 +163,9 @@ services:
     network_mode: "service:example-service-sidecar"  # Share network with sidecar
     environment:
       APP_PORT: 9001  # App listens on 9001, Envoy sidecar exposes 9000
-      WEBAUTHN_JWKS_URL: "http://webauthn-server:8080/.well-known/jwks.json"
+      # Fetch JWKS through gateway using host.docker.internal (works in both Docker Desktop and Engine)
+      WEBAUTHN_JWKS_URL: "http://host.docker.internal:8000/.well-known/jwks.json"
+      WEBAUTHN_JWKS_CACHE_LIFESPAN: "${WEBAUTHN_JWKS_CACHE_LIFESPAN:-300}"  # Default 5 min, override to 15s in CI
     depends_on:
       - webauthn-server
       - example-service-sidecar

@@ -22,9 +22,16 @@ app = FastAPI(
 
 # Configuration
 JWKS_URL = os.getenv("WEBAUTHN_JWKS_URL", "http://webauthn-server:8080/.well-known/jwks.json")
+JWKS_CACHE_LIFESPAN = int(os.getenv("WEBAUTHN_JWKS_CACHE_LIFESPAN", "300"))  # seconds
 
-# PyJWKClient automatically fetches and caches JWKS (5 minute TTL default)
-jwks_client = PyJWKClient(JWKS_URL)
+# PyJWKClient automatically fetches and caches JWKS
+# Cache lifespan should be < key rotation interval for proper cache coherency
+# Production: 300s (5 min), CI: 15s for 30s rotation testing
+jwks_client = PyJWKClient(
+    JWKS_URL,
+    cache_jwk_set=True,
+    lifespan=JWKS_CACHE_LIFESPAN
+)
 
 def verify_jwt_token(authorization: Optional[str] = Header(None)) -> dict:
     """Verify JWT from Authorization header using JWKS"""
