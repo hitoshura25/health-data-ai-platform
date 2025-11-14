@@ -219,13 +219,16 @@ jobs:
       - name: Verify Health API Configuration
         run: |
           echo "🔍 Verifying health-api environment variables..."
-          docker compose exec -T health-api printenv | grep WEBAUTHN_JWKS_URL || echo "❌ WEBAUTHN_JWKS_URL not set"
+          docker compose exec -T health-api printenv | grep WEBAUTHN || echo "❌ WEBAUTHN vars not found"
           echo ""
-          echo "📋 Testing JWKS endpoint accessibility from health-api container..."
-          docker compose exec -T health-api curl -f -s http://localhost:8000/.well-known/jwks.json | head -20 || echo "❌ JWKS endpoint not reachable from container"
+          echo "📋 Testing JWKS endpoint from health-api container..."
+          docker compose exec -T health-api curl -f -s -m 5 http://localhost:8000/.well-known/jwks.json | head -20 || echo "❌ JWKS not reachable from container (5s timeout)"
           echo ""
           echo "📋 Testing JWKS endpoint from CI host..."
-          curl -f -s http://localhost:8000/.well-known/jwks.json | head -20 || echo "❌ JWKS endpoint not reachable from host"
+          curl -f -s -m 5 http://localhost:8000/.well-known/jwks.json | head -20 || echo "❌ JWKS not reachable from host (5s timeout)"
+          echo ""
+          echo "📋 Testing health-api health endpoint..."
+          curl -f -s -m 5 http://localhost:8001/health/live || echo "❌ Health API not responding (5s timeout)"
 
       - name: Run Playwright E2E Tests
         working-directory: webauthn-stack
@@ -234,6 +237,32 @@ jobs:
           CI: true
         run: |
           npm test
+
+      - name: Debug Test Failures (Service Logs)
+        if: failure()
+        run: |
+          echo "========================================"
+          echo "Health API Logs (Last 200 lines):"
+          echo "========================================"
+          docker compose logs --tail=200 health-api || echo "Health API logs not available"
+
+          echo ""
+          echo "========================================"
+          echo "Health API Container Status:"
+          echo "========================================"
+          docker compose ps health-api || echo "Health API not running"
+
+          echo ""
+          echo "========================================"
+          echo "WebAuthn Server Logs (Last 100 lines):"
+          echo "========================================"
+          cd webauthn-stack/docker && docker compose logs --tail=100 webauthn-server || echo "WebAuthn server logs not available"
+
+          echo ""
+          echo "========================================"
+          echo "Envoy Gateway Logs (Last 50 lines):"
+          echo "========================================"
+          docker compose logs --tail=50 envoy-gateway || echo "Envoy gateway logs not available"
 
       - name: Upload Test Report
         if: always()

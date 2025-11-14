@@ -23,6 +23,7 @@ import jwt
 from typing import Annotated
 import secrets
 import structlog
+import time
 
 router = APIRouter(tags=["Authentication"])
 logger = structlog.get_logger()
@@ -112,10 +113,9 @@ async def exchange_webauthn_token(
     - Client uses Health API JWT for all subsequent API requests
     """
 
-    try:
-        import time
-        start_time = time.time()
+    start_time = time.time()
 
+    try:
         # Verify WebAuthn JWT using JWKS
         # PyJWKClient automatically fetches the signing key from JWKS endpoint
         logger.info("Starting JWT verification",
