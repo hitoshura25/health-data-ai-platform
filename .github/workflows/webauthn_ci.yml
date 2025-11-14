@@ -156,6 +156,8 @@ jobs:
           ./setup-all-services.sh
           # Override port to avoid conflict with WebAuthn Gateway (8000)
           echo "HEALTH_API_PORT=8001" >> .env
+          # Override WEBAUTHN_JWKS_URL for CI environment (localhost instead of host.docker.internal)
+          echo "WEBAUTHN_JWKS_URL=http://localhost:8000/.well-known/jwks.json" >> .env
           echo "✅ Health services environment configured"
 
       - name: Start Health Services Dependencies
