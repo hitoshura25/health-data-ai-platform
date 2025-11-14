@@ -43,6 +43,12 @@ jobs:
         run: |
           bash setup-secrets.sh
 
+      - name: Generate mTLS Certificates
+        working-directory: webauthn-stack/docker
+        run: |
+          bash generate-certs.sh
+          echo "✅ mTLS certificates generated"
+
       - name: Start Docker Services
         working-directory: webauthn-stack/docker
         run: |
