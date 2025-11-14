@@ -6,6 +6,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: health-api
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${HEALTH_API_PORT:-8000}:8000"
     environment:
