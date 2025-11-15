@@ -233,8 +233,8 @@ test.describe('Health Data Upload End-to-End Tests', () => {
         await serviceDropdown.waitFor({ state: 'visible', timeout: 5000 });
         console.log('  ✅ Found service dropdown');
 
-        // Click to open dropdown
-        await serviceDropdown.click();
+        // Click to open dropdown (fast-fail timeout)
+        await serviceDropdown.click({ timeout: 3000 });
 
         // Wait for dropdown menu to appear
         const dropdownMenu = page.locator('.ant-select-dropdown');
@@ -245,8 +245,8 @@ test.describe('Health Data Upload End-to-End Tests', () => {
         const hasHealthApi = await healthApiOption.isVisible({ timeout: 2000 }).catch(() => false);
 
         if (hasHealthApi) {
-          // Select health-api-service
-          await healthApiOption.click();
+          // Select health-api-service (fast-fail timeout)
+          await healthApiOption.click({ timeout: 3000 });
           console.log('  ✅ Selected health-api-service');
 
           // Find Traces button (has data-test="submit-btn")
@@ -255,18 +255,18 @@ test.describe('Health Data Upload End-to-End Tests', () => {
 
           // Wait for button to be enabled (it's disabled until service is selected)
           await findButton.waitFor({ state: 'attached', timeout: 3000 });
-          await findButton.click({ force: false });
+          await findButton.click({ timeout: 3000, force: false });
           console.log('  ✅ Clicked Find Traces');
 
-          // Wait for results to load - look for our correlation_id
+          // Wait for results to load - look for our correlation_id (fast-fail timeout)
           const ourTrace = page.locator(`text="${correlationId}"`);
 
           try {
-            await ourTrace.waitFor({ state: 'visible', timeout: 10000 });
+            await ourTrace.waitFor({ state: 'visible', timeout: 5000 });
             console.log(`  ✅ Found trace with correlation_id: ${correlationId}`);
             console.log('  ✅ Distributed tracing verified successfully!');
           } catch (error) {
-            console.log(`  ⚠️  Trace ${correlationId} not found within 10 seconds`);
+            console.log(`  ⚠️  Trace ${correlationId} not found within 5 seconds`);
             console.log('  💡 Jaeger may still be indexing - check manually:');
             console.log(`     http://localhost:16687`);
           }
