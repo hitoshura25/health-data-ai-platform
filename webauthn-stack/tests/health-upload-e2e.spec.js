@@ -221,9 +221,9 @@ test.describe('Health Data Upload End-to-End Tests', () => {
     await test.step('Verify distributed traces in Jaeger UI', async () => {
       console.log('\n🔍 Step 7: Verify Distributed Tracing');
 
-      // Open Jaeger UI
-      await page.goto('http://localhost:16687');
-      await page.waitForLoadState('networkidle');
+      // Open Jaeger UI (with reduced timeout - this is informational only)
+      await page.goto('http://localhost:16687', { timeout: 5000 });
+      await page.waitForLoadState('domcontentloaded', { timeout: 5000 });
 
       // Jaeger UI uses Ant Design components (not native select)
       // Service selector is the first .ant-select component

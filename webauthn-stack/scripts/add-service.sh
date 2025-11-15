@@ -297,10 +297,18 @@ yq eval ".services.\"envoy-gateway\".depends_on += [\"${SERVICE_NAME}-sidecar\"]
 echo "   ✅ Added to docker-compose.yml (APP_PORT: ${APP_PORT})"
 echo ""
 
-# Step 5: Add routing to envoy-gateway.yaml
-echo "📝 Step 5: Adding routing to envoy-gateway.yaml..."
+# Step 5: Add routing to envoy-gateway.yaml.template
+echo "📝 Step 5: Adding routing to envoy-gateway.yaml.template..."
 
-ENVOY_FILE="docker/envoy-gateway.yaml"
+ENVOY_FILE="docker/envoy-gateway.yaml.template"
+
+# Validate template file exists
+if [ ! -f "$ENVOY_FILE" ]; then
+  echo "❌ Error: $ENVOY_FILE not found!"
+  echo "💡 The template-based configuration requires envoy-gateway.yaml.template"
+  echo "   This file should have been created when you set up the WebAuthn stack."
+  exit 1
+fi
 
 # Backup original file
 cp "$ENVOY_FILE" "${ENVOY_FILE}.backup"
@@ -353,6 +361,10 @@ yq eval ".static_resources.clusters += [{
 
 echo "   ✅ Added route: ${ROUTE_PREFIX} → ${SERVICE_NAME} cluster"
 echo "   ✅ Added cluster: ${SERVICE_NAME} (port 9000 with mTLS)"
+echo "   ✅ Envoy gateway routing updated in template"
+echo ""
+echo "⚠️  Important: Restart the gateway container for changes to take effect:"
+echo "   cd docker && docker compose restart envoy-gateway"
 echo ""
 
 # Final summary
@@ -374,16 +386,19 @@ echo "      # Ensure app listens on 127.0.0.1:\$APP_PORT"
 echo ""
 echo "   2. Build and start your service:"
 echo "      cd docker"
-echo "      docker compose up -d ${SERVICE_NAME}"
+echo "      docker compose up -d --build ${SERVICE_NAME} ${SERVICE_NAME}-sidecar"
 echo ""
-echo "   3. Test your service:"
+echo "   3. Restart Envoy Gateway (apply routing changes):"
+echo "      docker compose restart envoy-gateway"
+echo ""
+echo "   4. Test your service:"
 echo "      # Get JWT token first (register + authenticate via web client)"
 echo "      curl -H \"Authorization: Bearer \$TOKEN\" \\"
 echo "        http://localhost:8000${ROUTE_PREFIX}/your-endpoint"
 echo ""
 echo "💾 Backups created:"
 echo "   - docker/docker-compose.yml.backup"
-echo "   - docker/envoy-gateway.yaml.backup"
+echo "   - docker/envoy-gateway.yaml.template.backup"
 echo ""
 echo "📚 For detailed integration guide, see:"
 echo "   docs/INTEGRATION.md"

@@ -20,13 +20,29 @@ services:
   envoy-gateway:
     image: envoyproxy/envoy:v1.29-latest
     container_name: envoy-gateway
+    environment:
+      # JWKS cache duration (seconds) - configurable per environment
+      # Default: 15s for fast rotation testing (CI uses 30s rotation cycles)
+      # Production: override to 300s for 180-day rotation cycles
+      - JWKS_CACHE_DURATION=${JWKS_CACHE_DURATION:-15}
     ports:
       - "8000:8000"  # Main gateway proxy
       - "9901:9901"  # Admin interface
     volumes:
-      - ./envoy-gateway.yaml:/etc/envoy/envoy.yaml:ro
+      - ./envoy-gateway.yaml.template:/etc/envoy/envoy-gateway.yaml.template:ro
       - ./certs:/etc/envoy/certs:ro  # mTLS certificates
-    command: ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "gateway"]
+    entrypoint:
+      - sh
+      - -c
+      - |
+        # Set default value for JWKS_CACHE_DURATION if not provided
+        CACHE_DURATION=$${JWKS_CACHE_DURATION:-15}
+        # Process template with environment variable substitution using sed
+        # Using | as delimiter and proper escaping for docker-compose
+        sed "s|seconds: \$${JWKS_CACHE_DURATION:-15}|seconds: $$CACHE_DURATION|" \
+          /etc/envoy/envoy-gateway.yaml.template > /tmp/envoy.yaml
+        # Start Envoy with generated configuration
+        exec envoy -c /tmp/envoy.yaml --service-cluster gateway
     depends_on:
       - webauthn-server
       - example-service-sidecar

@@ -65,8 +65,10 @@ jobs:
           MPO_AUTHN_JWT_KEY_GRACE_PERIOD=15s
           MPO_AUTHN_JWT_KEY_RETENTION=30s
 
-          # PyJWKClient cache duration (must be < rotation interval for cache coherency)
-          # Set to 15s (half of 30s rotation) to detect key changes quickly
+          # JWKS cache coherency configuration (all caches set to 15s for 30s rotation cycles)
+          # Envoy Gateway JWKS cache duration
+          JWKS_CACHE_DURATION=15
+          # PyJWKClient cache duration (health-api + example-service)
           WEBAUTHN_JWKS_CACHE_LIFESPAN=15
           EOF
           echo "✅ CI environment configuration created"
