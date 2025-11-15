@@ -8,6 +8,11 @@ const GRACE_PERIOD = 15000; // 15 seconds grace period
 const FULL_ROTATION_CYCLE = KEY_ROTATION_INTERVAL + GRACE_PERIOD; // 45 seconds total
 const KEY_ROTATION_TIMEOUT = FULL_ROTATION_CYCLE + 10000; // 55 seconds with buffer for detection
 
+// JWKS cache configuration (reads from environment, adapts to CI settings)
+const JWKS_CACHE_DURATION = parseInt(process.env.JWKS_CACHE_DURATION || '4', 10);
+const CACHE_BUFFER_SECONDS = 1; // Extra second for safety margin
+const CACHE_WAIT_MS = (JWKS_CACHE_DURATION + CACHE_BUFFER_SECONDS) * 1000;
+
 // Helper function to generate unique usernames for parallel test execution
 function generateUniqueUsername(testName, workerIndex = 0) {
   const timestamp = Date.now();
@@ -175,9 +180,9 @@ test.describe('JWT Key Rotation End-to-End Tests', () => {
 
     console.log(`Phase 3: After rotation, new JWT uses key: ${kidK2} (waited ${Math.round(waitTime / 1000)}s)`);
 
-    // Wait for Envoy JWKS cache to expire (cache_duration=4s, wait 5s to guarantee refresh)
-    console.log('Phase 3: Waiting 5s for Envoy JWKS cache to refresh...');
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    // Wait for Envoy JWKS cache to expire (calculated from JWKS_CACHE_DURATION env var)
+    console.log(`Phase 3: Waiting ${CACHE_WAIT_MS/1000}s for Envoy JWKS cache refresh (${JWKS_CACHE_DURATION}s cache + ${CACHE_BUFFER_SECONDS}s buffer)...`);
+    await new Promise(resolve => setTimeout(resolve, CACHE_WAIT_MS));
 
     // First verify K2 JWT is currently valid (before it potentially rotates)
     const responseWithK2Before = await request.get('http://localhost:8000/api/user/profile', {
@@ -252,9 +257,9 @@ test.describe('JWT Key Rotation End-to-End Tests', () => {
     expect(kidK3).not.toBe(kidK1);
     console.log(`Phase 4: After second rotation, key changed: ${kidK2} → ${kidK3} (waited ${Math.round(wait2 / 1000)}s)`);
 
-    // Wait for Envoy JWKS cache to expire (cache_duration=4s, wait 5s to guarantee refresh)
-    console.log('Phase 4: Waiting 5s for Envoy JWKS cache to refresh...');
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    // Wait for Envoy JWKS cache to expire (calculated from JWKS_CACHE_DURATION env var)
+    console.log(`Phase 4: Waiting ${CACHE_WAIT_MS/1000}s for Envoy JWKS cache refresh (${JWKS_CACHE_DURATION}s cache + ${CACHE_BUFFER_SECONDS}s buffer)...`);
+    await new Promise(resolve => setTimeout(resolve, CACHE_WAIT_MS));
 
     // Verify K3 JWT works for API calls using Playwright request (bypasses CORS)
     const responseWithK3 = await request.get('http://localhost:8000/api/user/profile', {
