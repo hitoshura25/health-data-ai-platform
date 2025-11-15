@@ -9,8 +9,8 @@ module.exports = defineConfig({
   maxFailures: process.env.CI ? 1 : undefined,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
+  /* Retry disabled to fail build on flaky tests and trigger debug action */
+  retries: 0,
   /* Opt out of parallel tests on CI. */
   workers: process.env.CI ? 2 : '50%',
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
