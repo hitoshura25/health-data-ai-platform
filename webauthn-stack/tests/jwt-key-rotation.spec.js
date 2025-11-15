@@ -175,6 +175,10 @@ test.describe('JWT Key Rotation End-to-End Tests', () => {
 
     console.log(`Phase 3: After rotation, new JWT uses key: ${kidK2} (waited ${Math.round(waitTime / 1000)}s)`);
 
+    // Wait for Envoy JWKS cache to expire (cache_duration=4s, wait 5s to guarantee refresh)
+    console.log('Phase 3: Waiting 5s for Envoy JWKS cache to refresh...');
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
     // First verify K2 JWT is currently valid (before it potentially rotates)
     const responseWithK2Before = await request.get('http://localhost:8000/api/user/profile', {
       headers: {
@@ -247,6 +251,10 @@ test.describe('JWT Key Rotation End-to-End Tests', () => {
 
     expect(kidK3).not.toBe(kidK1);
     console.log(`Phase 4: After second rotation, key changed: ${kidK2} → ${kidK3} (waited ${Math.round(wait2 / 1000)}s)`);
+
+    // Wait for Envoy JWKS cache to expire (cache_duration=4s, wait 5s to guarantee refresh)
+    console.log('Phase 4: Waiting 5s for Envoy JWKS cache to refresh...');
+    await new Promise(resolve => setTimeout(resolve, 5000));
 
     // Verify K3 JWT works for API calls using Playwright request (bypasses CORS)
     const responseWithK3 = await request.get('http://localhost:8000/api/user/profile', {
