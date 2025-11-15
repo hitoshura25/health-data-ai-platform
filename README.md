@@ -4,149 +4,102 @@ An end-to-end pipeline that automatically collects health data from Android Heal
 
 ## 🏗️ Architecture Overview
 
-This platform consists of 5 main services working together:
+This platform consists of two separate stacks working together:
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│  Health API     │───▶│  Message Queue  │───▶│   Data Lake     │
-│   Service       │    │   (RabbitMQ)    │    │   (MinIO S3)    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ AI Query        │◀───│ ETL Narrative   │◀───│ Raw Health Data │
-│ Interface       │    │    Engine       │    │   Processing    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
+**WebAuthn Stack** - Zero-trust authentication and observability:
+- Envoy Gateway (port 8000) - Entry point
+- WebAuthn Server - FIDO2/Passkey authentication
+- Jaeger - Distributed tracing for all services
+- Dedicated PostgreSQL + Redis
 
-## 🚀 Quick Start
+**Health Services Stack** - Data processing pipeline:
+- Health API (port 8001) - Upload and query service
+- Data Lake (MinIO) - S3-compatible storage
+- Message Queue (RabbitMQ) - Async processing
+- ETL Narrative Engine (planned) - Clinical data processing
+- AI Query Interface (planned) - MLflow-powered queries
+- Dedicated PostgreSQL + Redis
 
-### Prerequisites
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design decisions.
 
-- Docker and Docker Compose v2.20+ (for `include` directive)
-- Python 3.11+
-- OpenSSL (for generating secure credentials)
-- Git
-
-### Setup and Run (Under 2 Minutes!)
+## 🚀 Quick Start (Under 2 Minutes!)
 
 ```bash
-# 1. Clone the repository
+# 1. Clone and setup
 git clone <repository-url>
 cd health-data-ai-platform
-
-# 2. Generate secure configuration for all services
 ./setup-all-services.sh
 
-# 3. Start all services
+# 2. Start WebAuthn stack (authentication + tracing)
+cd webauthn-stack/docker && docker compose up -d && cd ../..
+
+# 3. Start health services
 docker compose up -d
 
-# 4. Verify services are running
-docker compose ps
-
-# 5. Access the Health API
-open http://localhost:8000/docs
+# 4. Access services
+open http://localhost:8082  # WebAuthn client
+open http://localhost:8001/docs  # Health API
 ```
 
-**That's it!** All services (PostgreSQL, Redis, MinIO, RabbitMQ, WebAuthn, Health API) are now running with coordinated, secure credentials.
-
-For detailed instructions, see [QUICK_START.md](QUICK_START.md)
+**For detailed setup, testing, and workflows**: See [GETTING_STARTED.md](GETTING_STARTED.md)
 
 ## 📁 Project Structure
 
 ```
 health-data-ai-platform/
-├── docker-compose.yml              # Main orchestrator (uses include)
+├── GETTING_STARTED.md              # Setup, testing, workflows
+├── ARCHITECTURE.md                 # Technical design reference
+├── docker-compose.yml              # Main orchestrator (health services)
 ├── setup-all-services.sh           # Unified setup script
-├── QUICK_START.md                  # 2-minute quick start guide
-├── DOCKER_COMPOSE_GUIDE.md         # Detailed Docker Compose docs
+├── run-tests.sh                    # Unified test runner
 │
-├── infrastructure/                  # Shared infrastructure services
-│   ├── setup-secure-env.sh         # Generates secure credentials
-│   ├── postgres.compose.yml        # PostgreSQL (multi-database)
-│   ├── redis.compose.yml           # Redis cache & sessions
-│   ├── jaeger.compose.yml          # Distributed tracing
-│   └── webauthn.compose.yml        # WebAuthn authentication server
+├── webauthn-stack/                 # Zero-trust authentication stack
+│   ├── docker/docker-compose.yml   # WebAuthn stack compose
+│   └── tests/                      # E2E Playwright tests
 │
-├── services/                        # Microservices
-│   ├── health-api-service/         # FastAPI upload service ✅ Complete
-│   ├── message-queue/              # RabbitMQ processing ✅ Complete
-│   ├── data-lake/                  # MinIO storage ✅ Complete
-│   ├── etl-narrative-engine/       # Clinical data processing (planned)
-│   └── ai-query-interface/         # MLflow AI queries (planned)
+├── services/                       # Microservices
+│   ├── health-api-service/         # ✅ FastAPI upload service
+│   ├── message-queue/              # ✅ RabbitMQ processing
+│   ├── data-lake/                  # ✅ MinIO storage
+│   ├── etl-narrative-engine/       # 📋 Planned: Clinical processing
+│   └── ai-query-interface/         # 📋 Planned: MLflow queries
 │
-├── docs/                            # Documentation
-│   └── architecture/                # Implementation plans
+├── docs/                           # Documentation
+│   └── architecture/               # Implementation plans
 │
 └── .github/workflows/              # CI/CD pipelines
 ```
 
-## 🐳 Docker Compose Architecture
-
-This project uses a **modular Docker Compose architecture** with reusable service definitions:
-
-- **No duplication** - Each service defined once
-- **Include directive** - Main `docker-compose.yml` includes service-specific compose files
-- **Shared network** - All services communicate via `health-platform-net`
-- **WebAuthn integration** - Uses published Docker image from [mpo-api-authn-server](https://github.com/hitoshura25/mpo-api-authn-server)
-
-**Services included:**
-- PostgreSQL (multi-database: healthapi, webauthn)
-- Redis (cache & sessions)
-- Jaeger (distributed tracing)
-- WebAuthn Server (passkey authentication)
-- MinIO (S3-compatible storage)
-- RabbitMQ (message queue)
-- Health API (main application)
-
-See [DOCKER_COMPOSE_GUIDE.md](DOCKER_COMPOSE_GUIDE.md) for detailed documentation.
-
 ## 🧪 Running Tests
 
-All services use a unified testing approach with the `run-tests.sh` script.
-
-**Prerequisites:** Ensure Docker services are running and activate the virtual environment:
 ```bash
-docker compose up -d
+# Activate virtual environment
 source .venv/bin/activate
-```
 
-### Run All Tests
-```bash
+# Run all tests (42 total)
 ./run-tests.sh all
+
+# Run specific service tests
+./run-tests.sh health-api     # 27 tests
+./run-tests.sh data-lake      # 1 test
+./run-tests.sh message-queue  # 14 tests
 ```
 
-### Run Service-Specific Tests
-```bash
-# Health API (27 tests)
-./run-tests.sh health-api
+**For detailed testing documentation and troubleshooting**: See [GETTING_STARTED.md](GETTING_STARTED.md#running-tests)
 
-# Data Lake (1 test)
-./run-tests.sh data-lake
+## 📊 Implementation Status
 
-# Message Queue (14 tests)
-./run-tests.sh message-queue
-```
+1. ✅ **Message Queue** + **Data Lake** - Foundation services complete
+2. ✅ **Health API Service** - User-facing upload interface complete
+3. 📋 **ETL Narrative Engine** - Clinical data processing (planned)
+4. 📋 **AI Query Interface** - Natural language queries (planned)
 
-### Run with Pytest Arguments
-```bash
-# Verbose output
-./run-tests.sh health-api -v
+## 📖 Documentation
 
-# Run specific test
-./run-tests.sh health-api -k upload
-```
-
-**For detailed testing documentation**, see [TESTING.md](TESTING.md).
-
-## 📊 Implementation Order
-
-The services should be implemented in this order based on dependencies:
-
-1. **Message Queue** + **Data Lake** (parallel) - Foundation services
-2. **Health API Service** - User-facing upload interface
-3. **ETL Narrative Engine** - Clinical data processing
-4. **AI Query Interface** - Natural language queries
+- **[GETTING_STARTED.md](GETTING_STARTED.md)** - Setup, testing, and development workflows
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System design and technical decisions
+- **[WEBAUTHN_INTEGRATION.md](WEBAUTHN_INTEGRATION.md)** - JWT verification patterns
+- **Service Implementation Plans** - `services/{service}/implementation_plan.md`
 
 ## 📄 License
 
@@ -155,6 +108,6 @@ Apache 2.0
 ## 🆘 Support
 
 - **Issues**: Report issues via GitHub Issues
-- **Documentation**: Check `docs/` directory
-- **Implementation Plans**: See `services/{service}/implementation_plan.md`
-- **Architecture**: Review `docs/architecture/implementation_plan_optimal_hybrid.md`
+- **Quick Start**: [GETTING_STARTED.md](GETTING_STARTED.md)
+- **Architecture Questions**: [ARCHITECTURE.md](ARCHITECTURE.md)
+- **Developer Notes**: `CLAUDE.md`

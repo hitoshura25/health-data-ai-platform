@@ -1,6 +1,10 @@
-from fastapi import APIRouter, Depends, Response, status, Header, HTTPException
+from fastapi import APIRouter, Depends, Response, status, Header, HTTPException, Body
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from pydantic import BaseModel
 from app.db.models import User
+from app.db.session import get_async_session
 from app.users import (
     current_active_user as get_current_active_user,
     auth_backend,
@@ -8,12 +12,18 @@ from app.users import (
     get_jwt_strategy,
 )
 from app.auth.blocklist import RedisBlocklist, get_blocklist
+from app.auth.webauthn_config import webauthn_config
+from app.schemas import UserRead, UserCreate
+from app.config import settings
 from fastapi_users import models
 from fastapi_users.manager import BaseUserManager
 from fastapi_users.authentication import JWTStrategy
+import jwt
 
 from typing import Annotated
+import secrets
 import structlog
+import time
 
 router = APIRouter(tags=["Authentication"])
 logger = structlog.get_logger()
@@ -69,26 +79,162 @@ async def logout(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/auth/webauthn/exchange", status_code=status.HTTP_501_NOT_IMPLEMENTED)
+class TokenExchangeRequest(BaseModel):
+    """Request model for WebAuthn token exchange"""
+    webauthn_token: str
+
+
+class TokenExchangeResponse(BaseModel):
+    """Response model for token exchange"""
+    access_token: str
+    token_type: str = "bearer"
+    user: UserRead
+
+
+@router.post("/auth/webauthn/exchange", response_model=TokenExchangeResponse)
 async def exchange_webauthn_token(
-    webauthn_token: str,
+    request: TokenExchangeRequest = Body(...),
+    db: AsyncSession = Depends(get_async_session),
+    user_manager: BaseUserManager[models.UP, models.ID] = Depends(get_user_manager),
+    strategy: JWTStrategy = Depends(get_jwt_strategy),
 ):
     """
-    [PLACEHOLDER] Exchange WebAuthn service JWT for Health API JWT.
+    Exchange WebAuthn JWT for Health API JWT.
 
-    Future implementation will:
-    1. Verify JWT from WebAuthn service (http://webauthn-server:8080)
-    2. Extract user information from WebAuthn JWT
-    3. Look up or create user in Health API database
-    4. Issue Health API JWT with appropriate claims
+    Flow:
+    1. Verify WebAuthn JWT signature using public key
+    2. Extract user identity (sub = username from WebAuthn)
+    3. Get or auto-create Health API user
+    4. Issue Health API JWT using fastapi-users
 
-    This endpoint will enable passkey-based authentication flow:
-    - Android client authenticates with WebAuthn service
-    - Android client receives WebAuthn JWT
-    - Android client exchanges WebAuthn JWT for Health API JWT
-    - Android client uses Health API JWT for all subsequent requests
+    This enables passkey-based authentication:
+    - Client authenticates with WebAuthn service → receives WebAuthn JWT
+    - Client exchanges WebAuthn JWT → receives Health API JWT
+    - Client uses Health API JWT for all subsequent API requests
     """
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="WebAuthn integration not yet implemented. Use /auth/jwt/login for now.",
+
+    start_time = time.time()
+
+    try:
+        # Verify WebAuthn JWT using JWKS
+        # PyJWKClient automatically fetches the signing key from JWKS endpoint
+        logger.info("Starting JWT verification",
+                   jwks_url=webauthn_config.jwks_url,
+                   cache_lifespan=webauthn_config.cache_lifespan)
+
+        jwks_fetch_start = time.time()
+        signing_key = webauthn_config.get_signing_key_from_jwt(request.webauthn_token)
+        jwks_fetch_duration = time.time() - jwks_fetch_start
+
+        logger.info("JWKS signing key fetched",
+                   duration_ms=round(jwks_fetch_duration * 1000, 2),
+                   key_id=getattr(signing_key, '_jwk_data', {}).get('kid', 'unknown'))
+
+        decode_start = time.time()
+        payload = jwt.decode(
+            request.webauthn_token,
+            signing_key.key,
+            algorithms=["RS256"],
+            issuer=webauthn_config.issuer,
+            audience="webauthn-clients",  # WebAuthn server sets this audience claim
+            options={
+                "verify_signature": True,
+                "verify_exp": True,
+                "verify_iss": True,
+                "verify_aud": True,
+            }
+        )
+        decode_duration = time.time() - decode_start
+
+        logger.info("JWT decoded and verified",
+                   duration_ms=round(decode_duration * 1000, 2))
+
+        webauthn_username = payload["sub"]  # Username from WebAuthn
+
+        # Convert username to email format if not already an email
+        # WebAuthn usernames may not be email addresses, so we normalize them
+        # Uses configurable SSO domain (not example.com for production)
+        if "@" not in webauthn_username:
+            user_email = f"{webauthn_username}@{settings.SSO_USER_EMAIL_DOMAIN}"
+        else:
+            user_email = webauthn_username
+
+        logger.info("WebAuthn token verified using JWKS",
+                   webauthn_user=webauthn_username,
+                   normalized_email=user_email)
+
+    except jwt.ExpiredSignatureError:
+        logger.warning("WebAuthn token expired")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="WebAuthn token expired"
+        )
+    except jwt.InvalidSignatureError:
+        logger.warning("Invalid WebAuthn token signature")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid WebAuthn token signature"
+        )
+    except jwt.InvalidIssuerError:
+        logger.warning("Invalid WebAuthn token issuer")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token issuer"
+        )
+    except Exception as e:
+        duration = time.time() - start_time
+        logger.error("Token verification failed",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    duration_ms=round(duration * 1000, 2))
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Token verification failed: {e}"
+        )
+
+    # Get or create Health API user
+    result = await db.execute(
+        select(User).where(User.email == user_email)
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        # Auto-create user from WebAuthn identity
+        logger.info("Creating new user from WebAuthn identity", email=user_email)
+
+        # Generate cryptographically random password for WebAuthn SSO users
+        # This prevents security risk if password-based login is accidentally enabled
+        # WebAuthn users authenticate via passkeys, not passwords
+        random_password = secrets.token_urlsafe(32)
+
+        user_create = UserCreate(
+            email=user_email,
+            password=random_password,
+            is_verified=True  # Pre-verified via WebAuthn
+        )
+
+        try:
+            user = await user_manager.create(user_create, safe=False)
+            logger.info("User created from WebAuthn", user_id=user.id, email=user.email)
+        except Exception as e:
+            logger.error("User creation failed", error=str(e))
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create user"
+            )
+    else:
+        logger.info("Existing user found", user_id=user.id, email=user.email)
+
+    # Generate Health API JWT
+    token = await strategy.write_token(user)
+
+    total_duration = time.time() - start_time
+    logger.info("Token exchange successful",
+               health_user_id=user.id,
+               webauthn_user=webauthn_username,
+               total_duration_ms=round(total_duration * 1000, 2))
+
+    return TokenExchangeResponse(
+        access_token=token,
+        user=UserRead.model_validate(user)
     )

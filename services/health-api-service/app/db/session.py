@@ -6,7 +6,7 @@ import redis.asyncio as redis
 from app.config import settings
 
 engine = create_async_engine(settings.DATABASE_URL)
-SessionLocal = async_sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = async_sessionmaker(autocommit=False, autoflush=False, expire_on_commit=False, bind=engine)
 
 redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
 

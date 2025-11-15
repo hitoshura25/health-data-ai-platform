@@ -28,7 +28,7 @@ DATALAKE_MINIO_ACCESS_KEY=$(generate_short_secret)
 DATALAKE_MINIO_SECRET_KEY=$(generate_long_secret)
 DATALAKE_MINIO_KMS_KEY=$(openssl rand -base64 32)
 SECRET_KEY=$(generate_long_secret)
-WEBAUTHN_REDIS_PASSWORD=$(generate_long_secret)
+HEALTH_REDIS_PASSWORD=$(generate_long_secret)
 
 # --- Static Configuration ---
 POSTGRES_DB="postgres"
@@ -55,23 +55,22 @@ WEBAUTHN_DB=webauthn
 
 # --- Redis Cache & Sessions ---
 REDIS_PORT=6379
+HEALTH_REDIS_PASSWORD=${HEALTH_REDIS_PASSWORD}
 
-# --- Jaeger Distributed Tracing ---
-JAEGER_UI_PORT=16686
-JAEGER_OTLP_GRPC=4317
-JAEGER_OTLP_HTTP=4318
-JAEGER_ZIPKIN=9411
-
-# --- WebAuthn Authentication Server ---
-WEBAUTHN_PORT=8080
-WEBAUTHN_VERSION=latest
-
-# WebAuthn Relying Party Configuration
-WEBAUTHN_RP_ID=localhost
-WEBAUTHN_RP_NAME="Health Data AI Platform"
-
-# WebAuthn Redis Password
-WEBAUTHN_REDIS_PASSWORD=${WEBAUTHN_REDIS_PASSWORD}
+# --- WebAuthn Stack Integration ---
+# WebAuthn authentication and Jaeger tracing are provided by webauthn-stack/
+# Start webauthn-stack first: cd webauthn-stack/docker && docker compose up -d
+#
+# Jaeger endpoints (from webauthn-stack):
+#   UI: http://localhost:16687
+#   OTLP gRPC: http://localhost:4319
+#   OTLP HTTP: http://localhost:4320
+#
+# WebAuthn server endpoint (from webauthn-stack):
+#   Gateway: http://localhost:8000
+#
+# When adding Jaeger tracing to health services, use:
+# JAEGER_OTLP_ENDPOINT=http://localhost:4319  # or 4320 for HTTP
 
 # --- Data Lake (MinIO) ---
 MINIO_API_PORT=9000
@@ -94,7 +93,7 @@ RABBITMQ_MAIN_EXCHANGE=health-data
 # Message Queue URLs
 MQ_RABBITMQ_URL=amqp://${MQ_RABBITMQ_USER}:${MQ_RABBITMQ_PASS}@localhost:5672/
 MQ_RABBITMQ_MANAGEMENT_URL=http://localhost:15672
-MQ_REDIS_URL=redis://:${WEBAUTHN_REDIS_PASSWORD}@localhost:6379
+MQ_REDIS_URL=redis://:${HEALTH_REDIS_PASSWORD}@localhost:6379
 
 # --- Health API Service ---
 HEALTH_API_PORT=8000

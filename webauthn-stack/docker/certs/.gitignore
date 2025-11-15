@@ -1,0 +1,5 @@
+# mTLS Certificates - Auto-generated
+# DO NOT commit private keys to version control!
+*.pem
+*.csr
+*.srl

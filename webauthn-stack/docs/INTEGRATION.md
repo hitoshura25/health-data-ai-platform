@@ -1,0 +1,1083 @@
+# Adding Your Service to Zero-Trust Stack
+
+This guide shows how to integrate your own services into the zero-trust WebAuthn architecture using **fully automated** service addition.
+
+## Architecture Overview
+
+```
+Client → Envoy Gateway (port 8000) [JWT Auth]
+         ↓
+         mTLS Connection
+         ↓
+         Your Service Sidecar (Envoy) [mTLS Termination]
+         ↓
+         HTTP (localhost)
+         ↓
+         Your Application
+```
+
+**Security Layers:**
+1. **JWT Authentication**: Envoy Gateway validates JWT tokens for all `/api/*` routes
+2. **mTLS Service Mesh**: All service-to-service communication uses mutual TLS
+3. **Zero-Trust**: Services never trust incoming requests without verification
+4. **Explicit Routing**: Only configured services are accessible (no catch-all routes)
+
+---
+
+## Quick Start: Adding a Service
+
+The `add-service.sh` script **fully automates** service integration with **zero manual YAML editing**.
+
+### Prerequisites
+
+**yq v4+** (YAML processor) is required:
+
+```bash
+# macOS
+brew install yq
+
+# Linux
+wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+chmod +x /usr/local/bin/yq
+
+# Verify installation
+yq --version  # Should show v4.x.x
+```
+
+### Automated Service Addition
+
+```bash
+# Auto-detect next available port (9002, 9003, etc.)
+./scripts/add-service.sh my-service
+
+# Specify custom port
+./scripts/add-service.sh my-service --app-port 9005
+
+# Custom API route prefix
+./scripts/add-service.sh billing-api --route /api/billing
+
+# Both custom port and route
+./scripts/add-service.sh payment-svc -p 9010 -r /api/payments
+
+# Show help
+./scripts/add-service.sh --help
+```
+
+**What it does automatically:**
+1. ✅ Copies `example-service` as template
+2. ✅ Generates mTLS certificates (CA-signed)
+3. ✅ Creates Envoy sidecar configuration
+4. ✅ Updates `docker-compose.yml` with service + sidecar
+5. ✅ Updates `envoy-gateway.yaml` with routing + cluster
+6. ✅ Validates port conflicts
+7. ✅ Creates backup files (`.backup`)
+
+**After generation:**
+
+```bash
+# 1. Customize service code
+cd my-service
+# Edit main.py - keep JWT verification, listen on 127.0.0.1:$APP_PORT
+
+# 2. Start service
+cd docker
+docker compose up -d my-service
+
+# 3. Test (after obtaining JWT token via web client)
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8000/api/my-service/data
+```
+
+---
+
+## Security Model: Explicit Routing
+
+**Zero-Trust Principle:** Services are **only** accessible via explicitly configured routes. There is no catch-all `/api` route.
+
+### How It Works
+
+**Envoy Gateway Routing (explicit allow-list):**
+
+```yaml
+routes:
+  # Each service has an explicit route
+  - match:
+      prefix: "/api/example"
+    route:
+      cluster: example_service
+
+  - match:
+      prefix: "/api/billing"
+    route:
+      cluster: billing_service
+
+  # NO catch-all /api route
+  # Undefined routes return 401 (JWT required but no route configured)
+```
+
+**Security Benefits:**
+- ✅ **Fail-fast**: Misconfigured routes immediately return 401/404
+- ✅ **Attack surface reduction**: Only defined endpoints reachable
+- ✅ **Explicit allow-list**: Every service must be explicitly added
+- ✅ **No silent routing**: Requests never routed to wrong service
+- ✅ **Zero-trust enforcement**: No implicit trust of any `/api/*` path
+
+**Testing undefined routes:**
+
+```bash
+# Undefined route returns 401 (JWT filter applies, but no route exists)
+curl http://localhost:8000/api/undefined-service
+# Response: "Jwt is missing"
+
+# Explicit route works (with valid JWT)
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8000/api/example/data
+# Response: Service data
+```
+
+---
+
+## Infrastructure Port Customization
+
+### Avoiding Port Conflicts with Existing Services
+
+The MCP-generated Docker stack includes several infrastructure services that may conflict with your existing setup:
+
+- **PostgreSQL** (default: 5432)
+- **Redis** (default: 6379)
+- **Envoy Gateway** (default: 8000, 9901)
+- **Jaeger** (default: 16686, 14268, 4317, 4318, and more)
+
+**All host ports are customizable** via CLI parameters to avoid conflicts.
+
+### CLI Port Customization
+
+```bash
+# Avoid conflicts with existing PostgreSQL and Redis
+npx @vmenon25/mcp-server-webauthn-client \
+  --path ./webauthn-client \
+  --postgres-host-port 5433 \
+  --redis-host-port 6380 \
+  --gateway-host-port 8001 \
+  --jaeger-ui-port 16687
+```
+
+### Available Port Parameters
+
+**Infrastructure Ports:**
+- `--postgres-host-port` - PostgreSQL (default: 5432)
+- `--redis-host-port` - Redis (default: 6379)
+- `--gateway-host-port` - Envoy Gateway (default: 8000)
+- `--gateway-admin-port` - Envoy admin (default: 9901)
+
+**Jaeger Tracing Ports:**
+- `--jaeger-ui-port` - Jaeger UI (default: 16686)
+- `--jaeger-collector-http-port` - Collector HTTP (default: 14268)
+- `--jaeger-collector-grpc-port` - Collector gRPC (default: 14250)
+- `--jaeger-otlp-grpc-port` - OTLP gRPC (default: 4317)
+- `--jaeger-otlp-http-port` - OTLP HTTP (default: 4318)
+- `--jaeger-agent-compact-port` - Agent compact thrift UDP (default: 6831)
+- `--jaeger-agent-binary-port` - Agent binary thrift UDP (default: 6832)
+- `--jaeger-agent-config-port` - Agent config HTTP (default: 5778)
+
+### Example: Health Data Project Integration
+
+```bash
+# Existing infrastructure uses default ports
+# WebAuthn stack uses custom ports to avoid conflicts
+npx @vmenon25/mcp-server-webauthn-client \
+  --path ./webauthn-client \
+  --postgres-host-port 5433 \
+  --redis-host-port 6380 \
+  --gateway-host-port 8001 \
+  --jaeger-ui-port 16687 \
+  --jaeger-otlp-grpc-port 4320
+
+# Result:
+# ✅ Existing services continue on ports 5432, 6379, 8000, 16686, 4317
+# ✅ WebAuthn stack runs on ports 5433, 6380, 8001, 16687, 4320
+# ✅ No port conflicts, no manual configuration needed
+```
+
+**Important:** Container internal ports remain standard (5432, 6379, etc.). Only **host-side ports** are customized.
+
+---
+
+## Port Configuration
+
+### Automated Port Management
+
+The `add-service.sh` script **automatically detects** the next available `APP_PORT`:
+
+```bash
+# First service (example-service): APP_PORT=9001 (pre-configured)
+# Second service: APP_PORT=9002 (auto-detected)
+# Third service: APP_PORT=9003 (auto-detected)
+```
+
+**Port conflict detection:**
+
+```bash
+./scripts/add-service.sh duplicate --app-port 9002
+# ❌ Error: Port 9002 is already in use by another service
+#    Use --app-port to specify a different port
+```
+
+**Manual override:**
+
+```bash
+./scripts/add-service.sh my-service --app-port 9010
+# Uses port 9010 explicitly
+```
+
+### Architecture Overview
+
+The zero-trust stack uses **two ports** for each service:
+
+- **Port 9000**: Envoy sidecar (external port accessed by gateway) - **FIXED**
+- **APP_PORT**: Your application (internal port, default: 9001+) - **CONFIGURABLE**
+
+```
+Envoy Gateway → mTLS → Envoy Sidecar (9000) → HTTP → Your App (APP_PORT)
+```
+
+**Important:** Each service's Envoy sidecar uses port 9000, but there are **no conflicts** because services use **separate network namespaces** via `network_mode: "service:sidecar"`. Port 9000 is isolated per service.
+
+### Framework-Specific Examples
+
+#### **FastAPI/Uvicorn** (Python)
+
+**Dockerfile CMD:**
+```dockerfile
+CMD ["sh", "-c", "uvicorn main:app --host 127.0.0.1 --port $APP_PORT"]
+```
+
+**main.py** (if running directly):
+```python
+import os
+import uvicorn
+
+if __name__ == "__main__":
+    port = int(os.getenv("APP_PORT", "9001"))
+    uvicorn.run(app, host="127.0.0.1", port=port)
+```
+
+#### **Spring Boot** (Java)
+
+**Dockerfile CMD:**
+```dockerfile
+CMD ["sh", "-c", "java -jar app.jar --server.port=$APP_PORT"]
+```
+
+**application.properties:**
+```properties
+server.port=${APP_PORT:9001}
+```
+
+#### **Express** (Node.js)
+
+**Dockerfile CMD:**
+```dockerfile
+CMD ["sh", "-c", "node server.js"]
+```
+
+**server.js:**
+```javascript
+const port = process.env.APP_PORT || 9001;
+app.listen(port, '127.0.0.1', () => {
+  console.log(`Server listening on 127.0.0.1:${port}`);
+});
+```
+
+#### **Flask** (Python)
+
+**Dockerfile CMD:**
+```dockerfile
+CMD ["sh", "-c", "flask run --host=127.0.0.1 --port=$APP_PORT"]
+```
+
+**app.py:**
+```python
+import os
+if __name__ == "__main__":
+    port = int(os.getenv("APP_PORT", "9001"))
+    app.run(host="127.0.0.1", port=port)
+```
+
+### Troubleshooting Port Issues
+
+**Problem:** `Address already in use` error
+
+**Solution:**
+1. Check if another service is using the same `APP_PORT`
+2. Verify you're listening on `127.0.0.1` (NOT `0.0.0.0`)
+3. Ensure `APP_PORT` is set in docker-compose.yml environment
+4. Check logs: `docker compose logs <service-name>`
+
+**Problem:** Gateway can't reach service
+
+**Solution:**
+1. Verify Envoy sidecar is running: `docker compose ps`
+2. Check sidecar connects to correct app port (matches `APP_PORT`)
+3. Restart services: `docker compose restart <service>`
+
+---
+
+## JWT Verification Pattern
+
+**CRITICAL**: All services MUST verify JWT tokens. The gateway validates tokens, but services should validate them as well for defense-in-depth.
+
+### Python (FastAPI) Example
+
+```python
+from fastapi import FastAPI, Depends, HTTPException, Header
+from typing import Optional
+import httpx
+import jwt
+import os
+
+app = FastAPI()
+
+# Configuration
+PUBLIC_KEY_URL = os.getenv("WEBAUTHN_PUBLIC_KEY_URL")
+PUBLIC_KEY_CACHE = None
+
+def get_public_key():
+    """Fetch public key from WebAuthn server (cached)"""
+    global PUBLIC_KEY_CACHE
+    if PUBLIC_KEY_CACHE is None:
+        response = httpx.get(PUBLIC_KEY_URL)
+        response.raise_for_status()
+        # Public key is Base64-encoded DER format
+        import base64
+        from cryptography.hazmat.primitives.serialization import load_der_public_key
+        PUBLIC_KEY_CACHE = load_der_public_key(base64.b64decode(response.text))
+    return PUBLIC_KEY_CACHE
+
+def verify_jwt_token(authorization: Optional[str] = Header(None)) -> dict:
+    """Verify JWT from Authorization header"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+
+    token = authorization.split(" ")[1]
+
+    try:
+        public_key = get_public_key()
+        payload = jwt.decode(
+            token,
+            public_key,
+            algorithms=["RS256"],
+            issuer="mpo-webauthn"
+        )
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+
+@app.get("/api/my-service/protected")
+def protected_endpoint(user: dict = Depends(verify_jwt_token)):
+    """Protected endpoint - requires valid JWT"""
+    return {
+        "username": user["sub"],
+        "message": "This is protected data from my-service",
+        "auth_time": user.get("iat")
+    }
+```
+
+### TypeScript (Express) Example
+
+```typescript
+import express from 'express';
+import jwt from 'jsonwebtoken';
+import axios from 'axios';
+
+const app = express();
+const PUBLIC_KEY_URL = process.env.WEBAUTHN_PUBLIC_KEY_URL!;
+let publicKeyCache: string | null = null;
+
+async function getPublicKey(): Promise<string> {
+  if (!publicKeyCache) {
+    const response = await axios.get(PUBLIC_KEY_URL);
+    // Convert Base64 DER to PEM format
+    const derBase64 = response.data;
+    publicKeyCache = `-----BEGIN PUBLIC KEY-----\n${derBase64}\n-----END PUBLIC KEY-----`;
+  }
+  return publicKeyCache;
+}
+
+async function verifyJWT(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing or invalid token' });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  try:
+    const publicKey = await getPublicKey();
+    const payload = jwt.verify(token, publicKey, {
+      algorithms: ['RS256'],
+      issuer: 'mpo-webauthn'
+    });
+
+    req.user = payload;
+    next();
+  } catch (error) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+}
+
+app.get('/api/my-service/protected', verifyJWT, (req, res) => {
+  res.json({
+    username: req.user.sub,
+    message: 'Protected data from my-service',
+    auth_time: req.user.iat
+  });
+});
+
+const port = process.env.APP_PORT || 9001;
+app.listen(port, '127.0.0.1');
+```
+
+---
+
+## mTLS Configuration Checklist
+
+Ensure your service follows these requirements:
+
+### Application Configuration
+- ✅ **Listen on localhost only**: `127.0.0.1` or `localhost` (NOT `0.0.0.0`)
+- ✅ **Use port 9001+**: Envoy sidecar exposes port 9000, your app uses 9001+
+- ✅ **Verify JWT tokens**: Use public key from `/public-key` endpoint
+- ✅ **Validate token expiration**: Check `exp` claim
+- ✅ **Non-root user**: Run application as non-privileged user in container
+
+### Docker Configuration
+- ✅ **Shared network namespace**: Use `network_mode: "service:sidecar"`
+- ✅ **Depends on sidecar**: Service must wait for sidecar to start
+- ✅ **Environment variables**: Pass `WEBAUTHN_PUBLIC_KEY_URL` and `APP_PORT`
+
+### Envoy Sidecar Configuration
+- ✅ **mTLS termination**: Sidecar terminates mTLS, proxies plain HTTP to app
+- ✅ **Certificate signed by CA**: Use certificates generated with `ca-cert.pem`
+- ✅ **Require client certificate**: `require_client_certificate: true`
+- ✅ **Validate client certificates**: Trust only CA-signed certificates
+
+### Envoy Gateway Configuration
+- ✅ **Route to sidecar port**: Route to port 9000 (sidecar), NOT app port
+- ✅ **mTLS client certificate**: Gateway uses `gateway-cert.pem` for mTLS
+- ✅ **Validate server certificate**: Gateway validates service certificate against CA
+
+---
+
+## Security Best Practices
+
+### Defense in Depth
+
+Even though the gateway validates JWTs, your service should also validate them:
+
+1. **Gateway JWT validation**: First line of defense
+2. **Service JWT validation**: Second line of defense (in case gateway is compromised)
+3. **mTLS**: Ensures all service-to-service traffic is encrypted and authenticated
+
+### JWT Token Handling
+
+```python
+# ✅ CORRECT: Verify signature, issuer, and expiration
+payload = jwt.decode(
+    token,
+    public_key,
+    algorithms=["RS256"],  # Only allow RS256
+    issuer="mpo-webauthn"  # Validate issuer
+    # exp claim validated automatically
+)
+
+# ❌ WRONG: Don't skip verification
+payload = jwt.decode(token, options={"verify_signature": False})  # NEVER DO THIS
+```
+
+### Certificate Management
+
+- **Validity**: Certificates are valid for 365 days from generation
+- **Rotation**: Regenerate certificates before expiration
+- **Private keys**: NEVER commit `*-key.pem` files to version control
+- **Storage**: Keep certificates in `docker/certs/`, protected by `.gitignore`
+
+### Network Isolation
+
+```dockerfile
+# ✅ CORRECT: Listen on localhost only
+CMD ["uvicorn", "main:app", "--host", "127.0.0.1", "--port", "$APP_PORT"]
+
+# ❌ WRONG: Listening on all interfaces bypasses sidecar
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "$APP_PORT"]
+```
+
+---
+
+## Troubleshooting
+
+### JWT Verification Fails
+
+**Symptom**: 401 Unauthorized errors when calling protected endpoints
+
+**Solutions**:
+1. Check JWT format: `curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/...`
+2. Verify token isn't expired: Decode JWT and check `exp` claim
+3. Ensure public key is accessible: `curl http://webauthn-server:8080/public-key`
+4. Validate issuer matches: Token should have `"iss": "mpo-webauthn"`
+
+### mTLS Connection Fails
+
+**Symptom**: Connection refused or TLS handshake errors
+
+**Solutions**:
+1. Verify certificates exist: `ls docker/certs/my-service-*.pem`
+2. Check certificate validity: `openssl x509 -in docker/certs/my-service-cert.pem -text -noout`
+3. Verify CA trust: Certificate should be signed by `ca-cert.pem`
+4. Check sidecar logs: `docker compose logs my-service-sidecar`
+
+### Service Cannot Connect to WebAuthn Server
+
+**Symptom**: Cannot fetch public key, connection errors
+
+**Solutions**:
+1. Verify network: Services must be in same Docker network
+2. Use internal DNS: Use `http://webauthn-server:8080/public-key`, NOT `localhost`
+3. Check service is running: `docker compose ps webauthn-server`
+4. Test from within container: `docker compose exec my-service curl http://webauthn-server:8080/public-key`
+
+### Application Port Conflicts
+
+**Symptom**: "Address already in use" errors
+
+**Solutions**:
+1. Ensure app listens on 9001+, NOT 9000 (sidecar uses 9000)
+2. Use `127.0.0.1`, NOT `0.0.0.0` (shares network with sidecar)
+3. Check port allocation: Each service needs unique port (9001, 9002, 9003...)
+4. Use `add-service.sh` which automatically detects conflicts
+
+---
+
+## Testing Your Integration
+
+### 1. Test JWT Authentication
+
+```bash
+# Get JWT token by authenticating via web client
+# Then test protected endpoint
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8000/api/my-service/protected
+```
+
+### 2. Test mTLS Connection
+
+```bash
+# Verify sidecar is listening on mTLS port
+docker compose exec my-service-sidecar netstat -tuln | grep 9000
+
+# Check certificate is mounted
+docker compose exec my-service-sidecar ls -l /etc/certs/
+```
+
+### 3. Test Service Health
+
+```bash
+# Check service is running
+docker compose ps my-service
+
+# View service logs
+docker compose logs -f my-service
+
+# Test from within service container
+docker compose exec my-service curl http://127.0.0.1:$APP_PORT/health
+```
+
+---
+
+## Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Client (Browser)                                               │
+└────────────────────────┬────────────────────────────────────────┘
+                         │ HTTPS
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Envoy Gateway (port 8000)                                      │
+│  - JWT Validation (for /api/* routes)                          │
+│  - CORS handling                                                 │
+│  - Explicit routing (no catch-all)                              │
+└────┬─────────────────────────┬──────────────────────────────────┘
+     │ Public routes           │ Protected routes (/api/*)
+     │ (no JWT)                │ (JWT required)
+     ▼                         ▼
+┌────────────────┐    ┌──────────────────┐    ┌──────────────────┐
+│ WebAuthn       │    │ Example Service  │    │ Your Service     │
+│ Server         │    │ Envoy Sidecar    │    │ Envoy Sidecar    │
+│ (JWT issuer)   │    │ (mTLS term.)     │    │ (mTLS term.)     │
+└────────────────┘    └────────┬─────────┘    └────────┬─────────┘
+                               │ HTTP                   │ HTTP
+                               │ (localhost)            │ (localhost)
+                               ▼                        ▼
+                      ┌──────────────────┐    ┌──────────────────┐
+                      │ Example Service  │    │ Your Application │
+                      │ (Python FastAPI) │    │ (Any language)   │
+                      └──────────────────┘    └──────────────────┘
+```
+
+---
+
+## Appendix: Manual Service Setup (Advanced)
+
+*Note: The `add-service.sh` script automates all these steps. Manual setup is only needed for advanced customization.*
+
+### Step 1: Copy Example Service Template
+
+```bash
+# Copy example-service as starting point
+cp -r example-service my-service
+cd my-service
+
+# Update main.py with your business logic
+# Keep the JWT verification middleware intact
+```
+
+### Step 2: Generate mTLS Certificates
+
+```bash
+cd docker/certs
+
+# Generate private key and CSR
+openssl req -newkey rsa:2048 -nodes \
+  -keyout my-service-key.pem \
+  -out my-service-csr.pem \
+  -subj "/CN=my-service/O=WebAuthn/OU=Services"
+
+# Sign with CA
+openssl x509 -req \
+  -in my-service-csr.pem \
+  -CA ca-cert.pem \
+  -CAkey ca-key.pem \
+  -CAcreateserial \
+  -out my-service-cert.pem \
+  -days 365
+
+# Cleanup CSR
+rm my-service-csr.pem
+
+cd ../..
+```
+
+### Step 3: Create Envoy Sidecar Configuration
+
+Create `docker/istio/my-service-envoy.yaml`:
+
+```yaml
+# Copy from docker/istio/example-service-envoy.yaml
+# Update certificate paths:
+# - /etc/certs/service-cert.pem → /etc/certs/my-service-cert.pem
+# - /etc/certs/service-key.pem → /etc/certs/my-service-key.pem
+```
+
+### Step 4: Add to docker-compose.yml
+
+```yaml
+services:
+  # ... existing services ...
+
+  # Your service sidecar (mTLS termination)
+  my-service-sidecar:
+    image: envoyproxy/envoy:v1.29-latest
+    container_name: my-service-sidecar
+    volumes:
+      - ./istio/my-service-envoy.yaml:/etc/envoy/envoy.yaml:ro
+      - ./certs:/etc/certs:ro
+    command: ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "my-service"]
+    restart: unless-stopped
+
+  # Your application (runs behind sidecar)
+  my-service:
+    build:
+      context: ../my-service
+      dockerfile: Dockerfile
+    container_name: my-service
+    network_mode: "service:my-service-sidecar"  # Share network with sidecar
+    environment:
+      APP_PORT: 9002  # Use next available port
+      WEBAUTHN_PUBLIC_KEY_URL: "http://webauthn-server:8080/public-key"
+    depends_on:
+      - webauthn-server
+      - my-service-sidecar
+    restart: unless-stopped
+```
+
+### Step 5: Update Envoy Gateway Routing
+
+Add routing to `docker/envoy-gateway.yaml`:
+
+```yaml
+# In routes section
+routes:
+  # ... existing routes ...
+
+  # Your service route (JWT required)
+  - match:
+      prefix: "/api/my-service"
+    route:
+      cluster: my_service
+
+# In clusters section
+clusters:
+  # ... existing clusters ...
+
+  - name: my_service
+    connect_timeout: 0.25s
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: my_service
+      endpoints:
+        - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: my-service
+                    port_value: 9000  # Sidecar port
+    # mTLS configuration
+    transport_socket:
+      name: envoy.transport_sockets.tls
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+        common_tls_context:
+          tls_certificates:
+            - certificate_chain:
+                filename: /etc/envoy/certs/gateway-cert.pem
+              private_key:
+                filename: /etc/envoy/certs/gateway-key.pem
+          validation_context:
+            trusted_ca:
+              filename: /etc/envoy/certs/ca-cert.pem
+```
+
+### Step 6: Start Your Service
+
+```bash
+cd docker
+docker compose up -d my-service
+docker compose logs -f my-service
+```
+
+---
+
+## Production Deployment Security Guide
+
+### JWT Authentication Configuration
+
+Before deploying to production, ensure JWT authentication is properly configured with maximum security.
+
+#### 1. Environment Variables
+
+Verify these environment variables are set on your WebAuthn server:
+
+```bash
+# JWT Configuration
+MPO_AUTHN_JWT_ISSUER=mpo-webauthn
+MPO_AUTHN_JWT_EXPIRATION=900  # 15 minutes (adjust as needed)
+
+# CRITICAL: Use strong RSA key pair in production
+# Generate with: openssl genrsa -out jwt-private.pem 2048
+# Extract public: openssl rsa -in jwt-private.pem -pubout -out jwt-public.pem
+MPO_AUTHN_JWT_PRIVATE_KEY_PATH=/path/to/jwt-private.pem
+MPO_AUTHN_JWT_PUBLIC_KEY_PATH=/path/to/jwt-public.pem
+```
+
+**Key Generation Best Practices**:
+- Use 2048-bit or 4096-bit RSA keys (minimum 2048)
+- Rotate keys periodically (every 6-12 months)
+- Store private keys securely (secrets management system)
+- Never commit keys to version control
+
+#### 2. HTTPS Enforcement (CRITICAL)
+
+JWT tokens are transmitted in HTTP headers and **MUST** use HTTPS:
+
+```yaml
+# Envoy Gateway - Force HTTPS redirect
+# envoy-gateway.yaml
+redirect:
+  https_redirect: true
+```
+
+**Why HTTPS is critical**:
+- HTTP transmits JWT in **plain text**
+- Attackers can intercept tokens on network
+- HTTPS encrypts Authorization header
+
+**Production Checklist**:
+- [ ] HTTPS enforced on all endpoints
+- [ ] Valid SSL/TLS certificate installed
+- [ ] HTTP automatically redirects to HTTPS
+- [ ] HSTS header enabled (Strict-Transport-Security)
+
+#### 3. Content Security Policy (CSP) Headers
+
+**CRITICAL for XSS protection**:
+
+```html
+<!-- Already included in generated HTML template -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+               script-src 'self' https://unpkg.com;
+               connect-src 'self' https://yourdomain.com;">
+```
+
+**What CSP prevents**:
+- ✅ Inline JavaScript execution (prevents XSS injection)
+- ✅ Unauthorized script sources (blocks attacker domains)
+- ✅ Token exfiltration to external servers
+
+**Production Hardening**:
+
+```html
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none';
+               script-src 'self' https://unpkg.com/@simplewebauthn/browser@10.0.0;
+               style-src 'self' 'unsafe-inline';
+               connect-src 'self' https://api.yourdomain.com;
+               img-src 'self' data:;
+               font-src 'self';
+               base-uri 'self';
+               form-action 'self';">
+```
+
+#### 4. CORS Configuration
+
+Configure CORS to **whitelist only production domains**:
+
+```kotlin
+// WebAuthn Server CORS
+install(CORS) {
+    // Production: Specific domain only
+    allowHost("app.yourdomain.com", schemes = listOf("https"))
+
+    allowHeader(HttpHeaders.Authorization)
+    allowHeader(HttpHeaders.ContentType)
+    allowMethod(HttpMethod.Options)
+    allowMethod(HttpMethod.Get)
+    allowMethod(HttpMethod.Post)
+
+    // NOT needed for JWT (only for cookies)
+    allowCredentials = false
+}
+```
+
+#### 5. Token Expiration Strategy
+
+Choose appropriate token lifetime based on security requirements:
+
+| Session Length | Security | UX | Best For |
+|----------------|----------|-----|----------|
+| **5-15 min** | 🔒🔒🔒 High | ⚠️ Frequent re-auth | Banking, healthcare |
+| **30-60 min** | 🔒🔒 Medium | ✅ Balanced | Most web apps |
+| **> 1 hour** | 🔒 Lower | ✅ Convenient | Low-security apps |
+
+**Recommendation**: 15 minutes (default) for most applications
+
+#### 6. Auto-Logout on Inactivity
+
+**CRITICAL for health data**: The web client includes auto-logout after 5 minutes of inactivity:
+
+```typescript
+// Configured for 5-minute inactivity timeout
+const INACTIVITY_TIMEOUT = 5 * 60 * 1000;
+
+// Tracks user activity (mouse, keyboard, scroll, touch)
+['mousedown', 'keydown', 'scroll', 'touchstart'].forEach(event => {
+  document.addEventListener(event, resetInactivityTimer, true);
+});
+```
+
+**Why this is critical**:
+- Health data should not remain accessible on idle browser
+- Prevents unauthorized access if user walks away
+- 5-minute timeout balances security and UX
+
+#### 7. Rate Limiting
+
+Implement rate limiting on authentication endpoints:
+
+```yaml
+# Envoy Gateway rate limiting
+rate_limits:
+  - actions:
+    - request_headers:
+        header_name: ":path"
+        descriptor_key: "path"
+    limit:
+      requests_per_unit: 10
+      unit: minute
+```
+
+**Protect against**:
+- ✅ Brute force attacks
+- ✅ Credential stuffing
+- ✅ Token generation abuse
+
+#### 8. Security Comparison: JWT vs HttpOnly Cookies
+
+##### Current Approach: JWT in sessionStorage
+
+**Pros**:
+- ✅ No backend changes required
+- ✅ Simple CORS configuration
+- ✅ Standard Bearer token pattern
+- ✅ Works seamlessly with SPAs
+- ✅ No CSRF vulnerability
+
+**Cons**:
+- ❌ Vulnerable to XSS attacks
+- ❌ Manual token management
+
+**Mitigations**:
+- ✅ Strict CSP headers (included in template)
+- ✅ Input sanitization (documented)
+- ✅ HTTPS enforcement (required)
+- ✅ Short token lifetime (15 minutes)
+- ✅ Auto-logout on inactivity (5 minutes)
+
+##### Alternative: HttpOnly Cookies
+
+**Pros**:
+- ✅ XSS immune (JavaScript cannot access)
+- ✅ Automatic transmission
+- ✅ Browser handles storage
+
+**Cons**:
+- ❌ Vulnerable to CSRF attacks
+- ❌ Requires backend changes
+- ❌ Complex CORS configuration
+- ❌ Needs CSRF token management
+
+**Backend Changes Required for HttpOnly Cookies**:
+
+See `PRODUCTION_READY_PLAN.md` for complete backend modification requirements, including:
+- Set-Cookie headers instead of JSON response
+- CORS credentials configuration
+- CSRF token generation and validation
+- Cookie-based token extraction
+
+**When to Use HttpOnly Cookies**:
+- Extremely high-security requirements
+- Willing to modify backend authentication
+- Need token revocation capabilities
+- Have resources for CSRF protection
+
+**Recommendation**: JWT in sessionStorage is appropriate for most applications when combined with proper XSS protection (CSP, input sanitization, HTTPS).
+
+### Production Testing Checklist
+
+Before deploying to production, verify:
+
+#### Security
+- [ ] HTTPS enforced on all endpoints
+- [ ] Valid SSL/TLS certificate installed
+- [ ] CSP headers configured and tested
+- [ ] CORS allows only production domains
+- [ ] JWT tokens are RS256-signed with production keys
+- [ ] Private keys stored securely (secrets management)
+- [ ] Input sanitization implemented
+- [ ] XSS protection tested
+- [ ] Rate limiting enabled on auth endpoints
+
+#### Authentication
+- [ ] Token expiration matches business requirements (default: 15 minutes)
+- [ ] Auto-logout on inactivity enabled (5 minutes for health data)
+- [ ] sessionStorage cleared on logout
+- [ ] Expired tokens trigger re-authentication
+- [ ] 401 responses handled gracefully
+- [ ] Token countdown timer works
+- [ ] Protected API calls include Authorization header
+
+#### Testing
+- [ ] E2E tests pass in staging environment
+- [ ] Security penetration testing completed
+- [ ] CSP violations monitored and resolved
+- [ ] Load testing completed
+- [ ] Browser compatibility verified
+
+#### Monitoring
+- [ ] Monitoring and alerting configured
+- [ ] CSP violation reporting enabled
+- [ ] Authentication metrics tracked
+- [ ] Error logging configured
+- [ ] Performance monitoring enabled
+
+### Production Monitoring
+
+#### Key Metrics to Track
+
+1. **Authentication Success Rate**
+   - Target: > 95%
+   - Alert if < 90%
+
+2. **Token Expiration Events**
+   - Track how often users experience expiration
+   - Adjust `expiresIn` if too frequent
+
+3. **401 Unauthorized Responses**
+   - High rate indicates token issues or attacks
+   - Track per endpoint
+
+4. **XSS Attempt Detection**
+   - Monitor CSP violation reports
+   - Track blocked script sources
+   - Alert on policy violations
+
+### Emergency Response Plan
+
+#### Token Compromise
+
+If JWT tokens are compromised:
+
+1. **Immediate Actions**:
+   - Rotate JWT signing keys immediately
+   - Invalidate all existing tokens (server-side)
+   - Force all users to re-authenticate
+   - Investigate attack vector (XSS? Network interception?)
+
+2. **Post-Incident**:
+   - Review CSP configuration
+   - Audit code for XSS vulnerabilities
+   - Implement additional security controls
+
+#### XSS Attack Detected
+
+If XSS attack is detected:
+
+1. **Immediate Actions**:
+   - Enable maintenance mode
+   - Sanitize compromised input fields
+   - Clear all user sessions
+   - Deploy patch
+
+2. **Post-Incident**:
+   - Strengthen CSP headers
+   - Audit all user input handling
+   - Implement automated XSS scanning
+
+---
+
+## Additional Resources
+
+- **WebAuthn Server**: http://localhost:8000 (gateway entry point)
+- **Example Service**: See `example-service/` for complete reference implementation
+- **Envoy Documentation**: https://www.envoyproxy.io/docs
+- **JWT Best Practices**: https://tools.ietf.org/html/rfc8725
+- **Zero-Trust Architecture**: https://www.nist.gov/publications/zero-trust-architecture
+
+---
+
+**Generated by @vmenon25/mcp-server-webauthn-client**

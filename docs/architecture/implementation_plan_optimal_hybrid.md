@@ -20,7 +20,7 @@ fastapi==0.104.1
 fastapi-users==12.1.2  # From Claude: battle-tested auth
 uvicorn[standard]==0.24.0
 gunicorn==21.2.0
-slowapi==0.1.9  # From Gemini: simple rate limiting
+fastapi-limiter==0.1.6  # Async-native rate limiting (replaced SlowAPI due to greenlet conflicts)
 structlog==23.2.0
 tenacity==8.2.3  # From Claude: simple retry patterns
 prometheus-client==0.19.0
@@ -93,25 +93,34 @@ class ServiceClients:
             return True
 ```
 
-### Rate Limiting - Proven Library (Gemini's Approach)
+### Rate Limiting - Async-Native Library
 ```python
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from fastapi_limiter import FastAPILimiter
+from fastapi_limiter.depends import RateLimiter
+import redis.asyncio as redis
 
-limiter = Limiter(
-    key_func=get_remote_address,
-    storage_uri="redis://localhost:6379",
-    default_limits=["100/hour"]
+# Initialize in lifespan
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    redis_connection = redis.from_url("redis://localhost:6379", decode_responses=True)
+    await FastAPILimiter.init(redis_connection)
+    yield
+    await FastAPILimiter.close()
+    await redis_connection.close()
+
+# Use as dependency
+@app.post(
+    "/v1/upload",
+    dependencies=[Depends(RateLimiter(times=10, seconds=60))]  # 10/minute
 )
-
-@app.post("/v1/upload")
-@limiter.limit("10/minute")  # Strict limit for uploads
 async def upload_health_data(
     file: UploadFile,
     user = Depends(current_user)
 ):
     return await process_upload(file, user)
 ```
+
+**Note**: Replaced SlowAPI with fastapi-limiter due to greenlet context conflicts when using SlowAPI's sync Redis operations with uvloop + async SQLAlchemy. fastapi-limiter is async-native and production-ready.
 
 ## Component 2: Message Queue - Elegant Reliability
 

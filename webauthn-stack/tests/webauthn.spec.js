@@ -1,0 +1,332 @@
+const { test, expect } = require('@playwright/test');
+const crypto = require('crypto');
+
+// Timeout configuration for WebAuthn operations (max wait time, actual wait is condition-based)
+const WEBAUTHN_OPERATION_TIMEOUT = 10000; // 10 seconds max for WebAuthn operations
+
+// Helper function to generate unique usernames for parallel test execution
+function generateUniqueUsername(testName, workerIndex = 0) {
+  const timestamp = Date.now();
+  const randomBytes = crypto.randomBytes(4).toString('hex');
+  const processId = process.pid;
+  const workerId = workerIndex || Math.floor(Math.random() * 1000);
+
+  // Create a short hash of the test name for readability
+  const testHash = crypto.createHash('md5').update(testName).digest('hex').substring(0, 6);
+
+  return `pw-${testHash}-${timestamp}-${processId}-${workerId}-${randomBytes}`;
+}
+
+test.describe('WebAuthn Passkey End-to-End Tests', () => {
+
+  test.beforeEach(async ({ page, context }) => {
+    // Set up CDP (Chrome DevTools Protocol) virtual authenticator
+    const client = await context.newCDPSession(page);
+    await client.send('WebAuthn.enable');
+    const { authenticatorId } = await client.send('WebAuthn.addVirtualAuthenticator', {
+      options: {
+        protocol: 'ctap2',
+        ctap2Version: 'ctap2_1',
+        transport: 'internal',
+        hasResidentKey: true,
+        hasUserVerification: true,
+        hasLargeBlob: false,
+        hasCredBlob: false,
+        hasMinPinLength: false,
+        hasPrf: false,
+        automaticPresenceSimulation: true,
+        isUserVerified: true
+      }
+    });
+    page.authenticatorId = authenticatorId;
+
+    // Navigate to the test client web application
+    await page.goto('http://localhost:8082');
+    await page.waitForLoadState('networkidle');
+  });
+
+  test('should complete full registration and authentication flow with virtual authenticator', async ({ page }, testInfo) => {
+    // Generate scalable unique username using test metadata
+    const uniqueUsername = generateUniqueUsername(testInfo.title, testInfo.workerIndex);
+
+    // Step 1: Register a new passkey
+    await page.fill('#regUsername', uniqueUsername);
+    await page.fill('#regDisplayName', 'Playwright Test User');
+
+    // Start registration - this will use the virtual authenticator
+    await page.click('button:has-text("Register Passkey")');
+
+    // Wait for registration to complete (production-grade auto-waiting with expect)
+    await expect(page.locator('#registrationStatus')).toContainText('successful', { timeout: WEBAUTHN_OPERATION_TIMEOUT });
+
+    // Step 2: Authenticate with the newly registered passkey
+    await page.fill('#authUsername', uniqueUsername);
+    await page.click('button:has-text("Authenticate with Passkey")');
+
+    // Wait for authentication to complete (production-grade auto-waiting with expect)
+    await expect(page.locator('#authenticationStatus')).toContainText('successful', { timeout: WEBAUTHN_OPERATION_TIMEOUT });
+
+    console.log(`Full flow completed successfully for user: ${uniqueUsername}`);
+  });
+
+  test('should store JWT in sessionStorage on successful authentication', async ({ page }, testInfo) => {
+    const uniqueUsername = generateUniqueUsername(testInfo.title, testInfo.workerIndex);
+
+    // Registration
+    await page.fill('#regUsername', uniqueUsername);
+    await page.fill('#regDisplayName', 'JWT Storage Test User');
+    await page.click('button:has-text("Register Passkey")');
+    await expect(page.locator('#registrationStatus')).toContainText('successful', { timeout: WEBAUTHN_OPERATION_TIMEOUT });
+
+    // Authentication
+    await page.fill('#authUsername', uniqueUsername);
+    await page.click('button:has-text("Authenticate with Passkey")');
+    await expect(page.locator('#authenticationStatus')).toContainText('successful', { timeout: WEBAUTHN_OPERATION_TIMEOUT });
+
+    // CRITICAL: Verify JWT is stored in sessionStorage (native browser API)
+    const sessionData = await page.evaluate(() => {
+      const stored = sessionStorage.getItem('webauthn_auth_session');
+      return stored ? JSON.parse(stored) : null;
+    });
+
+    expect(sessionData).toBeTruthy();
+    expect(sessionData.accessToken).toBeTruthy();
+    expect(sessionData.tokenType).toBe('Bearer');
+    expect(sessionData.expiresIn).toBe(900);
+    expect(sessionData.username).toBe(uniqueUsername);
+    expect(sessionData.issuedAt).toBeTruthy();
+
+    // Verify token format (JWT has 3 parts)
+    const tokenParts = sessionData.accessToken.split('.');
+    expect(tokenParts.length).toBe(3);
+
+    // Verify token can be decoded (jwt-decode functionality)
+    const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+    expect(payload.sub).toBe(uniqueUsername);
+    expect(payload.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
+
+    console.log(`JWT storage verified for user: ${uniqueUsername}`);
+  });
+
+  test('should successfully call protected API with stored JWT', async ({ page }, testInfo) => {
+    const uniqueUsername = generateUniqueUsername(testInfo.title, testInfo.workerIndex);
+
+    // Register and authenticate
+    await page.fill('#regUsername', uniqueUsername);
+    await page.fill('#regDisplayName', 'API Call Test User');
+    await page.click('button:has-text("Register Passkey")');
+    await expect(page.locator('#registrationStatus')).toContainText('successful', { timeout: WEBAUTHN_OPERATION_TIMEOUT });
+
+    await page.fill('#authUsername', uniqueUsername);
+    await page.click('button:has-text("Authenticate with Passkey")');
+    await expect(page.locator('#authenticationStatus')).toContainText('successful', { timeout: WEBAUTHN_OPERATION_TIMEOUT });
+
+    // Verify protected section is visible
+    await expect(page.locator('#protectedSection')).toBeVisible();
+    await expect(page.locator('#authenticationSection')).not.toBeVisible();
+
+    // Mock protected API endpoint response
+    await page.route('**/api/user/profile', route => {
+      const authHeader = route.request().headers()['authorization'];
+
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        route.fulfill({
+          status: 401,
+          body: JSON.stringify({ error: 'Unauthorized' })
+        });
+      } else {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            username: uniqueUsername,
+            message: 'Profile data retrieved successfully'
+          })
+        });
+      }
+    });
+
+    // Call protected API
+    await page.fill('#apiEndpoint', '/api/user/profile');
+    await page.click('button:has-text("Call Protected API")');
+
+    // Wait for API call to complete (production-grade auto-waiting with expect)
+    await expect(page.locator('#apiStatus')).toContainText('successful', { timeout: WEBAUTHN_OPERATION_TIMEOUT });
+
+    // Verify API response is displayed
+    const apiOutput = await page.textContent('#apiOutput');
+    expect(apiOutput).toContain(uniqueUsername);
+    expect(apiOutput).toContain('Profile data retrieved successfully');
+
+    console.log(`Protected API call successful for user: ${uniqueUsername}`);
+  });
+
+  test('should clear session on logout', async ({ page }, testInfo) => {
+    const uniqueUsername = generateUniqueUsername(testInfo.title, testInfo.workerIndex);
+
+    // Register and authenticate
+    await page.fill('#regUsername', uniqueUsername);
+    await page.fill('#regDisplayName', 'Logout Test User');
+    await page.click('button:has-text("Register Passkey")');
+    await expect(page.locator('#registrationStatus')).toContainText('successful', { timeout: WEBAUTHN_OPERATION_TIMEOUT });
+
+    await page.fill('#authUsername', uniqueUsername);
+    await page.click('button:has-text("Authenticate with Passkey")');
+    await expect(page.locator('#authenticationStatus')).toContainText('successful', { timeout: WEBAUTHN_OPERATION_TIMEOUT });
+
+    // Verify protected section is visible
+    await expect(page.locator('#protectedSection')).toBeVisible();
+
+    // Logout
+    await page.click('button:has-text("Logout")');
+
+    // Wait for logout to complete (authentication section becomes visible again)
+    await expect(page.locator('#authenticationSection')).toBeVisible({ timeout: WEBAUTHN_OPERATION_TIMEOUT });
+
+    // Verify sessionStorage is cleared
+    const sessionData = await page.evaluate(() => {
+      return sessionStorage.getItem('webauthn_auth_session');
+    });
+    expect(sessionData).toBeNull();
+
+    // Verify UI state reset
+    await expect(page.locator('#protectedSection')).not.toBeVisible();
+    await expect(page.locator('#authenticationSection')).toBeVisible();
+
+    console.log(`Logout successful for user: ${uniqueUsername}`);
+  });
+
+  test('should handle expired token gracefully using jwt-decode', async ({ page }) => {
+    // Create a fake expired JWT token
+    const expiredPayload = {
+      sub: 'test@example.com',
+      iss: 'mpo-webauthn',
+      exp: Math.floor(Date.now() / 1000) - 1000  // Expired 1000 seconds ago
+    };
+    const encodedPayload = Buffer.from(JSON.stringify(expiredPayload)).toString('base64');
+    const fakeToken = `header.${encodedPayload}.signature`;
+
+    // Manually inject expired session
+    await page.evaluate(({ token }) => {
+      const expiredSession = {
+        accessToken: token,
+        tokenType: 'Bearer',
+        expiresIn: 900,
+        username: 'test@example.com',
+        issuedAt: Date.now() - 1000000  // Far in the past
+      };
+      sessionStorage.setItem('webauthn_auth_session', JSON.stringify(expiredSession));
+    }, { token: fakeToken });
+
+    // Reload page to trigger auth check (jwt-decode should detect expiration)
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+
+    // Verify expired session is cleared by AuthStorage.get()
+    const sessionData = await page.evaluate(() => {
+      return sessionStorage.getItem('webauthn_auth_session');
+    });
+    expect(sessionData).toBeNull();
+
+    // Verify UI shows unauthenticated state
+    await expect(page.locator('#protectedSection')).not.toBeVisible();
+    await expect(page.locator('#authenticationSection')).toBeVisible();
+
+    console.log('Expired token handled gracefully');
+  });
+
+  test('should handle malformed JWT gracefully using jwt-decode', async ({ page }) => {
+    // Inject session with malformed JWT
+    await page.evaluate(() => {
+      const malformedSession = {
+        accessToken: 'not.a.valid.jwt.token',
+        tokenType: 'Bearer',
+        expiresIn: 900,
+        username: 'test@example.com',
+        issuedAt: Date.now()
+      };
+      sessionStorage.setItem('webauthn_auth_session', JSON.stringify(malformedSession));
+    });
+
+    // Reload page to trigger auth check
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+
+    // jwt-decode should throw, AuthStorage.get() should catch and clear
+    const sessionData = await page.evaluate(() => {
+      return sessionStorage.getItem('webauthn_auth_session');
+    });
+    expect(sessionData).toBeNull();
+
+    // Verify UI shows unauthenticated state
+    await expect(page.locator('#protectedSection')).not.toBeVisible();
+    await expect(page.locator('#authenticationSection')).toBeVisible();
+
+    console.log('Malformed token handled gracefully');
+  });
+
+  test('should handle 401 response and trigger re-authentication', async ({ page }, testInfo) => {
+    const uniqueUsername = generateUniqueUsername(testInfo.title, testInfo.workerIndex);
+
+    // Register and authenticate
+    await page.fill('#regUsername', uniqueUsername);
+    await page.fill('#regDisplayName', '401 Test User');
+    await page.click('button:has-text("Register Passkey")');
+    await expect(page.locator('#registrationStatus')).toContainText('successful', { timeout: WEBAUTHN_OPERATION_TIMEOUT });
+
+    await page.fill('#authUsername', uniqueUsername);
+    await page.click('button:has-text("Authenticate with Passkey")');
+    await expect(page.locator('#authenticationStatus')).toContainText('successful', { timeout: WEBAUTHN_OPERATION_TIMEOUT });
+
+    // Verify protected section is visible
+    await expect(page.locator('#protectedSection')).toBeVisible();
+
+    // Mock API endpoint to return 401
+    await page.route('**/api/user/profile', route => {
+      route.fulfill({
+        status: 401,
+        body: JSON.stringify({ error: 'Unauthorized' })
+      });
+    });
+
+    // Call protected API (should get 401)
+    await page.fill('#apiEndpoint', '/api/user/profile');
+    await page.click('button:has-text("Call Protected API")');
+
+    // Wait for error status to appear (production-grade auto-waiting with expect)
+    await expect(page.locator('#apiStatus')).toContainText('expired or invalid', { timeout: WEBAUTHN_OPERATION_TIMEOUT });
+
+    // Verify session is cleared
+    const sessionData = await page.evaluate(() => {
+      return sessionStorage.getItem('webauthn_auth_session');
+    });
+    expect(sessionData).toBeNull();
+
+    // Verify UI shows unauthenticated state
+    await expect(page.locator('#protectedSection')).not.toBeVisible();
+    await expect(page.locator('#authenticationSection')).toBeVisible();
+
+    console.log('401 response handled correctly');
+  });
+});
+
+// Configure test execution
+test.describe.configure({ mode: 'parallel' });
+
+// Add custom test reporter for better output
+test.afterEach(async ({ page }, testInfo) => {
+  if (testInfo.status !== 'passed') {
+    // Take screenshot on failure
+    const screenshot = await page.screenshot();
+    await testInfo.attach('screenshot', { body: screenshot, contentType: 'image/png' });
+
+    // Get console logs
+    const logs = await page.evaluate(() => {
+      return window.console.history || [];
+    });
+
+    if (logs.length > 0) {
+      await testInfo.attach('console-logs', { body: JSON.stringify(logs, null, 2), contentType: 'application/json' });
+    }
+  }
+});
