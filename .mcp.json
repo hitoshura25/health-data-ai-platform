@@ -6,6 +6,17 @@
                 "-y",
                 "@vmenon25/mcp-server-webauthn-client@0.0.5"
             ]
+        },
+        "gemini-workflow": {
+            "command": "uvx",
+            "args": [
+                "hitoshura25-gemini-workflow-bridge"
+            ],
+            "env": {
+                "CONTEXT_CACHE_TTL_MINUTES": "30",
+                "MAX_TOKENS_PER_ANSWER": "300",
+                "TARGET_COMPRESSION_RATIO": "100"
+            }
         }
     }
 }
