@@ -44,6 +44,9 @@ case "$SERVICE" in
     "message-queue")
         run_service_tests "Message Queue" "services/message-queue" $PYTEST_ARGS
         ;;
+    "etl-narrative-engine")
+        run_service_tests "ETL Narrative Engine" "services/etl-narrative-engine" $PYTEST_ARGS
+        ;;
     "all")
         echo -e "${BLUE}Running all service tests...${NC}\n"
         run_service_tests "Data Lake" "services/data-lake" $PYTEST_ARGS
@@ -52,17 +55,20 @@ case "$SERVICE" in
         echo ""
         run_service_tests "Health API" "services/health-api-service" $PYTEST_ARGS
         echo ""
+        run_service_tests "ETL Narrative Engine" "services/etl-narrative-engine" $PYTEST_ARGS
+        echo ""
         echo -e "\n${GREEN}All tests completed!${NC}"
 
         ;;
     *)
-        echo "Usage: ./run-tests.sh {health-api|data-lake|message-queue|all} [pytest-args]"
+        echo "Usage: ./run-tests.sh {health-api|data-lake|message-queue|etl-narrative-engine|all} [pytest-args]"
         echo ""
         echo "Examples:"
-        echo "  ./run-tests.sh all                    # Run all tests"
-        echo "  ./run-tests.sh health-api             # Run health-api tests"
-        echo "  ./run-tests.sh message-queue -v       # Run message-queue tests verbosely"
-        echo "  ./run-tests.sh health-api -k upload   # Run health-api tests matching 'upload'"
+        echo "  ./run-tests.sh all                       # Run all tests"
+        echo "  ./run-tests.sh health-api                # Run health-api tests"
+        echo "  ./run-tests.sh message-queue -v          # Run message-queue tests verbosely"
+        echo "  ./run-tests.sh etl-narrative-engine      # Run ETL tests"
+        echo "  ./run-tests.sh health-api -k upload      # Run health-api tests matching 'upload'"
         exit 1
         ;;
 esac
