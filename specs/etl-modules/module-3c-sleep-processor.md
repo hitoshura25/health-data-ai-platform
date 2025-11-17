@@ -129,7 +129,7 @@ class SleepProcessor(BaseClinicalProcessor):
     async def process_with_clinical_insights(
         self,
         records: List[Dict[str, Any]],
-        message_data: Dict[str, Any]],
+        message_data: Dict[str, Any],
         validation_result: ValidationResult
     ) -> ProcessingResult:
         """

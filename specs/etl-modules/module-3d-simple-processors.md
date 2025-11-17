@@ -70,7 +70,7 @@ class StepsProcessor(BaseClinicalProcessor):
     async def process_with_clinical_insights(
         self,
         records: List[Dict[str, Any]],
-        message_data: Dict[str, Any]],
+        message_data: Dict[str, Any],
         validation_result: Any
     ) -> ProcessingResult:
         """Process step count records"""
