@@ -89,21 +89,6 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      minio:
-        image: minio/minio:latest
-        ports:
-          - 9000:9000
-          - 9001:9001
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-          MINIO_CONSOLE_ADDRESS: ':9001'
-        options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -112,6 +97,19 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - name: Start MinIO
+        run: |
+          # Start MinIO container manually since service containers don't support command args
+          docker run -d \
+            --name minio \
+            -p 9000:9000 \
+            -p 9001:9001 \
+            -e "MINIO_ROOT_USER=minioadmin" \
+            -e "MINIO_ROOT_PASSWORD=minioadmin" \
+            minio/minio:latest server /data --console-address ":9001"
+
+          echo "MinIO container started"
 
       - name: Generate .env files
         run: |
