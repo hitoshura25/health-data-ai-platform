@@ -6,6 +6,9 @@ Tests the complete deployment stack including:
 - Service dependencies (RabbitMQ, MinIO, Redis)
 - Health and metrics endpoints
 - End-to-end message processing
+
+These tests run in CI with the full ETL service started in Docker.
+For local testing: docker compose up -d etl-narrative-engine
 """
 
 import asyncio
