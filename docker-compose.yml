@@ -42,6 +42,9 @@ include:
   # API services
   - path: services/health-api-service/health-api.compose.yml
 
+  # ETL services
+  - path: services/etl-narrative-engine/deployment/etl-narrative-engine.compose.yml
+
 # Create the shared network that all services will use
 networks:
   health-platform-net:
