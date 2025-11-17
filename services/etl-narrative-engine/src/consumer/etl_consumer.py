@@ -19,7 +19,7 @@ import structlog
 from aio_pika import ExchangeType, IncomingMessage, Message, connect_robust
 
 from ..config.settings import settings
-from ..processors.processor_factory import ProcessorFactory
+from ..processors.processor_factory import MOCK_QUALITY_SCORE, ProcessorFactory
 from ..storage.avro_parser import AvroParser
 from ..storage.s3_client import S3Client
 from .deduplication import DeduplicationStore, RedisDeduplicationStore, SQLiteDeduplicationStore
@@ -220,7 +220,7 @@ class ETLConsumer:
                     processing_time=processing_time,
                     records_processed=message_data.get("record_count", 0),
                     narrative="Processing completed (Module 1 stub)",
-                    quality_score=0.95
+                    quality_score=MOCK_QUALITY_SCORE
                 )
 
                 # ACK message
@@ -326,9 +326,8 @@ class ETLConsumer:
         )
 
         # 3. Get processor for record type
+        # Note: get_processor() raises ValueError/RuntimeError if not found, never returns None
         processor = self.processor_factory.get_processor(record_type)
-        if not processor:
-            raise ValueError(f"No processor found for record type: {record_type}")
 
         # 4. Process records with clinical processor
         # Note: validation_result is None for Module 1, Module 2 will provide it

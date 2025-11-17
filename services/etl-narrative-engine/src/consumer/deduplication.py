@@ -17,6 +17,9 @@ import structlog
 
 logger = structlog.get_logger()
 
+# Maximum length for narrative preview stored in deduplication records
+NARRATIVE_PREVIEW_MAX_LENGTH = 200
+
 
 @dataclass
 class ProcessingRecord:
@@ -261,7 +264,7 @@ class SQLiteDeduplicationStore(DeduplicationStore):
             raise RuntimeError("Store not initialized")
 
         now = time.time()
-        narrative_preview = narrative[:200] if narrative else None
+        narrative_preview = narrative[:NARRATIVE_PREVIEW_MAX_LENGTH] if narrative else None
 
         await self._conn.execute("""
             UPDATE processed_messages
@@ -452,7 +455,7 @@ class RedisDeduplicationStore(DeduplicationStore):
         record.processing_time_seconds = processing_time
         record.records_processed = records_processed
         record.quality_score = quality_score
-        record.narrative_preview = narrative[:200] if narrative else None
+        record.narrative_preview = narrative[:NARRATIVE_PREVIEW_MAX_LENGTH] if narrative else None
 
         # Update record
         await self._redis.setex(

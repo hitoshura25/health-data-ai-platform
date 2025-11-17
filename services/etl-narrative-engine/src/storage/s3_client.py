@@ -76,12 +76,17 @@ class S3Client:
             File contents as bytes
 
         Raises:
+            ValueError: If max_size_mb is not positive
             S3NotFoundError: If object not found
             S3AccessDeniedError: If access denied
             S3TimeoutError: If download times out
             NetworkError: If network error occurs
         """
-        self.logger.info("downloading_s3_file", key=key)
+        # Validate input
+        if max_size_mb <= 0:
+            raise ValueError(f"max_size_mb must be positive, got {max_size_mb}")
+
+        self.logger.info("downloading_s3_file", key=key, max_size_mb=max_size_mb)
 
         try:
             async with self.session.client(
@@ -232,7 +237,5 @@ class S3Client:
         except ClientError as e:
             if e.response.get('Error', {}).get('Code') == 'NoSuchKey':
                 return False
+            # For other client errors (permissions, etc.), fail fast
             raise
-
-        except Exception:
-            return False

@@ -4,14 +4,15 @@ Processor factory for routing messages to appropriate clinical processors.
 This factory selects the correct processor based on record_type from the message.
 For Module 1, this provides stub/mock processors. Real processors come from Module 3.
 """
-
-
-
 import structlog
 
 from .base_processor import BaseClinicalProcessor, ProcessingResult
 
 logger = structlog.get_logger()
+
+# Mock processor constants for Module 1 (placeholders for real clinical processing in Module 3)
+MOCK_QUALITY_SCORE = 0.95  # Stub quality score until real clinical analysis in Module 3
+MOCK_PROCESSING_TIME_SECONDS = 0.1  # Stub processing time for mock processor
 
 
 class MockProcessor(BaseClinicalProcessor):
@@ -50,9 +51,9 @@ class MockProcessor(BaseClinicalProcessor):
             success=True,
             narrative=narrative,
             error_message=None,
-            processing_time_seconds=0.1,
+            processing_time_seconds=MOCK_PROCESSING_TIME_SECONDS,
             records_processed=record_count,
-            quality_score=0.95,
+            quality_score=MOCK_QUALITY_SCORE,
             clinical_insights={
                 "mock": True,
                 "record_type": self.record_type,

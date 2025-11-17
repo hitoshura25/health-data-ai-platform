@@ -1,5 +1,56 @@
 # Fixes Applied - PR Feedback Response
 
+## Round 4: Code Quality & Maintainability (2025-11-17)
+
+### 1. Input Validation for max_size_mb ✅
+**Issue:** Missing validation for `max_size_mb` parameter - negative or zero values would cause incorrect behavior
+**Fix:** Added validation to ensure `max_size_mb > 0`, raises ValueError if not
+**File:** `src/storage/s3_client.py:86-87`
+
+### 2. Magic Number: Quality Score 0.95 ✅
+**Issue:** Hardcoded quality score 0.95 in processor_factory.py is a magic number
+**Fix:** Extracted to constant `MOCK_QUALITY_SCORE = 0.95` with clear documentation
+**Files:** `src/processors/processor_factory.py:14-15, 56`
+
+### 3. PEP 8: Blank Lines Between Docstring and Imports ✅
+**Issue:** Extra blank lines (lines 7-9) between docstring and imports violate PEP 8
+**Fix:** Removed blank lines, imports now directly follow docstring
+**File:** `src/processors/processor_factory.py:7`
+
+### 4. Redundant None Check ✅
+**Issue:** Line 330 checks if `processor is None`, but `get_processor()` never returns None (raises ValueError/RuntimeError instead)
+**Fix:** Removed redundant check, added clarifying comment
+**File:** `src/consumer/etl_consumer.py:329-330`
+
+### 5. Magic Number: Quality Score in Consumer ✅
+**Issue:** Hardcoded quality score 0.95 on line 223 (same magic number as #2)
+**Fix:** Imported and used `MOCK_QUALITY_SCORE` constant from processor_factory
+**Files:** `src/consumer/etl_consumer.py:22, 223`
+
+### 6. Overly Broad Exception Handling ✅
+**Issue:** Lines 237-238 catch all exceptions and return False, masking network/permission errors as "file doesn't exist"
+**Fix:** Removed broad `except Exception: return False`, now fails fast for non-NoSuchKey errors
+**File:** `src/storage/s3_client.py:237-241`
+
+### 7. Magic Number: Processing Time 0.1 ✅
+**Issue:** Hardcoded processing time 0.1 seconds is a magic number
+**Fix:** Extracted to constant `MOCK_PROCESSING_TIME_SECONDS = 0.1`
+**Files:** `src/processors/processor_factory.py:15, 54`
+
+### 8. Magic Number: Narrative Preview Length 200 ✅
+**Issue:** Hardcoded truncation to 200 characters appears in both SQLite and Redis implementations
+**Fix:** Extracted to constant `NARRATIVE_PREVIEW_MAX_LENGTH = 200`
+**Files:** `src/consumer/deduplication.py:21, 267, 458`
+
+**Summary:** All 8 issues fixed. Improved code maintainability by:
+- Adding input validation
+- Extracting magic numbers to well-documented constants
+- Removing dead code
+- Improving exception handling to fail fast
+- Following PEP 8 style guidelines
+
+---
+
 ## Round 3: Final PR Feedback (2025-11-17)
 
 ### 1. Unused NetworkError Import ✅
