@@ -14,14 +14,23 @@ This module implements comprehensive data validation and quality assessment for 
 - ✅ `DataQualityValidator` class with all validation checks
 - ✅ `ValidationConfig` with pydantic settings
 - ✅ Clinical ranges for all 6 health record types
-- ✅ Schema validation
+- ✅ Schema validation (basic structure checking)
 - ✅ Completeness checking
-- ✅ Physiological range validation
+- ⚠️  Physiological range validation (awaiting Avro schema confirmation)
 - ✅ Temporal consistency checking
 - ✅ Quality score calculation
 - ✅ Quarantine mechanism with S3 integration
 - ✅ Comprehensive unit tests (test_validation.py)
 - ✅ Integration tests with real Avro samples (test_validation_integration.py)
+
+### Known Limitations
+
+⚠️ **Avro Schema Structure**: The actual Android Health Connect Avro export schema needs to be confirmed. Currently:
+- Schema validation accepts any non-empty record
+- Completeness checking is relaxed (no specific required fields)
+- Physiological range validation is temporarily disabled
+
+These will be updated once we can inspect the actual Avro file structure from real sample files or Android Health Connect documentation.
 
 ## Architecture
 
