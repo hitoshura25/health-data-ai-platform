@@ -103,16 +103,14 @@ cp .env.example .env
 ### Running Tests
 
 ```bash
-# Run linting and tests together (recommended)
-./run_tests.sh
-
-# Or run separately:
-
-# Run linting
+# Run linting (recommended before tests)
 ruff check src/ tests/
 
 # Run all unit tests
 pytest
+
+# Run linting and tests together
+ruff check src/ tests/ && pytest
 
 # Run with coverage
 pytest --cov=src --cov-report=html
@@ -122,6 +120,10 @@ pytest tests/test_deduplication.py -v
 
 # Auto-fix linting issues
 ruff check src/ tests/ --fix
+
+# Use project-wide test runner (from repo root)
+cd ../..
+./run-tests.sh etl-narrative-engine -v
 ```
 
 ### Starting the Service (Development)
