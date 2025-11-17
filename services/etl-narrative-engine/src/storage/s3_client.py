@@ -4,25 +4,17 @@ S3/MinIO client for downloading health data files.
 Handles file downloads from MinIO data lake with retry logic and error handling.
 """
 
-from typing import Optional, BinaryIO
-import io
 import aioboto3
 import structlog
 from botocore.exceptions import ClientError, EndpointConnectionError
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type
-)
 
 from ..consumer.error_recovery import (
     NetworkError,
-    S3TimeoutError,
+    S3AccessDeniedError,
     S3ConnectionError,
     S3NotFoundError,
-    S3AccessDeniedError,
-    S3RateLimitError
+    S3RateLimitError,
+    S3TimeoutError,
 )
 
 logger = structlog.get_logger()

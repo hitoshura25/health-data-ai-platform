@@ -5,8 +5,9 @@ Tests Module 1 processor routing and mock processor functionality.
 """
 
 import pytest
-from src.processors.processor_factory import ProcessorFactory, MockProcessor
+
 from src.processors.base_processor import ProcessingResult
+from src.processors.processor_factory import MockProcessor, ProcessorFactory
 
 
 @pytest.mark.unit

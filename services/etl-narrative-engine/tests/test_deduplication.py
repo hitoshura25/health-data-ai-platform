@@ -4,13 +4,12 @@ Tests for deduplication stores (SQLite and Redis).
 Tests Module 1 deduplication functionality to ensure idempotent processing.
 """
 
-import pytest
 import asyncio
 import time
-from src.consumer.deduplication import (
-    SQLiteDeduplicationStore,
-    ProcessingRecord
-)
+
+import pytest
+
+from src.consumer.deduplication import ProcessingRecord, SQLiteDeduplicationStore
 
 
 @pytest.mark.unit

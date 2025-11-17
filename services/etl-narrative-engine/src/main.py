@@ -6,9 +6,11 @@ Starts the consumer and handles graceful shutdown.
 
 import asyncio
 import signal
+
 import structlog
-from .consumer.etl_consumer import ETLConsumer
+
 from .config.settings import settings
+from .consumer.etl_consumer import ETLConsumer
 
 logger = structlog.get_logger()
 

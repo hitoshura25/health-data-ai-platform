@@ -5,8 +5,9 @@ Handles parsing of Apache Avro files downloaded from the data lake and
 extracts health records into Python dictionaries for processing.
 """
 
-from typing import List, Dict, Any
 import io
+from typing import Any
+
 import fastavro
 import structlog
 
@@ -31,7 +32,7 @@ class AvroParser:
         self,
         avro_data: bytes,
         expected_record_type: str = None
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Parse Avro file and extract records.
 
@@ -97,7 +98,7 @@ class AvroParser:
 
     def _validate_record_type(
         self,
-        records: List[Dict[str, Any]],
+        records: list[dict[str, Any]],
         expected_type: str
     ) -> None:
         """
@@ -126,8 +127,8 @@ class AvroParser:
 
     def get_record_statistics(
         self,
-        records: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        records: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """
         Get basic statistics about parsed records.
 

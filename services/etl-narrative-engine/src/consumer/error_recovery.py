@@ -6,7 +6,7 @@ appropriate retry strategies with exponential backoff.
 """
 
 from enum import Enum
-from typing import Optional
+
 import structlog
 
 logger = structlog.get_logger()
@@ -90,7 +90,7 @@ class ErrorRecoveryManager:
     appropriate delay intervals using exponential backoff.
     """
 
-    def __init__(self, max_retries: int = 3, retry_delays: list[int] = None):
+    def __init__(self, max_retries: int = 3, retry_delays: list[int] | None = None):
         """
         Initialize error recovery manager.
 
@@ -113,11 +113,7 @@ class ErrorRecoveryManager:
             ErrorType enum value
         """
         # Network errors (retriable)
-        if isinstance(exception, S3TimeoutError):
-            return ErrorType.NETWORK_ERROR
-        elif isinstance(exception, S3ConnectionError):
-            return ErrorType.NETWORK_ERROR
-        elif isinstance(exception, NetworkError):
+        if isinstance(exception, (S3TimeoutError, S3ConnectionError, NetworkError)):
             return ErrorType.NETWORK_ERROR
 
         # Rate limiting (retriable)
@@ -149,9 +145,7 @@ class ErrorRecoveryManager:
             return ErrorType.AUTH_ERROR
 
         # Check exception message for hints
-        elif "timeout" in str(exception).lower():
-            return ErrorType.NETWORK_ERROR
-        elif "connection" in str(exception).lower():
+        elif "timeout" in str(exception).lower() or "connection" in str(exception).lower():
             return ErrorType.NETWORK_ERROR
         elif "rate limit" in str(exception).lower():
             return ErrorType.RATE_LIMIT

@@ -103,6 +103,14 @@ cp .env.example .env
 ### Running Tests
 
 ```bash
+# Run linting and tests together (recommended)
+./run_tests.sh
+
+# Or run separately:
+
+# Run linting
+ruff check src/ tests/
+
 # Run all unit tests
 pytest
 
@@ -111,6 +119,9 @@ pytest --cov=src --cov-report=html
 
 # Run specific test file
 pytest tests/test_deduplication.py -v
+
+# Auto-fix linting issues
+ruff check src/ tests/ --fix
 ```
 
 ### Starting the Service (Development)

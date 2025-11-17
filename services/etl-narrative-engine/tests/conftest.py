@@ -4,9 +4,10 @@ Pytest fixtures for ETL Narrative Engine tests.
 Provides common test fixtures for unit and integration tests.
 """
 
-import pytest
 import tempfile
 from pathlib import Path
+
+import pytest
 
 
 @pytest.fixture

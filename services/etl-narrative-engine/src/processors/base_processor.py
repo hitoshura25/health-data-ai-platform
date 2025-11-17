@@ -6,8 +6,9 @@ this interface to be called by the message consumer.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
+from typing import Any
+
 import structlog
 
 logger = structlog.get_logger()
@@ -28,12 +29,12 @@ class ProcessingResult:
         clinical_insights: Structured clinical insights (processor-specific)
     """
     success: bool
-    narrative: Optional[str] = None
-    error_message: Optional[str] = None
+    narrative: str | None = None
+    error_message: str | None = None
     processing_time_seconds: float = 0.0
     records_processed: int = 0
     quality_score: float = 1.0
-    clinical_insights: Optional[Dict[str, Any]] = None
+    clinical_insights: dict[str, Any] | None = None
 
 
 class BaseClinicalProcessor(ABC):
@@ -70,8 +71,8 @@ class BaseClinicalProcessor(ABC):
     @abstractmethod
     async def process_with_clinical_insights(
         self,
-        records: List[Dict[str, Any]],
-        message_data: Dict[str, Any],
+        records: list[dict[str, Any]],
+        message_data: dict[str, Any],
         validation_result: Any
     ) -> ProcessingResult:
         """

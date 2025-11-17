@@ -10,20 +10,19 @@ This consumer:
 6. Handles errors with retry logic
 """
 
-from typing import Dict, Any, Optional
-import time
 import asyncio
+import time
+from typing import Any
+
 import structlog
-from aio_pika import connect_robust, Message, IncomingMessage
-from aio_pika.pool import Pool
-from aio_pika import ExchangeType
+from aio_pika import ExchangeType, IncomingMessage, Message, connect_robust
 
 from ..config.settings import settings
-from .deduplication import DeduplicationStore, SQLiteDeduplicationStore, RedisDeduplicationStore
-from .error_recovery import ErrorRecoveryManager, ErrorType
 from ..processors.processor_factory import ProcessorFactory
-from ..storage.s3_client import S3Client
 from ..storage.avro_parser import AvroParser
+from ..storage.s3_client import S3Client
+from .deduplication import DeduplicationStore, RedisDeduplicationStore, SQLiteDeduplicationStore
+from .error_recovery import ErrorRecoveryManager
 
 logger = structlog.get_logger()
 
@@ -42,11 +41,11 @@ class ETLConsumer:
         self.settings = settings
 
         # Initialize components (will be set up in initialize())
-        self.dedup_store: Optional[DeduplicationStore] = None
-        self.error_manager: Optional[ErrorRecoveryManager] = None
-        self.processor_factory: Optional[ProcessorFactory] = None
-        self.s3_client: Optional[S3Client] = None
-        self.avro_parser: Optional[AvroParser] = None
+        self.dedup_store: DeduplicationStore | None = None
+        self.error_manager: ErrorRecoveryManager | None = None
+        self.processor_factory: ProcessorFactory | None = None
+        self.s3_client: S3Client | None = None
+        self.avro_parser: AvroParser | None = None
 
         # RabbitMQ connection (will be created in start_consuming)
         self._connection = None
@@ -150,7 +149,7 @@ class ETLConsumer:
         )
 
         # Declare dead letter queue
-        dlq = await self._channel.declare_queue(
+        _dlq = await self._channel.declare_queue(
             self.settings.dead_letter_queue,
             durable=True
         )
@@ -242,14 +241,21 @@ class ETLConsumer:
 
                 # Determine action
                 if self.error_manager.should_retry(error_type, retry_count):
-                    # NACK with requeue
+                    # Publish to retry with delay
                     delay = self.error_manager.get_retry_delay(retry_count)
                     self.logger.info(
-                        "requeueing_message_for_retry",
+                        "scheduling_retry_with_delay",
                         retry_count=retry_count + 1,
                         delay_seconds=delay
                     )
-                    await message.nack(requeue=True)
+
+                    # Update retry count in message data
+                    if 'message_data' in locals():
+                        message_data['retry_count'] = retry_count + 1
+                        await self._publish_delayed_retry(message_data, delay)
+
+                    # ACK original message (it's been requeued with delay)
+                    await message.ack()
 
                 else:
                     # Mark as failed and move to DLQ
@@ -267,7 +273,7 @@ class ETLConsumer:
                         error_type=error_type.value
                     )
 
-    async def _handle_message_processing(self, message_data: Dict[str, Any]) -> None:
+    async def _handle_message_processing(self, message_data: dict[str, Any]) -> None:
         """
         Handle the main processing logic for a message.
 
@@ -322,7 +328,61 @@ class ETLConsumer:
 
         # Module 4 will handle training data output
 
-    def _parse_message_body(self, message: IncomingMessage) -> Dict[str, Any]:
+    async def _publish_delayed_retry(
+        self, message_data: dict[str, Any], delay_seconds: int
+    ) -> None:
+        """
+        Publish message for delayed retry using RabbitMQ message TTL.
+
+        Creates a temporary queue with TTL that routes back to main queue
+        after the delay period.
+
+        Args:
+            message_data: Message data to retry
+            delay_seconds: Delay in seconds before retry
+        """
+        import json
+
+        try:
+            # Delay queue name based on delay duration
+            delay_queue_name = f"{self.settings.queue_name}_delay_{delay_seconds}s"
+
+            # Declare delay queue with message TTL and dead-letter back to main queue
+            _delay_queue = await self._channel.declare_queue(
+                delay_queue_name,
+                durable=True,
+                arguments={
+                    "x-message-ttl": delay_seconds * 1000,  # Convert to milliseconds
+                    "x-dead-letter-exchange": self.settings.exchange_name,
+                    "x-dead-letter-routing-key": f"health.processing.{message_data.get('record_type', 'unknown')}.normal"
+                }
+            )
+
+            # Publish message to delay queue
+            message_body = json.dumps(message_data).encode('utf-8')
+            await self._channel.default_exchange.publish(
+                Message(body=message_body),
+                routing_key=delay_queue_name
+            )
+
+            self.logger.info(
+                "message_published_to_delay_queue",
+                delay_queue=delay_queue_name,
+                delay_seconds=delay_seconds,
+                retry_count=message_data.get('retry_count', 0)
+            )
+
+        except Exception as e:
+            self.logger.error(
+                "failed_to_publish_delayed_retry",
+                error=str(e),
+                delay_seconds=delay_seconds
+            )
+            # If delayed retry fails, fall back to immediate requeue
+            # This is better than losing the message
+            raise
+
+    def _parse_message_body(self, message: IncomingMessage) -> dict[str, Any]:
         """
         Parse RabbitMQ message body into dictionary.
 

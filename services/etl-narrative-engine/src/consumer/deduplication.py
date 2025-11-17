@@ -5,12 +5,12 @@ Provides persistent tracking of processed messages to ensure idempotency.
 Supports both SQLite (single instance) and Redis (distributed deployment).
 """
 
-from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
-from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
-import time
 import json
+import time
+from abc import ABC, abstractmethod
+from dataclasses import asdict, dataclass
+from typing import Any
+
 import aiosqlite
 import redis.asyncio as aioredis
 import structlog
@@ -23,28 +23,28 @@ class ProcessingRecord:
     """Record of message processing status"""
     idempotency_key: str
     message_id: str
-    correlation_id: Optional[str]
-    user_id: Optional[str]
+    correlation_id: str | None
+    user_id: str | None
     record_type: str
     s3_key: str
     status: str  # 'processing_started', 'completed', 'failed'
-    error_message: Optional[str] = None
-    error_type: Optional[str] = None
+    error_message: str | None = None
+    error_type: str | None = None
     started_at: float = 0.0
-    completed_at: Optional[float] = None
-    processing_time_seconds: Optional[float] = None
-    records_processed: Optional[int] = None
-    quality_score: Optional[float] = None
-    narrative_preview: Optional[str] = None
+    completed_at: float | None = None
+    processing_time_seconds: float | None = None
+    records_processed: int | None = None
+    quality_score: float | None = None
+    narrative_preview: str | None = None
     created_at: float = 0.0
     expires_at: float = 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for storage"""
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ProcessingRecord':
+    def from_dict(cls, data: dict[str, Any]) -> 'ProcessingRecord':
         """Create from dictionary"""
         return cls(**data)
 
@@ -64,7 +64,7 @@ class DeduplicationStore(ABC):
 
     @abstractmethod
     async def mark_processing_started(
-        self, message_data: Dict[str, Any], idempotency_key: str
+        self, message_data: dict[str, Any], idempotency_key: str
     ) -> None:
         """Mark message as processing started"""
         pass
@@ -113,7 +113,7 @@ class SQLiteDeduplicationStore(DeduplicationStore):
         self.db_path = db_path
         self.retention_hours = retention_hours
         self.logger = structlog.get_logger(store="sqlite", db_path=db_path)
-        self._conn: Optional[aiosqlite.Connection] = None
+        self._conn: aiosqlite.Connection | None = None
 
     async def initialize(self) -> None:
         """Create database and tables"""
@@ -183,7 +183,7 @@ class SQLiteDeduplicationStore(DeduplicationStore):
         return result is not None
 
     async def mark_processing_started(
-        self, message_data: Dict[str, Any], idempotency_key: str
+        self, message_data: dict[str, Any], idempotency_key: str
     ) -> None:
         """Mark message as processing started"""
         if not self._conn:
@@ -329,7 +329,7 @@ class RedisDeduplicationStore(DeduplicationStore):
         self.redis_url = redis_url
         self.retention_seconds = retention_hours * 3600
         self.logger = structlog.get_logger(store="redis")
-        self._redis: Optional[aioredis.Redis] = None
+        self._redis: aioredis.Redis | None = None
 
     async def initialize(self) -> None:
         """Connect to Redis"""
@@ -356,7 +356,7 @@ class RedisDeduplicationStore(DeduplicationStore):
         return exists > 0
 
     async def mark_processing_started(
-        self, message_data: Dict[str, Any], idempotency_key: str
+        self, message_data: dict[str, Any], idempotency_key: str
     ) -> None:
         """Mark message as processing started"""
         if not self._redis:

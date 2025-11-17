@@ -4,9 +4,9 @@ Configuration settings for ETL Narrative Engine using Pydantic.
 All settings can be configured via environment variables with ETL_ prefix.
 """
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
 from enum import Enum
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class DeduplicationStore(str, Enum):
@@ -32,7 +32,7 @@ class ConsumerSettings(BaseSettings):
     dead_letter_queue: str = "health_data_dlq"
     prefetch_count: int = 1
     max_retries: int = 3
-    retry_delays: List[int] = [30, 300, 900]  # 30s, 5m, 15m
+    retry_delays: list[int] = [30, 300, 900]  # 30s, 5m, 15m
 
     # Storage (S3/MinIO)
     s3_endpoint_url: str = "http://localhost:9000"

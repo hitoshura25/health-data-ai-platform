@@ -5,8 +5,9 @@ This factory selects the correct processor based on record_type from the message
 For Module 1, this provides stub/mock processors. Real processors come from Module 3.
 """
 
-from typing import Dict, Optional
+
 import structlog
+
 from .base_processor import BaseClinicalProcessor, ProcessingResult
 
 logger = structlog.get_logger()
@@ -83,7 +84,7 @@ class ProcessorFactory:
     def __init__(self):
         """Initialize the factory"""
         self.logger = structlog.get_logger()
-        self._processors: Dict[str, BaseClinicalProcessor] = {}
+        self._processors: dict[str, BaseClinicalProcessor] = {}
 
     async def initialize(self) -> None:
         """
@@ -104,7 +105,7 @@ class ProcessorFactory:
             processor_count=len(self._processors)
         )
 
-    def get_processor(self, record_type: str) -> Optional[BaseClinicalProcessor]:
+    def get_processor(self, record_type: str) -> BaseClinicalProcessor | None:
         """
         Get processor for a specific record type.
 

@@ -5,18 +5,19 @@ Tests Module 1 error classification and retry logic.
 """
 
 import pytest
+
 from src.consumer.error_recovery import (
+    DataQualityError,
     ErrorRecoveryManager,
     ErrorType,
     NetworkError,
-    S3TimeoutError,
-    S3ConnectionError,
-    S3RateLimitError,
-    S3NotFoundError,
+    ProcessingTimeoutError,
     S3AccessDeniedError,
-    DataQualityError,
+    S3ConnectionError,
+    S3NotFoundError,
+    S3RateLimitError,
+    S3TimeoutError,
     SchemaError,
-    ProcessingTimeoutError
 )
 
 
