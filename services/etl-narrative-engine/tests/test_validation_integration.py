@@ -82,20 +82,17 @@ class TestBloodGlucoseValidation:
         ]
 
         for filename in test_files:
-            try:
-                records, file_size = load_avro_file(filename)
+            # load_avro_file already handles missing files with pytest.skip
+            records, file_size = load_avro_file(filename)
 
-                result = await validator.validate(
-                    records,
-                    'BloodGlucoseRecord',
-                    file_size
-                )
+            result = await validator.validate(
+                records,
+                'BloodGlucoseRecord',
+                file_size
+            )
 
-                assert result.is_valid is True, f"Failed for {filename}"
-                assert result.quality_score >= 0.7, f"Low quality for {filename}"
-            except Exception:
-                # Skip if file doesn't exist
-                pytest.skip(f"Sample file not found: {filename}")
+            assert result.is_valid is True, f"Failed for {filename}"
+            assert result.quality_score >= 0.7, f"Low quality for {filename}"
 
 
 class TestHeartRateValidation:
@@ -386,9 +383,9 @@ class TestPerformance:
         end_time = time.time()
         elapsed_time = end_time - start_time
 
-        # Validation should complete in under 1 second for typical files
-        # (Adjust threshold based on actual file size and system performance)
-        assert elapsed_time < 5.0, f"Validation took {elapsed_time:.2f}s, too slow"
+        # Validation should complete quickly (target: <1s, allow 2s for CI variability)
+        # Documentation states <1 second for 10,000 records
+        assert elapsed_time < 2.0, f"Validation took {elapsed_time:.2f}s, too slow"
 
         assert result.is_valid is True
 

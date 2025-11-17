@@ -4,10 +4,10 @@ Debug script to examine actual Avro file structure.
 Helps understand the real field names in sample files.
 """
 
-import sys
-from pathlib import Path
-from fastavro import reader
 import json
+from pathlib import Path
+
+from fastavro import reader
 
 # Sample files to examine
 SAMPLE_FILES = {
@@ -40,6 +40,6 @@ for record_type, filename in SAMPLE_FILES.items():
     print(f"{'='*60}")
     print(f"Record count: {len(records)}")
     print(f"\nTop-level fields: {list(records[0].keys())}")
-    print(f"\nFirst record sample:")
+    print("\nFirst record sample:")
     print(json.dumps(records[0], indent=2, default=str)[:500])
     print("...")

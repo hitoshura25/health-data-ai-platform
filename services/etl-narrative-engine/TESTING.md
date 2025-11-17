@@ -40,7 +40,8 @@ docker compose -f deployment/docker-compose.test.yml up --build
 ### Run Unit Tests
 
 ```bash
-cd /home/user/health-data-ai-platform/services/etl-narrative-engine
+# From service directory
+cd services/etl-narrative-engine
 
 # Run all validation tests
 pytest tests/test_validation.py -v
@@ -254,8 +255,9 @@ Required packages:
 
 Integration tests require sample Avro files in:
 ```
-/home/user/health-data-ai-platform/docs/sample-avro-files/
+docs/sample-avro-files/
 ```
+(Relative to repository root)
 
 If missing, integration tests will be skipped automatically.
 

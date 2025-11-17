@@ -7,7 +7,7 @@ for health data files.
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -364,7 +364,7 @@ class DataQualityValidator:
                 'quarantine_reason': validation_result.errors,
                 'quality_score': validation_result.quality_score,
                 'warnings': validation_result.warnings,
-                'quarantined_at': datetime.utcnow().isoformat(),
+                'quarantined_at': datetime.now(UTC).isoformat(),
                 'validation_metadata': validation_result.metadata
             }
 
