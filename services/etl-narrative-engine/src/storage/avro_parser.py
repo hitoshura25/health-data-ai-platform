@@ -31,7 +31,7 @@ class AvroParser:
     def parse_records(
         self,
         avro_data: bytes,
-        expected_record_type: str = None
+        expected_record_type: str | None = None
     ) -> list[dict[str, Any]]:
         """
         Parse Avro file and extract records.

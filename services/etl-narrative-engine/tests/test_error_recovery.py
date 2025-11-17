@@ -10,7 +10,6 @@ from src.consumer.error_recovery import (
     DataQualityError,
     ErrorRecoveryManager,
     ErrorType,
-    NetworkError,
     ProcessingTimeoutError,
     S3AccessDeniedError,
     S3ConnectionError,
