@@ -149,7 +149,7 @@ class ETLConsumer:
         )
 
         # Declare dead letter queue
-        _dlq = await self._channel.declare_queue(
+        await self._channel.declare_queue(
             self.settings.dead_letter_queue,
             durable=True
         )
@@ -348,7 +348,7 @@ class ETLConsumer:
             delay_queue_name = f"{self.settings.queue_name}_delay_{delay_seconds}s"
 
             # Declare delay queue with message TTL and dead-letter back to main queue
-            _delay_queue = await self._channel.declare_queue(
+            await self._channel.declare_queue(
                 delay_queue_name,
                 durable=True,
                 arguments={
