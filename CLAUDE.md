@@ -239,12 +239,20 @@ Health API will verify WebAuthn JWTs:
 - Health API verifies using public key from `http://localhost:8000/public-key`
 - See `webauthn-stack/docs/INTEGRATION.md` for detailed integration guide
 
-### 🚨 CRITICAL: Git Commit Policy - NEVER Auto-Commit
+### 🚨 CRITICAL: Git Commit Policy - User Approval Required
 
-**🛑 MANDATORY: User Must Review and Commit All Changes**
+**🛑 MANDATORY: User Must Approve All Git Operations**
 
-- **❌ NEVER run**: `git add`, `git commit`, `git push` commands
-- **✅ ALWAYS prepare**: Changes and inform user they are ready for review
+- **✅ ASK FIRST**: When work is complete, ask user if you should commit and push
+- **✅ IF APPROVED**: Run `git add`, `git commit`, and `git push` commands with clear commit messages
+- **❌ NEVER auto-commit**: Without explicit user approval in the current conversation
+- **✅ ALWAYS prepare**: Clear commit messages summarizing the changes
+
+**Workflow:**
+1. Complete implementation and verify tests pass
+2. Ask user: "Should I commit and push these changes to [branch-name]?"
+3. If user approves → run git commands
+4. If user declines → inform them of manual commands
 
 ### 🚨 CRITICAL: Environment-Specific Configuration
 

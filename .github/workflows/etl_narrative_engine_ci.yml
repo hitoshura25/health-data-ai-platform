@@ -1,0 +1,58 @@
+# This GitHub Actions workflow runs linting and tests for the etl-narrative-engine service.
+
+name: ETL Narrative Engine CI
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'services/etl-narrative-engine/**'
+      - 'infrastructure/**'
+      - 'setup-all-services.sh'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'services/etl-narrative-engine/**'
+      - 'infrastructure/**'
+      - 'setup-all-services.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test-etl:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Generate .env files
+        run: |
+          chmod +x infrastructure/setup-secure-env.sh
+          chmod +x setup-all-services.sh
+          ./setup-all-services.sh
+
+      - name: Install dependencies
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
+          pip install -r services/etl-narrative-engine/requirements.txt
+
+      - name: Run linting (Ruff)
+        run: |
+          source .venv/bin/activate
+          cd services/etl-narrative-engine
+          ruff check src/ tests/
+
+      - name: Run tests
+        run: |
+          source .venv/bin/activate
+          chmod +x run-tests.sh
+          ./run-tests.sh etl-narrative-engine -v -s
