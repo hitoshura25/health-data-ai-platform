@@ -55,7 +55,9 @@ class S3Client:
         self.use_ssl = use_ssl
         self.logger = structlog.get_logger(bucket=bucket_name)
 
-        # Create aioboto3 session
+        # Create aioboto3 session once (reused for all client operations)
+        # Note: Creating clients via context manager per operation is the
+        # recommended pattern for aioboto3 to prevent resource leaks
         self.session = aioboto3.Session()
 
     async def download_file(

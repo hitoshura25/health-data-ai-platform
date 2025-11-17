@@ -39,6 +39,30 @@ class ProcessingRecord:
     created_at: float = 0.0
     expires_at: float = 0.0
 
+    def __post_init__(self):
+        """Validate processing record fields"""
+        # Validate timestamps
+        if self.expires_at > 0 and self.created_at > 0 and self.expires_at < self.created_at:
+            raise ValueError(
+                f"expires_at ({self.expires_at}) must be greater than or equal to "
+                f"created_at ({self.created_at})"
+            )
+
+        # Validate status
+        valid_statuses = ['processing_started', 'completed', 'failed']
+        if self.status not in valid_statuses:
+            raise ValueError(
+                f"Invalid status: {self.status}. "
+                f"Must be one of: {valid_statuses}"
+            )
+
+        # Validate quality score if present
+        if self.quality_score is not None and not 0.0 <= self.quality_score <= 1.0:
+            raise ValueError(
+                f"quality_score must be between 0.0 and 1.0, "
+                f"got {self.quality_score}"
+            )
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for storage"""
         return asdict(self)

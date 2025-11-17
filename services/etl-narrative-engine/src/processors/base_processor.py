@@ -112,15 +112,10 @@ class BaseClinicalProcessor(ABC):
 
 
 class ProcessingError(Exception):
-    """Base exception for processing errors"""
-    pass
+    """
+    Base exception for processing errors.
 
-
-class DataQualityError(ProcessingError):
-    """Raised when data quality is below threshold"""
-    pass
-
-
-class SchemaError(ProcessingError):
-    """Raised when Avro schema is invalid"""
+    Note: For DataQualityError and SchemaError, import from:
+        from ..consumer.error_recovery import DataQualityError, SchemaError
+    """
     pass

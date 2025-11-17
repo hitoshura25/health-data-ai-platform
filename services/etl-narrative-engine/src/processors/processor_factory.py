@@ -6,6 +6,7 @@ For Module 1, this provides stub/mock processors. Real processors come from Modu
 """
 
 
+
 import structlog
 
 from .base_processor import BaseClinicalProcessor, ProcessingResult
@@ -105,7 +106,7 @@ class ProcessorFactory:
             processor_count=len(self._processors)
         )
 
-    def get_processor(self, record_type: str) -> BaseClinicalProcessor | None:
+    def get_processor(self, record_type: str) -> BaseClinicalProcessor:
         """
         Get processor for a specific record type.
 
@@ -113,7 +114,7 @@ class ProcessorFactory:
             record_type: Health record type (e.g., "BloodGlucoseRecord")
 
         Returns:
-            Processor instance or None if not found
+            Processor instance
 
         Raises:
             ValueError: If record_type is not supported
@@ -126,9 +127,14 @@ class ProcessorFactory:
 
         processor = self._processors.get(record_type)
         if not processor:
+            # This should never happen if initialize() was called
             self.logger.error(
-                "processor_not_found",
+                "processor_not_initialized",
                 record_type=record_type
+            )
+            raise RuntimeError(
+                f"Processor for {record_type} not initialized. "
+                "Call initialize() first."
             )
         return processor
 

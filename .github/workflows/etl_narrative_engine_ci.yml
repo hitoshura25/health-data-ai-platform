@@ -16,6 +16,9 @@ on:
       - 'infrastructure/**'
       - 'setup-all-services.sh'
 
+permissions:
+  contents: read
+
 jobs:
   lint-and-test-etl:
     runs-on: ubuntu-latest

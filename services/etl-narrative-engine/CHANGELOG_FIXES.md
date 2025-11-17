@@ -1,5 +1,62 @@
 # Fixes Applied - PR Feedback Response
 
+## Round 2: Additional PR Feedback (2025-11-17)
+
+### 1. Duplicate Exception Classes ✅
+**Issue:** DataQualityError and SchemaError defined in both `base_processor.py` and `error_recovery.py`
+**Fix:** Removed duplicate exceptions from `base_processor.py`, kept canonical versions in `error_recovery.py`
+**Files:** `src/processors/base_processor.py`, `src/consumer/error_recovery.py`
+
+### 2. S3 Client Session Management ✅
+**Issue:** Clarification needed on session reuse pattern
+**Fix:** Added clarifying comments explaining that session is reused (created once), clients created per operation (recommended aioboto3 pattern)
+**File:** `src/storage/s3_client.py`
+
+### 3. ProcessorFactory Return Type ✅
+**Issue:** `get_processor()` returned `BaseClinicalProcessor | None` but always raises on error
+**Fix:** Changed return type to `BaseClinicalProcessor` (non-optional), added RuntimeError for uninitialized processors
+**File:** `src/processors/processor_factory.py:116`
+
+### 4. ProcessingRecord Validation ✅
+**Issue:** ProcessingRecord dataclass lacked field validation
+**Fix:** Added `__post_init__` method with validation for timestamps, status, and quality_score
+**File:** `src/consumer/deduplication.py:42-64`
+
+**Validation Rules:**
+- Timestamps: `expires_at` must be >= `created_at` (when both > 0)
+- Status: Must be one of ['processing_started', 'completed', 'failed']
+- Quality Score: Must be between 0.0 and 1.0 (when not None)
+
+### 5 & 6. JSON Import Location ✅
+**Issue:** `import json` statements inside methods (lines 345, 399) violates Python best practices
+**Fix:** Moved `import json` to module-level imports at top of file
+**File:** `src/consumer/etl_consumer.py:14`
+
+### 7. Hardcoded Routing Key ✅
+**Issue:** Delayed retry used hardcoded `.normal` suffix in routing key
+**Fix:**
+- Preserve original routing key from incoming message
+- Use preserved routing key in delayed retry dead-letter routing
+- Fallback to constructed key if not available
+**File:** `src/consumer/etl_consumer.py:186, 354-357`
+
+### 8. Exception Handling Fallback ✅
+**Issue:** `_publish_delayed_retry` raised exception with misleading comment about "fallback to immediate requeue"
+**Fix:**
+- Wrapped delayed retry call in try-except in caller (`_process_message`)
+- If scheduling fails, mark as failed and move to DLQ to avoid infinite retry loops
+- Updated comment to clarify re-raise behavior
+**File:** `src/consumer/etl_consumer.py:260-282, 409-411`
+
+### 9. Workflow Permissions ✅
+**Issue:** GitHub Actions workflow missing permissions declaration
+**Fix:** Added `permissions: contents: read` to workflow
+**File:** `.github/workflows/etl_narrative_engine_ci.yml:19-20`
+
+---
+
+## Round 1: Initial PR Feedback
+
 ## Issues Addressed
 
 ### 1. Type Hint Compatibility ✅

@@ -11,6 +11,7 @@ This consumer:
 """
 
 import asyncio
+import json
 import time
 from typing import Any
 
@@ -181,6 +182,10 @@ class ETLConsumer:
                 # Parse message body
                 message_data = self._parse_message_body(message)
 
+                # Preserve original routing key for retries
+                if message.routing_key:
+                    message_data['routing_key'] = message.routing_key
+
                 self.logger.info(
                     "message_received",
                     message_id=message_data.get("message_id"),
@@ -252,10 +257,29 @@ class ETLConsumer:
                     # Update retry count in message data
                     if 'message_data' in locals():
                         message_data['retry_count'] = retry_count + 1
-                        await self._publish_delayed_retry(message_data, delay)
-
-                    # ACK original message (it's been requeued with delay)
-                    await message.ack()
+                        try:
+                            await self._publish_delayed_retry(message_data, delay)
+                            # ACK original message (it's been requeued with delay)
+                            await message.ack()
+                        except Exception as retry_error:
+                            self.logger.error(
+                                "failed_to_schedule_delayed_retry",
+                                error=str(retry_error),
+                                retry_count=retry_count + 1
+                            )
+                            # If we can't schedule a retry, treat as permanent failure
+                            # to avoid infinite retry loops
+                            if 'idempotency_key' in message_data:
+                                await self.dedup_store.mark_processing_failed(
+                                    idempotency_key=message_data["idempotency_key"],
+                                    error_message=f"Failed to schedule retry: {str(retry_error)}",
+                                    error_type="infrastructure_error"
+                                )
+                            await message.ack()
+                            self.logger.warning(
+                                "message_moved_to_dlq_after_retry_scheduling_failure",
+                                retry_count=retry_count + 1
+                            )
 
                 else:
                     # Mark as failed and move to DLQ
@@ -341,11 +365,15 @@ class ETLConsumer:
             message_data: Message data to retry
             delay_seconds: Delay in seconds before retry
         """
-        import json
-
         try:
             # Delay queue name based on delay duration
             delay_queue_name = f"{self.settings.queue_name}_delay_{delay_seconds}s"
+
+            # Use preserved routing key or construct default
+            routing_key = message_data.get(
+                'routing_key',
+                f"health.processing.{message_data.get('record_type', 'unknown')}"
+            )
 
             # Declare delay queue with message TTL and dead-letter back to main queue
             await self._channel.declare_queue(
@@ -354,7 +382,7 @@ class ETLConsumer:
                 arguments={
                     "x-message-ttl": delay_seconds * 1000,  # Convert to milliseconds
                     "x-dead-letter-exchange": self.settings.exchange_name,
-                    "x-dead-letter-routing-key": f"health.processing.{message_data.get('record_type', 'unknown')}.normal"
+                    "x-dead-letter-routing-key": routing_key
                 }
             )
 
@@ -378,8 +406,8 @@ class ETLConsumer:
                 error=str(e),
                 delay_seconds=delay_seconds
             )
-            # If delayed retry fails, fall back to immediate requeue
-            # This is better than losing the message
+            # Re-raise to let caller handle the failure
+            # Caller will move message to DLQ to avoid infinite retry loops
             raise
 
     def _parse_message_body(self, message: IncomingMessage) -> dict[str, Any]:
@@ -395,8 +423,6 @@ class ETLConsumer:
         Raises:
             ValueError: If message body is invalid
         """
-        import json
-
         try:
             body = message.body.decode('utf-8')
             data = json.loads(body)
