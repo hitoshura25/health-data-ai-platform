@@ -97,13 +97,12 @@ jobs:
         env:
           MINIO_ROOT_USER: minioadmin
           MINIO_ROOT_PASSWORD: minioadmin
+          MINIO_CONSOLE_ADDRESS: ':9001'
         options: >-
           --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-        # Run MinIO server with custom entrypoint
-        cmd: server /data --console-address ':9001'
 
     steps:
       - name: Checkout repository
