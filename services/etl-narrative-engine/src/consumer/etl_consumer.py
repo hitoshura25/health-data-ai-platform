@@ -15,6 +15,7 @@ import json
 import time
 from typing import Any
 
+import aioboto3
 import structlog
 from aio_pika import ExchangeType, IncomingMessage, Message, connect_robust
 
@@ -51,6 +52,7 @@ class ETLConsumer:
         self.avro_parser: AvroParser | None = None
         self.training_formatter: TrainingDataFormatter | None = None
         self.training_deduplicator: TrainingDeduplicator | None = None
+        self._training_s3_client = None  # aioboto3 client for training output
 
         # RabbitMQ connection (will be created in start_consuming)
         self._connection = None
@@ -110,8 +112,20 @@ class ETLConsumer:
 
         # Initialize Module 4: Training data output
         if self.settings.enable_training_output:
+            # Create aioboto3 client for training output
+            # Note: We create this once and reuse it for all training operations
+            session = aioboto3.Session()
+            self._training_s3_client = await session.client(
+                's3',
+                endpoint_url=self.settings.s3_endpoint_url,
+                aws_access_key_id=self.settings.s3_access_key,
+                aws_secret_access_key=self.settings.s3_secret_key,
+                region_name=self.settings.s3_region,
+                use_ssl=self.settings.s3_use_ssl
+            ).__aenter__()
+
             self.training_formatter = TrainingDataFormatter(
-                s3_client=self.s3_client.client,  # Pass boto3 client
+                s3_client=self._training_s3_client,
                 bucket_name=self.settings.s3_bucket_name,
                 training_prefix=self.settings.training_data_prefix,
                 include_metadata=self.settings.include_training_metadata
@@ -561,5 +575,9 @@ class ETLConsumer:
         # Close dedup store
         if self.dedup_store:
             await self.dedup_store.close()
+
+        # Close training S3 client
+        if self._training_s3_client:
+            await self._training_s3_client.__aexit__(None, None, None)
 
         self.logger.info("consumer_stopped")
