@@ -131,8 +131,8 @@ class SleepProcessor(BaseClinicalProcessor):
                 if not start_epoch or not end_epoch:
                     continue
 
-                start_time = datetime.fromtimestamp(start_epoch / 1000)
-                end_time = datetime.fromtimestamp(end_epoch / 1000)
+                start_time = datetime.fromtimestamp(start_epoch / 1000, tz=UTC)
+                end_time = datetime.fromtimestamp(end_epoch / 1000, tz=UTC)
 
                 # Calculate duration
                 duration_hours = (end_epoch - start_epoch) / (1000 * 3600)
