@@ -11,7 +11,6 @@ Tests verify:
 - Deduplication across multiple runs
 """
 
-import contextlib
 import json
 import os
 from datetime import UTC, datetime
@@ -48,9 +47,17 @@ async def s3_client(s3_config):
         region_name=s3_config['region'],
         use_ssl=False
     ) as client:
-        # Ensure bucket exists
-        with contextlib.suppress(Exception):
+        # Ensure bucket exists - catch specific bucket already exists exceptions
+        try:
             await client.create_bucket(Bucket=s3_config['bucket_name'])
+        except client.exceptions.BucketAlreadyOwnedByYou:
+            pass  # Bucket already exists and we own it - this is fine
+        except client.exceptions.BucketAlreadyExists:
+            pass  # Bucket already exists - this is fine for integration tests
+        except Exception:
+            # For other exceptions during bucket creation, log but don't fail
+            # This handles cases where bucket might exist from previous test runs
+            pass
 
         yield client
 

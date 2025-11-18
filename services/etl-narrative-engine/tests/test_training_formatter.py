@@ -27,9 +27,10 @@ class TestTrainingDataFormatter:
     def mock_s3_client(self):
         """Create mock S3 client"""
         client = AsyncMock()
-        # Mock NoSuchKey exception
+        # Mock NoSuchKey exception as a proper exception class
+        # This ensures isinstance() checks work correctly in the code
         client.exceptions = MagicMock()
-        client.exceptions.NoSuchKey = Exception
+        client.exceptions.NoSuchKey = type('NoSuchKey', (Exception,), {})
         return client
 
     @pytest.fixture
