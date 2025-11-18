@@ -96,5 +96,11 @@ async def fake_redis():
 
 @pytest.fixture
 def redis_test_url():
-    """Provide Redis connection URL for testing"""
-    return "redis://localhost:6379/15"  # Use DB 15 for tests
+    """
+    Provide placeholder Redis connection URL for testing.
+
+    Note: This URL is never actually used in unit tests since we inject
+    the fake_redis client directly via store._redis. It's only needed
+    to satisfy the RedisDeduplicationStore constructor signature.
+    """
+    return "redis://fake"  # Placeholder - tests inject fake_redis directly
