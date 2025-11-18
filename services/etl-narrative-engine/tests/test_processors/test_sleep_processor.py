@@ -10,7 +10,7 @@ This test module covers:
 - Clinical insights extraction
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -43,8 +43,8 @@ def validation_result():
 @pytest.fixture
 def sample_sleep_record():
     """Create a sample sleep session record"""
-    start_time = datetime(2024, 1, 15, 22, 0, 0)  # 10 PM
-    end_time = datetime(2024, 1, 16, 6, 30, 0)  # 6:30 AM
+    start_time = datetime(2024, 1, 15, 22, 0, 0, tzinfo=UTC)  # 10 PM
+    end_time = datetime(2024, 1, 16, 6, 30, 0, tzinfo=UTC)  # 6:30 AM
 
     return {
         "startTime": {"epochMillis": int(start_time.timestamp() * 1000)},
@@ -105,7 +105,7 @@ def sample_sleep_record():
 def multiple_sleep_records():
     """Create multiple sleep records for testing patterns"""
     records = []
-    base_date = datetime(2024, 1, 1, 22, 0, 0)
+    base_date = datetime(2024, 1, 1, 22, 0, 0, tzinfo=UTC)
 
     for i in range(14):  # 2 weeks of data
         start_time = base_date + timedelta(days=i)
@@ -202,8 +202,8 @@ class TestSleepAnalysis:
     @pytest.mark.asyncio
     async def test_analyze_optimal_duration(self, initialized_processor):
         """Test analyzing optimal sleep duration"""
-        start_time = datetime(2024, 1, 15, 22, 0, 0)
-        end_time = datetime(2024, 1, 16, 6, 0, 0)  # 8 hours
+        start_time = datetime(2024, 1, 15, 22, 0, 0, tzinfo=UTC)
+        end_time = datetime(2024, 1, 16, 6, 0, 0, tzinfo=UTC)  # 8 hours
 
         session = {
             "start_time": start_time,
@@ -224,8 +224,8 @@ class TestSleepAnalysis:
     @pytest.mark.asyncio
     async def test_analyze_insufficient_duration(self, initialized_processor):
         """Test analyzing insufficient sleep duration"""
-        start_time = datetime(2024, 1, 15, 22, 0, 0)
-        end_time = datetime(2024, 1, 16, 3, 0, 0)  # 5 hours
+        start_time = datetime(2024, 1, 15, 22, 0, 0, tzinfo=UTC)
+        end_time = datetime(2024, 1, 16, 3, 0, 0, tzinfo=UTC)  # 5 hours
 
         session = {
             "start_time": start_time,
@@ -246,8 +246,8 @@ class TestSleepAnalysis:
     async def test_analyze_bedtime_quality(self, initialized_processor):
         """Test bedtime quality assessment"""
         # Optimal bedtime (10 PM)
-        start_time = datetime(2024, 1, 15, 22, 0, 0)
-        end_time = datetime(2024, 1, 16, 6, 0, 0)
+        start_time = datetime(2024, 1, 15, 22, 0, 0, tzinfo=UTC)
+        end_time = datetime(2024, 1, 16, 6, 0, 0, tzinfo=UTC)
 
         session = {
             "start_time": start_time,
@@ -286,7 +286,7 @@ class TestStageAnalysis:
     @pytest.mark.asyncio
     async def test_sleep_efficiency_calculation(self, initialized_processor):
         """Test sleep efficiency calculation"""
-        start_time = datetime(2024, 1, 15, 22, 0, 0)
+        start_time = datetime(2024, 1, 15, 22, 0, 0, tzinfo=UTC)
 
         stages = [
             {
@@ -434,7 +434,10 @@ class TestPatternIdentification:
     async def test_identify_patterns_insufficient_data(self, initialized_processor):
         """Test pattern identification with insufficient data"""
         analyzed_sessions = [
-            {"start_time": datetime(2024, 1, 1, 22, 0), "duration_hours": 8.0}
+            {
+                "start_time": datetime(2024, 1, 1, 22, 0, 0, tzinfo=UTC),
+                "duration_hours": 8.0,
+            }
             for _ in range(3)
         ]
 
@@ -449,7 +452,7 @@ class TestPatternIdentification:
         """Test identifying excellent sleep consistency"""
         # Same bedtime and duration every day
         analyzed_sessions = []
-        base_time = datetime(2024, 1, 1, 22, 0, 0)
+        base_time = datetime(2024, 1, 1, 22, 0, 0, tzinfo=UTC)
 
         for i in range(10):
             analyzed_sessions.append(
@@ -487,7 +490,8 @@ class TestNarrativeGeneration:
                 "duration_hours": 8.0,
                 "duration_quality": "good",
                 "sleep_efficiency": 92.0,
-                "start_time": datetime(2024, 1, 1, 22, 0) + timedelta(days=i),
+                "start_time": datetime(2024, 1, 1, 22, 0, 0, tzinfo=UTC)
+                + timedelta(days=i),
             }
             for i in range(10)
         ]
@@ -510,7 +514,7 @@ class TestNarrativeGeneration:
                 "duration_hours": 5.5,
                 "duration_quality": "poor",
                 "sleep_efficiency": 70.0,
-                "start_time": datetime(2024, 1, 1, 22, 0)
+                "start_time": datetime(2024, 1, 1, 22, 0, 0, tzinfo=UTC)
                 + timedelta(days=i, hours=i % 3),
             }
             for i in range(10)
@@ -532,7 +536,7 @@ class TestClinicalInsights:
     @pytest.mark.asyncio
     async def test_extract_clinical_insights(self, initialized_processor):
         """Test clinical insights extraction"""
-        base_time = datetime(2024, 1, 1, 22, 0, 0)
+        base_time = datetime(2024, 1, 1, 22, 0, 0, tzinfo=UTC)
         analyzed_sessions = [
             {
                 "duration_hours": 8.0,
