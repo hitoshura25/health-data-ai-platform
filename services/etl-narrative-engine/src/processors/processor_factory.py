@@ -17,6 +17,9 @@ from .steps_processor import StepsProcessor
 
 logger = structlog.get_logger()
 
+# Quality score constant used by consumer until Module 4 is implemented
+MOCK_QUALITY_SCORE = 0.95  # Stub quality score until real quality analysis in Module 4
+
 
 class ProcessorFactory:
     """
