@@ -4,11 +4,13 @@ Processor factory for routing messages to appropriate clinical processors.
 This factory selects the correct processor based on record_type from the message.
 For Module 1, this provides stub/mock processors. Real processors come from Module 3.
 """
+
 import structlog
 
 from .base_processor import BaseClinicalProcessor, ProcessingResult
 from .blood_glucose_processor import BloodGlucoseProcessor
 from .heart_rate_processor import HeartRateProcessor
+from .sleep_processor import SleepProcessor
 
 logger = structlog.get_logger()
 
@@ -34,10 +36,7 @@ class MockProcessor(BaseClinicalProcessor):
         self.logger.info("mock_processor_initialized", record_type=self.record_type)
 
     async def process_with_clinical_insights(
-        self,
-        records,
-        message_data,
-        validation_result
+        self, records, message_data, validation_result
     ) -> ProcessingResult:
         """Return mock processing result"""
         record_count = len(records)
@@ -59,8 +58,8 @@ class MockProcessor(BaseClinicalProcessor):
             clinical_insights={
                 "mock": True,
                 "record_type": self.record_type,
-                "record_count": record_count
-            }
+                "record_count": record_count,
+            },
         )
 
 
@@ -82,7 +81,7 @@ class ProcessorFactory:
         "SleepSessionRecord",
         "StepsRecord",
         "ActiveCaloriesBurnedRecord",
-        "HeartRateVariabilityRmssdRecord"
+        "HeartRateVariabilityRmssdRecord",
     ]
 
     def __init__(self):
@@ -100,11 +99,13 @@ class ProcessorFactory:
         self.logger.info("initializing_processor_factory")
 
         for record_type in self.SUPPORTED_TYPES:
-            # Use real processors for implemented types (Module 3a, 3b)
+            # Use real processors for implemented types (Module 3a, 3b, 3c)
             if record_type == "BloodGlucoseRecord":
                 processor = BloodGlucoseProcessor()
             elif record_type == "HeartRateRecord":
                 processor = HeartRateProcessor()
+            elif record_type == "SleepSessionRecord":
+                processor = SleepProcessor()
             else:
                 # Mock processors for types not yet implemented
                 processor = MockProcessor(record_type)
@@ -113,8 +114,7 @@ class ProcessorFactory:
             self._processors[record_type] = processor
 
         self.logger.info(
-            "processor_factory_initialized",
-            processor_count=len(self._processors)
+            "processor_factory_initialized", processor_count=len(self._processors)
         )
 
     def get_processor(self, record_type: str) -> BaseClinicalProcessor:
@@ -139,10 +139,7 @@ class ProcessorFactory:
         processor = self._processors.get(record_type)
         if not processor:
             # This should never happen if initialize() was called
-            self.logger.error(
-                "processor_not_initialized",
-                record_type=record_type
-            )
+            self.logger.error("processor_not_initialized", record_type=record_type)
             raise RuntimeError(
                 f"Processor for {record_type} not initialized. "
                 "Call initialize() first."

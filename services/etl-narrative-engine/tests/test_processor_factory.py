@@ -10,6 +10,7 @@ from src.processors.base_processor import BaseClinicalProcessor, ProcessingResul
 from src.processors.blood_glucose_processor import BloodGlucoseProcessor
 from src.processors.heart_rate_processor import HeartRateProcessor
 from src.processors.processor_factory import MockProcessor, ProcessorFactory
+from src.processors.sleep_processor import SleepProcessor
 
 
 @pytest.mark.unit
@@ -29,12 +30,15 @@ async def test_processor_factory_initialization():
         # All processors should inherit from BaseClinicalProcessor
         assert isinstance(processor, BaseClinicalProcessor)
 
-        # BloodGlucoseRecord and HeartRateRecord use real processors (Module 3a, 3b)
+        # Module 3a, 3b, 3c use real processors
         if record_type == "BloodGlucoseRecord":
             assert isinstance(processor, BloodGlucoseProcessor)
         elif record_type == "HeartRateRecord":
             assert isinstance(processor, HeartRateProcessor)
+        elif record_type == "SleepSessionRecord":
+            assert isinstance(processor, SleepProcessor)
         else:
+            # Other types still use mock processor
             assert isinstance(processor, MockProcessor)
 
     await factory.cleanup()
@@ -56,6 +60,11 @@ async def test_processor_factory_get_processor():
     processor = factory.get_processor("HeartRateRecord")
     assert processor is not None
     assert isinstance(processor, HeartRateProcessor)
+
+    # Test sleep processor (real processor, Module 3c)
+    processor = factory.get_processor("SleepSessionRecord")
+    assert processor is not None
+    assert isinstance(processor, SleepProcessor)
 
     await factory.cleanup()
 
@@ -95,7 +104,7 @@ async def test_mock_processor_returns_success(sample_avro_records, sample_messag
     result = await processor.process_with_clinical_insights(
         records=sample_avro_records,
         message_data=sample_message_data,
-        validation_result=None
+        validation_result=None,
     )
 
     # Verify result
