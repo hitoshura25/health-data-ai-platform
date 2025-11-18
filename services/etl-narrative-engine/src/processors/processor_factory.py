@@ -8,6 +8,7 @@ import structlog
 
 from .base_processor import BaseClinicalProcessor, ProcessingResult
 from .blood_glucose_processor import BloodGlucoseProcessor
+from .heart_rate_processor import HeartRateProcessor
 
 logger = structlog.get_logger()
 
@@ -99,9 +100,11 @@ class ProcessorFactory:
         self.logger.info("initializing_processor_factory")
 
         for record_type in self.SUPPORTED_TYPES:
-            # Use real processor for BloodGlucoseRecord (Module 3a)
+            # Use real processors for implemented types (Module 3a, 3b)
             if record_type == "BloodGlucoseRecord":
                 processor = BloodGlucoseProcessor()
+            elif record_type == "HeartRateRecord":
+                processor = HeartRateProcessor()
             else:
                 # Mock processors for types not yet implemented
                 processor = MockProcessor(record_type)
