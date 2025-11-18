@@ -2,65 +2,20 @@
 Processor factory for routing messages to appropriate clinical processors.
 
 This factory selects the correct processor based on record_type from the message.
-For Module 1, this provides stub/mock processors. Real processors come from Module 3.
+All Module 3 processors are now real implementations (no more mocks).
 """
 
 import structlog
 
+from .active_calories_processor import ActiveCaloriesProcessor
 from .base_processor import BaseClinicalProcessor, ProcessingResult
 from .blood_glucose_processor import BloodGlucoseProcessor
 from .heart_rate_processor import HeartRateProcessor
+from .hrv_rmssd_processor import HRVRmssdProcessor
 from .sleep_processor import SleepProcessor
+from .steps_processor import StepsProcessor
 
 logger = structlog.get_logger()
-
-# Mock processor constants for Module 1 (placeholders for real clinical processing in Module 3)
-MOCK_QUALITY_SCORE = 0.95  # Stub quality score until real clinical analysis in Module 3
-MOCK_PROCESSING_TIME_SECONDS = 0.1  # Stub processing time for mock processor
-
-
-class MockProcessor(BaseClinicalProcessor):
-    """
-    Mock processor for Module 1 testing.
-
-    Returns a simple success result without actual clinical processing.
-    Real processors will be implemented in Module 3.
-    """
-
-    def __init__(self, record_type: str):
-        super().__init__()
-        self.record_type = record_type
-
-    async def initialize(self) -> None:
-        """Initialize mock processor"""
-        self.logger.info("mock_processor_initialized", record_type=self.record_type)
-
-    async def process_with_clinical_insights(
-        self, records, message_data, validation_result
-    ) -> ProcessingResult:
-        """Return mock processing result"""
-        record_count = len(records)
-
-        # Generate simple mock narrative
-        narrative = (
-            f"Mock processing of {record_count} {self.record_type} records. "
-            f"This is a stub processor from Module 1. Real clinical processing "
-            f"will be implemented in Module 3."
-        )
-
-        return ProcessingResult(
-            success=True,
-            narrative=narrative,
-            error_message=None,
-            processing_time_seconds=MOCK_PROCESSING_TIME_SECONDS,
-            records_processed=record_count,
-            quality_score=MOCK_QUALITY_SCORE,
-            clinical_insights={
-                "mock": True,
-                "record_type": self.record_type,
-                "record_count": record_count,
-            },
-        )
 
 
 class ProcessorFactory:
@@ -93,28 +48,34 @@ class ProcessorFactory:
         """
         Initialize all processors.
 
-        For Module 1, this creates mock processors for each type.
-        Module 3 processors (like BloodGlucoseProcessor) replace mocks.
+        Module 3a/3b/3c processors:
+        - BloodGlucoseRecord -> BloodGlucoseProcessor
+        - HeartRateRecord -> HeartRateProcessor
+        - SleepSessionRecord -> SleepProcessor
+
+        Module 3d processors:
+        - StepsRecord -> StepsProcessor
+        - ActiveCaloriesBurnedRecord -> ActiveCaloriesProcessor
+        - HeartRateVariabilityRmssdRecord -> HRVRmssdProcessor
         """
         self.logger.info("initializing_processor_factory")
 
-        for record_type in self.SUPPORTED_TYPES:
-            # Use real processors for implemented types (Module 3a, 3b, 3c)
-            if record_type == "BloodGlucoseRecord":
-                processor = BloodGlucoseProcessor()
-            elif record_type == "HeartRateRecord":
-                processor = HeartRateProcessor()
-            elif record_type == "SleepSessionRecord":
-                processor = SleepProcessor()
-            else:
-                # Mock processors for types not yet implemented
-                processor = MockProcessor(record_type)
+        # Create all real processors
+        self._processors["BloodGlucoseRecord"] = BloodGlucoseProcessor()
+        self._processors["HeartRateRecord"] = HeartRateProcessor()
+        self._processors["SleepSessionRecord"] = SleepProcessor()
+        self._processors["StepsRecord"] = StepsProcessor()
+        self._processors["ActiveCaloriesBurnedRecord"] = ActiveCaloriesProcessor()
+        self._processors["HeartRateVariabilityRmssdRecord"] = HRVRmssdProcessor()
 
+        # Initialize all processors
+        for processor in self._processors.values():
             await processor.initialize()
-            self._processors[record_type] = processor
 
         self.logger.info(
-            "processor_factory_initialized", processor_count=len(self._processors)
+            "processor_factory_initialized",
+            processor_count=len(self._processors),
+            processors=list(self._processors.keys()),
         )
 
     def get_processor(self, record_type: str) -> BaseClinicalProcessor:
