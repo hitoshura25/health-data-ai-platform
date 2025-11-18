@@ -9,18 +9,21 @@ on:
       - 'services/etl-narrative-engine/**'
       - 'infrastructure/**'
       - 'setup-all-services.sh'
+      - '.github/workflows/etl_narrative_engine_ci.yml'
   pull_request:
     branches: [ "main" ]
     paths:
       - 'services/etl-narrative-engine/**'
       - 'infrastructure/**'
       - 'setup-all-services.sh'
+      - '.github/workflows/etl_narrative_engine_ci.yml'
 
 permissions:
   contents: read
 
 jobs:
-  lint-and-test-etl:
+  lint-and-unit-tests:
+    name: Lint and Unit Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -51,8 +54,198 @@ jobs:
           cd services/etl-narrative-engine
           ruff check src/ tests/
 
-      - name: Run tests
+      - name: Run unit tests
         run: |
           source .venv/bin/activate
-          chmod +x run-tests.sh
-          ./run-tests.sh etl-narrative-engine -v -s
+          cd services/etl-narrative-engine
+          pytest tests/ -v -m "not integration" --tb=short
+
+  integration-tests:
+    name: Integration Tests with Docker
+    runs-on: ubuntu-latest
+
+    services:
+      rabbitmq:
+        image: rabbitmq:3.12-management-alpine
+        ports:
+          - 5672:5672
+          - 15672:15672
+        env:
+          RABBITMQ_DEFAULT_USER: guest
+          RABBITMQ_DEFAULT_PASS: guest
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Start MinIO
+        run: |
+          # Start MinIO container manually since service containers don't support command args
+          docker run -d \
+            --name minio \
+            -p 9000:9000 \
+            -p 9001:9001 \
+            -e "MINIO_ROOT_USER=minioadmin" \
+            -e "MINIO_ROOT_PASSWORD=minioadmin" \
+            minio/minio:latest server /data --console-address ":9001"
+
+          echo "MinIO container started"
+
+      - name: Generate .env files
+        run: |
+          chmod +x infrastructure/setup-secure-env.sh
+          chmod +x setup-all-services.sh
+          ./setup-all-services.sh
+
+      - name: Install dependencies
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
+          pip install -r services/etl-narrative-engine/requirements.txt
+
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for RabbitMQ..."
+          timeout 60 bash -c 'until curl -f http://localhost:15672 > /dev/null 2>&1; do echo "Waiting..."; sleep 2; done'
+
+          echo "Waiting for Redis..."
+          sudo apt-get update && sudo apt-get install -y redis-tools
+          timeout 60 bash -c 'until redis-cli -h localhost ping > /dev/null 2>&1; do echo "Waiting..."; sleep 2; done'
+
+          echo "Waiting for MinIO..."
+          timeout 60 bash -c 'until curl -f http://localhost:9000/minio/health/live > /dev/null 2>&1; do echo "Waiting..."; sleep 2; done'
+
+          echo "All services are ready!"
+
+      - name: Setup MinIO bucket
+        run: |
+          # Install MinIO client
+          wget -q https://dl.min.io/client/mc/release/linux-amd64/mc
+          chmod +x mc
+
+          # Configure MinIO client
+          ./mc alias set myminio http://localhost:9000 minioadmin minioadmin
+
+          # Create health-data bucket
+          ./mc mb myminio/health-data --ignore-existing
+
+          echo "MinIO bucket created successfully"
+
+      - name: Create RabbitMQ exchange and queue
+        run: |
+          # Create exchange
+          curl -u guest:guest -X PUT \
+            http://localhost:15672/api/exchanges/%2F/health_data_exchange \
+            -H "content-type: application/json" \
+            -d '{"type":"topic","durable":true}'
+
+          # Create queue
+          curl -u guest:guest -X PUT \
+            http://localhost:15672/api/queues/%2F/health_data_processing \
+            -H "content-type: application/json" \
+            -d '{"durable":true}'
+
+          # Bind queue to exchange
+          curl -u guest:guest -X POST \
+            http://localhost:15672/api/bindings/%2F/e/health_data_exchange/q/health_data_processing \
+            -H "content-type: application/json" \
+            -d '{"routing_key":"health.processing.#"}'
+
+          echo "RabbitMQ setup complete"
+
+      - name: Build ETL Docker image
+        run: |
+          cd services/etl-narrative-engine
+          docker build -t etl-narrative-engine:test .
+          echo "ETL Docker image built"
+
+      - name: Start ETL service
+        run: |
+          # Start ETL service container
+          docker run -d \
+            --name etl-narrative-engine \
+            --network host \
+            -e ETL_RABBITMQ_URL=amqp://guest:guest@localhost:5672/ \
+            -e ETL_S3_ENDPOINT_URL=http://localhost:9000 \
+            -e ETL_S3_ACCESS_KEY=minioadmin \
+            -e ETL_S3_SECRET_KEY=minioadmin \
+            -e ETL_S3_BUCKET_NAME=health-data \
+            -e ETL_DEDUPLICATION_REDIS_URL=redis://localhost:6379/2 \
+            -e ETL_ENABLE_METRICS=true \
+            -e ETL_METRICS_PORT=8004 \
+            -e ETL_LOG_LEVEL=INFO \
+            etl-narrative-engine:test
+
+          echo "ETL service container started"
+
+      - name: Wait for ETL service to be ready
+        run: |
+          echo "Waiting for ETL service health endpoint..."
+          timeout 60 bash -c 'until curl -f http://localhost:8004/health > /dev/null 2>&1; do echo "Waiting..."; sleep 2; done'
+
+          echo "ETL service is ready!"
+          curl -s http://localhost:8004/health | head -20
+
+      - name: Run integration tests
+        env:
+          ETL_RABBITMQ_URL: amqp://guest:guest@localhost:5672/
+          ETL_S3_ENDPOINT_URL: http://localhost:9000
+          ETL_S3_ACCESS_KEY: minioadmin
+          ETL_S3_SECRET_KEY: minioadmin
+          ETL_S3_BUCKET_NAME: health-data
+          ETL_DEDUPLICATION_REDIS_URL: redis://localhost:6379/2
+          ETL_ENABLE_METRICS: true
+          ETL_METRICS_PORT: 8004
+          ETL_LOG_LEVEL: DEBUG
+        run: |
+          source .venv/bin/activate
+          cd services/etl-narrative-engine
+          # Run ALL integration tests including deployment tests
+          pytest tests/ -v -m "integration" --tb=short --log-cli-level=INFO
+
+      - name: Display service logs on failure
+        if: failure()
+        run: |
+          echo "=== ETL Service Logs ==="
+          docker logs etl-narrative-engine --tail 100 || echo "Failed to get ETL logs"
+
+          echo ""
+          echo "=== ETL Service Status ==="
+          docker ps -a --filter name=etl-narrative-engine || echo "Failed to get container status"
+
+          echo ""
+          echo "=== RabbitMQ Status ==="
+          curl -s http://localhost:15672/api/overview -u guest:guest | head -20 || echo "Failed to get RabbitMQ status"
+
+          echo ""
+          echo "=== Redis Status ==="
+          redis-cli -h localhost info server || echo "Failed to get Redis info"
+
+          echo ""
+          echo "=== MinIO Status ==="
+          curl -s http://localhost:9000/minio/health/live || echo "Failed to get MinIO status"
+
+          echo ""
+          echo "=== MinIO Buckets ==="
+          ./mc ls myminio/ || echo "Failed to list buckets"

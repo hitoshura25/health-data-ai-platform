@@ -58,6 +58,19 @@ class ConsumerSettings(BaseSettings):
     quarantine_prefix: str = "quarantine"
     raw_data_prefix: str = "raw"
 
+    # Observability - Metrics
+    enable_metrics: bool = True
+    metrics_port: int = 8004
+
+    # Observability - Jaeger Tracing
+    enable_jaeger_tracing: bool = False
+    jaeger_otlp_endpoint: str = "http://localhost:4319"
+    jaeger_service_name: str = "etl-narrative-engine"
+
+    # Development mode
+    development_mode: bool = False
+    retry_delay_seconds: int = 5
+
     # Logging
     log_level: str = "INFO"
     log_json: bool = True

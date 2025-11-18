@@ -1,0 +1,137 @@
+# ETL Narrative Engine - Docker Compose Configuration
+#
+# This service processes health data from RabbitMQ, transforms it into
+# clinical narratives, and stores training data in MinIO.
+#
+# Dependencies:
+#   - RabbitMQ (message queue)
+#   - MinIO (S3-compatible object storage)
+#   - Redis (deduplication cache)
+#   - PostgreSQL (future: metadata storage)
+#
+# Usage:
+#   docker compose up -d etl-narrative-engine
+#   docker compose logs -f etl-narrative-engine
+
+services:
+  etl-narrative-engine:
+    build:
+      context: ../
+      dockerfile: Dockerfile
+    container_name: etl-narrative-engine
+    hostname: etl-narrative-engine
+
+    # Depends on infrastructure services
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      redis:
+        condition: service_started
+
+    # Environment configuration
+    environment:
+      # Service metadata
+      ETL_SERVICE_NAME: etl-narrative-engine
+      ETL_VERSION: v3.0
+      ETL_ENVIRONMENT: ${ETL_ENVIRONMENT:-development}
+
+      # RabbitMQ
+      ETL_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      ETL_QUEUE_NAME: health_data_processing
+      ETL_EXCHANGE_NAME: health_data_exchange
+      ETL_EXCHANGE_TYPE: topic
+      ETL_ROUTING_KEY_PATTERN: health.processing.#
+      ETL_DEAD_LETTER_QUEUE: health_data_dlq
+      ETL_PREFETCH_COUNT: 1
+
+      # MinIO / S3
+      ETL_S3_ENDPOINT_URL: http://minio:9000
+      ETL_S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      ETL_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      ETL_S3_BUCKET_NAME: health-data
+      ETL_S3_REGION: us-east-1
+      ETL_S3_USE_SSL: false
+
+      # Deduplication (use Redis for distributed setup)
+      ETL_DEDUPLICATION_STORE: redis
+      ETL_DEDUPLICATION_REDIS_URL: redis://redis:6379/2
+      ETL_DEDUPLICATION_RETENTION_HOURS: 168
+
+      # Processing limits
+      ETL_MAX_FILE_SIZE_MB: 100
+      ETL_PROCESSING_TIMEOUT_SECONDS: 300
+      ETL_DATA_QUALITY_THRESHOLD: 0.7
+
+      # Output paths
+      ETL_TRAINING_DATA_PREFIX: training
+      ETL_QUARANTINE_PREFIX: quarantine
+      ETL_RAW_DATA_PREFIX: raw
+
+      # Retry configuration
+      ETL_MAX_RETRIES: 3
+      ETL_RETRY_DELAYS: "[30, 300, 900]"
+
+      # Observability - Metrics
+      ETL_ENABLE_METRICS: true
+      ETL_METRICS_PORT: 8004
+
+      # Observability - Jaeger Tracing
+      ETL_ENABLE_JAEGER_TRACING: ${ETL_ENABLE_JAEGER_TRACING:-false}
+      ETL_JAEGER_OTLP_ENDPOINT: ${ETL_JAEGER_OTLP_ENDPOINT:-http://host.docker.internal:4319}
+      ETL_JAEGER_SERVICE_NAME: etl-narrative-engine
+
+      # Development mode
+      ETL_DEVELOPMENT_MODE: ${ETL_DEVELOPMENT_MODE:-true}
+      ETL_RETRY_DELAY_SECONDS: 5
+
+      # Logging
+      ETL_LOG_LEVEL: ${ETL_LOG_LEVEL:-INFO}
+      ETL_LOG_JSON: ${ETL_LOG_JSON:-false}
+
+    # Port mappings
+    ports:
+      - "8004:8004"  # Metrics and health check endpoint
+
+    # Volume mounts
+    volumes:
+      # Persistent deduplication DB (if using SQLite)
+      - etl-data:/data
+      # Sample Avro files for local development (optional)
+      # - ../../../docs/sample-avro-files:/sample-avro-files:ro
+
+    # Network configuration
+    networks:
+      - health-platform-net
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Resource limits (optional, uncomment for production)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '2'
+    #       memory: 2G
+    #     reservations:
+    #       cpus: '0.5'
+    #       memory: 512M
+
+# Volumes
+volumes:
+  etl-data:
+    driver: local
+
+# Networks (shared with other services)
+networks:
+  health-platform-net:
+    external: true

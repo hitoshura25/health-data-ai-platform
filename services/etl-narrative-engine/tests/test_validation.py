@@ -12,8 +12,7 @@ Tests cover:
 """
 
 import json
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
