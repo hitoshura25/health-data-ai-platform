@@ -18,21 +18,21 @@ from src.processors.sleep_processor import SleepProcessor
 from src.validation.data_quality import ValidationResult
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def sleep_processor():
     """Create a SleepProcessor instance"""
     processor = SleepProcessor()
     return processor
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 async def initialized_processor(sleep_processor):
     """Create and initialize a SleepProcessor"""
     await sleep_processor.initialize()
     return sleep_processor
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def validation_result():
     """Create a mock validation result"""
     return ValidationResult(
@@ -40,7 +40,7 @@ def validation_result():
     )
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def sample_sleep_record():
     """Create a sample sleep session record"""
     start_time = datetime(2024, 1, 15, 22, 0, 0, tzinfo=UTC)  # 10 PM
@@ -101,7 +101,7 @@ def sample_sleep_record():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def multiple_sleep_records():
     """Create multiple sleep records for testing patterns"""
     records = []
