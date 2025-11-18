@@ -19,6 +19,8 @@ import structlog
 from aio_pika import ExchangeType, IncomingMessage, Message, connect_robust
 
 from ..config.settings import settings
+from ..output.training_deduplicator import TrainingDeduplicator
+from ..output.training_formatter import TrainingDataFormatter
 from ..processors.processor_factory import MOCK_QUALITY_SCORE, ProcessorFactory
 from ..storage.avro_parser import AvroParser
 from ..storage.s3_client import S3Client
@@ -47,6 +49,8 @@ class ETLConsumer:
         self.processor_factory: ProcessorFactory | None = None
         self.s3_client: S3Client | None = None
         self.avro_parser: AvroParser | None = None
+        self.training_formatter: TrainingDataFormatter | None = None
+        self.training_deduplicator: TrainingDeduplicator | None = None
 
         # RabbitMQ connection (will be created in start_consuming)
         self._connection = None
@@ -103,6 +107,23 @@ class ETLConsumer:
 
         # Initialize Avro parser
         self.avro_parser = AvroParser()
+
+        # Initialize Module 4: Training data output
+        if self.settings.enable_training_output:
+            self.training_formatter = TrainingDataFormatter(
+                s3_client=self.s3_client.client,  # Pass boto3 client
+                bucket_name=self.settings.s3_bucket_name,
+                training_prefix=self.settings.training_data_prefix,
+                include_metadata=self.settings.include_training_metadata
+            )
+
+            self.training_deduplicator = TrainingDeduplicator(
+                dedup_store=self.dedup_store
+            )
+
+            self.logger.info("training_output_enabled")
+        else:
+            self.logger.info("training_output_disabled")
 
         self.logger.info("etl_consumer_initialized")
 
@@ -349,7 +370,13 @@ class ETLConsumer:
             quality_score=result.quality_score
         )
 
-        # Module 4 will handle training data output
+        # 5. Generate training data output (Module 4)
+        if self.settings.enable_training_output and self.training_formatter:
+            await self._generate_training_output(
+                narrative=result.narrative,
+                message_data=message_data,
+                result=result
+            )
 
     async def _publish_delayed_retry(
         self, message_data: dict[str, Any], delay_seconds: int
@@ -408,6 +435,91 @@ class ETLConsumer:
             # Re-raise to let caller handle the failure
             # Caller will move message to DLQ to avoid infinite retry loops
             raise
+
+    async def _generate_training_output(
+        self,
+        narrative: str,
+        message_data: dict[str, Any],
+        result: Any
+    ) -> None:
+        """
+        Generate training data output (Module 4).
+
+        Args:
+            narrative: Clinical narrative from processor
+            message_data: Original message metadata
+            result: ProcessingResult from processor
+        """
+        try:
+            # Check for duplicates first
+            content_hash = self.training_formatter.generate_content_hash(
+                narrative,
+                message_data['key']
+            )
+
+            if await self.training_deduplicator.is_duplicate(content_hash):
+                self.logger.info(
+                    "skipping_duplicate_training_example",
+                    record_type=message_data.get('record_type'),
+                    content_hash=content_hash[:16]
+                )
+                return
+
+            # Prepare metadata for training output
+            source_metadata = {
+                'bucket': message_data.get('bucket'),
+                'key': message_data.get('key'),
+                'record_type': message_data.get('record_type'),
+                'user_id': message_data.get('user_id'),
+                'correlation_id': message_data.get('correlation_id'),
+            }
+
+            processing_metadata = {
+                'duration': result.processing_time_seconds,
+                'record_count': result.records_processed,
+                'quality_score': result.quality_score,
+                'clinical_insights': result.clinical_insights,
+            }
+
+            # Generate training output
+            success = await self.training_formatter.generate_training_output(
+                narrative=narrative,
+                source_metadata=source_metadata,
+                processing_metadata=processing_metadata
+            )
+
+            if success:
+                # Mark as processed to prevent duplicates
+                await self.training_deduplicator.mark_as_processed(
+                    content_hash=content_hash,
+                    metadata={
+                        'record_type': message_data.get('record_type'),
+                        'correlation_id': message_data.get('correlation_id'),
+                        'user_id': message_data.get('user_id'),
+                        'source_key': message_data.get('key'),
+                        'source_bucket': message_data.get('bucket'),
+                    }
+                )
+
+                self.logger.info(
+                    "training_output_generated",
+                    record_type=message_data.get('record_type'),
+                    content_hash=content_hash[:16]
+                )
+            else:
+                self.logger.warning(
+                    "training_output_failed",
+                    record_type=message_data.get('record_type')
+                )
+
+        except Exception as e:
+            # Log error but don't fail the message processing
+            # Training data generation is not critical to message processing
+            self.logger.error(
+                "training_output_error",
+                error=str(e),
+                record_type=message_data.get('record_type')
+            )
 
     def _parse_message_body(self, message: IncomingMessage) -> dict[str, Any]:
         """
