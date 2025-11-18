@@ -5,6 +5,7 @@ Provides HTTP endpoints for Prometheus metrics and health checks.
 """
 
 import asyncio
+import contextlib
 from datetime import UTC, datetime
 from typing import Any
 
@@ -142,5 +143,7 @@ class MetricsServer:
                 except TimeoutError:
                     logger.warning("metrics_server_stop_timeout")
                     self.server_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await self.server_task
 
             logger.info("metrics_server_stopped")

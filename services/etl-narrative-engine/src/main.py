@@ -86,6 +86,7 @@ async def main():
         # Cancel consumer task
         if not consumer_task.done():
             consumer_task.cancel()
+            logger.debug("consumer_task_cancelled_for_shutdown")
             with contextlib.suppress(asyncio.CancelledError):
                 await consumer_task
 
