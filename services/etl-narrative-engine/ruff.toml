@@ -37,10 +37,6 @@ exclude = [
     ".ruff_cache",
 ]
 
-[lint.per-file-ignores]
-# Test files can have unused imports and assertions
-"tests/**/*.py" = ["F401", "F841"]
-
 [lint.isort]
 # Import sorting configuration
 known-first-party = ["src"]
