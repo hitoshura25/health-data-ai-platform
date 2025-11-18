@@ -77,3 +77,24 @@ def sample_avro_records():
             }
         }
     ]
+
+
+@pytest.fixture
+async def fake_redis():
+    """
+    Provide fake Redis client for unit testing.
+
+    This creates an in-memory Redis client that behaves like real Redis
+    without requiring an actual Redis instance.
+    """
+    import fakeredis.aioredis
+
+    redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    yield redis
+    await redis.aclose()
+
+
+@pytest.fixture
+def redis_test_url():
+    """Provide Redis connection URL for testing"""
+    return "redis://localhost:6379/15"  # Use DB 15 for tests
