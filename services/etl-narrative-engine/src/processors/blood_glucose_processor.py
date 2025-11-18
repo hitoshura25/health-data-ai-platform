@@ -264,8 +264,9 @@ class BloodGlucoseProcessor(BaseClinicalProcessor):
             'trends': None
         }
 
-        # Identify hypoglycemic events
+        # Identify hypoglycemic and hyperglycemic events (single loop optimization)
         for classification in classifications:
+            # Check for hypoglycemic events
             if (classification['severity'] in ['warning', 'critical'] and
                     classification['category'] in ['hypoglycemia', 'severe_hypoglycemia']):
                 patterns['hypoglycemic_events'].append({
@@ -273,38 +274,35 @@ class BloodGlucoseProcessor(BaseClinicalProcessor):
                     'glucose': classification['glucose_mg_dl'],
                     'severity': classification['category']
                 })
-
-        # Identify hyperglycemic events
-        for classification in classifications:
-            if classification['category'] in ['hyperglycemia', 'severe_hyperglycemia']:
+            # Check for hyperglycemic events
+            elif classification['category'] in ['hyperglycemia', 'severe_hyperglycemia']:
                 patterns['hyperglycemic_events'].append({
                     'timestamp': classification['timestamp'],
                     'glucose': classification['glucose_mg_dl'],
                     'severity': classification['category']
                 })
 
-        # Identify fasting readings (early morning)
+        # Identify time-based patterns (single loop optimization)
         for reading in readings:
             hour = reading['timestamp'].hour
-            if self.FASTING_START_HOUR <= hour <= self.FASTING_END_HOUR:
+
+            # Fasting readings (6 AM to 9:59 AM, before breakfast)
+            if self.FASTING_START_HOUR <= hour < self.FASTING_END_HOUR:
                 patterns['fasting_readings'].append({
                     'timestamp': reading['timestamp'],
                     'glucose': reading['glucose_mg_dl']
                 })
 
-        # Identify post-meal readings (using relation_to_meal metadata)
-        for reading in readings:
-            if reading.get('relation_to_meal') in ['AFTER_MEAL', 'POSTPRANDIAL']:
-                patterns['post_meal_readings'].append({
+            # Overnight readings (10 PM to 5:59 AM)
+            if hour >= self.OVERNIGHT_START_HOUR or hour < self.OVERNIGHT_END_HOUR:
+                patterns['overnight_readings'].append({
                     'timestamp': reading['timestamp'],
                     'glucose': reading['glucose_mg_dl']
                 })
 
-        # Identify overnight readings
-        for reading in readings:
-            hour = reading['timestamp'].hour
-            if hour >= self.OVERNIGHT_START_HOUR or hour < self.OVERNIGHT_END_HOUR:
-                patterns['overnight_readings'].append({
+            # Post-meal readings (using relation_to_meal metadata)
+            if reading.get('relation_to_meal') in ['AFTER_MEAL', 'POSTPRANDIAL']:
+                patterns['post_meal_readings'].append({
                     'timestamp': reading['timestamp'],
                     'glucose': reading['glucose_mg_dl']
                 })
@@ -330,6 +328,10 @@ class BloodGlucoseProcessor(BaseClinicalProcessor):
 
         first_mean = statistics.mean([r['glucose_mg_dl'] for r in first_half])
         second_mean = statistics.mean([r['glucose_mg_dl'] for r in second_half])
+
+        # Guard against division by zero (should never happen with valid glucose data)
+        if first_mean == 0:
+            return None
 
         # Calculate change percentage
         change_percent = ((second_mean - first_mean) / first_mean) * 100
@@ -371,8 +373,8 @@ class BloodGlucoseProcessor(BaseClinicalProcessor):
         # Mean glucose
         mean_glucose = statistics.mean(glucose_values)
 
-        # Standard deviation
-        std_dev = statistics.stdev(glucose_values) if len(glucose_values) > 1 else 0
+        # Standard deviation (guaranteed >= 2 values from guard clause above)
+        std_dev = statistics.stdev(glucose_values)
 
         # Coefficient of Variation (CV)
         cv = (std_dev / mean_glucose * 100) if mean_glucose > 0 else 0
@@ -465,7 +467,8 @@ class BloodGlucoseProcessor(BaseClinicalProcessor):
                     f"{len(severe_hyper)} severe hyperglycemic reading(s) detected "
                     f"(>180 mg/dL). Medication adjustment may be needed."
                 )
-            elif mild_hyper:
+
+            if mild_hyper:
                 narrative_parts.append(
                     f"{len(mild_hyper)} elevated glucose reading(s) (140-180 mg/dL) observed."
                 )
@@ -511,21 +514,32 @@ class BloodGlucoseProcessor(BaseClinicalProcessor):
         if 'mean_glucose' not in metrics:
             return f"Blood glucose data shows {len(readings)} readings."
 
-        # Calculate time span
+        mean_glucose = metrics['mean_glucose']
+
+        # Calculate time span with more precision
         if len(readings) >= 2:
             first_time = readings[0]['timestamp']
             last_time = readings[-1]['timestamp']
             time_span = last_time - first_time
-            days = max(1, time_span.days)
+            total_hours = time_span.total_seconds() / 3600
+
+            # Use appropriate time unit based on duration
+            if total_hours < 24:
+                # Less than a day: report in hours
+                hours = int(total_hours)
+                return (
+                    f"Blood glucose data shows {len(readings)} readings over a "
+                    f"{hours}-hour period with mean glucose of {mean_glucose} mg/dL."
+                )
+            else:
+                # One or more days: report in days (round up for partial days)
+                days = max(1, int(total_hours / 24) + (1 if total_hours % 24 > 0 else 0))
+                return (
+                    f"Blood glucose data shows {len(readings)} readings over a "
+                    f"{days}-day period with mean glucose of {mean_glucose} mg/dL."
+                )
         else:
-            days = 1
-
-        mean_glucose = metrics['mean_glucose']
-
-        return (
-            f"Blood glucose data shows {len(readings)} readings over a {days}-day period "
-            f"with mean glucose of {mean_glucose} mg/dL."
-        )
+            return f"Blood glucose data shows {len(readings)} reading with mean glucose of {mean_glucose} mg/dL."
 
     def _generate_recommendations(
         self,
