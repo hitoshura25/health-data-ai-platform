@@ -14,7 +14,7 @@ For local testing: docker compose up -d etl-narrative-engine
 import asyncio
 import json
 import uuid
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import aio_pika
