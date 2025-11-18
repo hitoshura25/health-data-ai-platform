@@ -22,6 +22,10 @@ logger = structlog.get_logger(__name__)
 class HeartRateProcessor(BaseClinicalProcessor):
     """Clinical processor for heart rate data"""
 
+    # Default maximum heart rate for zone calculations when user age is unknown
+    # Based on typical adult max HR; ideally would use 220 - age formula
+    DEFAULT_MAX_HR = 180
+
     async def initialize(self) -> None:
         """Initialize heart rate processor with clinical ranges"""
         self.ranges = {
@@ -174,28 +178,31 @@ class HeartRateProcessor(BaseClinicalProcessor):
         """Classify each heart rate sample"""
         classifications = []
 
+        # Map categories to severity levels
+        severity_map = {
+            "severe_bradycardia": "critical",
+            "bradycardia": "warning",  # Can be normal for athletes
+            "normal_resting": "normal",
+            "elevated": "info",
+            "tachycardia": "warning",
+            "severe_tachycardia": "critical",
+        }
+
         for sample in samples:
             bpm = sample["bpm"]
 
-            # Determine classification
-            if bpm < 40:
-                category = "severe_bradycardia"
-                severity = "critical"
-            elif bpm < 60:
-                category = "bradycardia"
-                severity = "warning"  # Can be normal for athletes
-            elif bpm <= 100:
-                category = "normal_resting"
-                severity = "normal"
-            elif bpm <= 120:
-                category = "elevated"
-                severity = "info"
-            elif bpm <= 150:
-                category = "tachycardia"
-                severity = "warning"
-            else:
-                category = "severe_tachycardia"
-                severity = "critical"
+            # Determine classification based on configured ranges
+            category = None
+            for range_name, (min_bpm, max_bpm) in self.ranges.items():
+                if min_bpm <= bpm < max_bpm:
+                    category = range_name
+                    break
+
+            # Fallback for values outside all ranges (shouldn't happen with proper ranges)
+            if category is None:
+                category = "severe_tachycardia" if bpm >= 220 else "severe_bradycardia"
+
+            severity = severity_map.get(category, "warning")
 
             classifications.append(
                 {
@@ -356,10 +363,10 @@ class HeartRateProcessor(BaseClinicalProcessor):
         resting_hr = patterns.get("resting_heart_rate", min_hr)
 
         # Time in zones (if we know approximate max HR)
-        # Assume average adult, max HR ≈ 180 for calculations
-        assumed_max_hr = 180
-
-        zone_distribution = self._calculate_zone_distribution(hr_values, assumed_max_hr)
+        # Use default max HR for calculations
+        zone_distribution = self._calculate_zone_distribution(
+            hr_values, self.DEFAULT_MAX_HR
+        )
 
         # Heart rate variability (SDNN - standard deviation of normal-to-normal)
         # This is a simple approximation, not true HRV
