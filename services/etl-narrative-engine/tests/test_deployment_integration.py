@@ -14,7 +14,7 @@ For local testing: docker compose up -d etl-narrative-engine
 import asyncio
 import json
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, timezone
 from typing import Any
 
 import aio_pika
@@ -143,14 +143,32 @@ async def test_sample_data_processing():
         'record_type': 'BloodGlucoseRecord',
         'user_id': f'test_user_{correlation_id}',
         'correlation_id': correlation_id,
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(UTC).isoformat(),
     }
 
     # Publish message to RabbitMQ
     await publish_message(message)
 
-    # Wait for processing (with timeout)
-    await asyncio.sleep(10)
+    # Wait for processing with retry loop (max 30 seconds)
+    max_retries = 15
+    retry_delay = 2
+    for attempt in range(max_retries):
+        try:
+            # Check if service is still healthy and processing
+            response = requests.get("http://localhost:8004/health", timeout=5)
+            if response.status_code == 200:
+                health = response.json()
+                # If service is healthy, we can check metrics
+                if health['status'] in ['healthy', 'degraded']:
+                    await asyncio.sleep(retry_delay)
+                    continue
+            break
+        except Exception:
+            # Service may be restarting, wait and retry
+            if attempt < max_retries - 1:
+                await asyncio.sleep(retry_delay)
+            else:
+                raise
 
     # Note: Actual file processing verification would require
     # the sample file to be uploaded and the ETL service to be running

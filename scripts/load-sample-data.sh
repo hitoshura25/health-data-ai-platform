@@ -54,7 +54,7 @@ FAILED=0
 for file in "$SAMPLE_DIR"/*.avro; do
     filename=$(basename "$file")
     # Extract record type from filename (e.g., BloodGlucoseRecord from BloodGlucoseRecord_1758407139312.avro)
-    record_type=$(echo "$filename" | sed 's/_[0-9]*.avro//')
+    record_type=$(echo "$filename" | sed 's/_[0-9]\+\.avro//')
 
     echo "📤 Processing: $filename (type: $record_type)"
 

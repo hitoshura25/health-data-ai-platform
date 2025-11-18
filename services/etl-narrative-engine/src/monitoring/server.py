@@ -5,7 +5,7 @@ Provides HTTP endpoints for Prometheus metrics and health checks.
 """
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -31,7 +31,7 @@ class MetricsServer:
         )
         self.server: uvicorn.Server | None = None
         self.server_task: asyncio.Task | None = None
-        self.start_time = datetime.utcnow()
+        self.start_time = datetime.now(UTC)
 
         # Health check dependencies status
         self.rabbitmq_healthy = False
@@ -47,7 +47,7 @@ class MetricsServer:
         async def health_check() -> dict[str, Any]:
             """Health check endpoint"""
             is_healthy = self.rabbitmq_healthy and self.s3_healthy
-            uptime_seconds = (datetime.utcnow() - self.start_time).total_seconds()
+            uptime_seconds = (datetime.now(UTC) - self.start_time).total_seconds()
 
             return {
                 "status": "healthy" if is_healthy else "degraded",
@@ -59,7 +59,7 @@ class MetricsServer:
                     "rabbitmq": "connected" if self.rabbitmq_healthy else "disconnected",
                     "s3": "connected" if self.s3_healthy else "disconnected"
                 },
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(UTC).isoformat()
             }
 
         @self.app.get("/metrics", response_class=PlainTextResponse)
@@ -89,7 +89,7 @@ class MetricsServer:
             """Liveness check for Kubernetes"""
             return {
                 "alive": True,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(UTC).isoformat()
             }
 
     def update_rabbitmq_status(self, healthy: bool):
