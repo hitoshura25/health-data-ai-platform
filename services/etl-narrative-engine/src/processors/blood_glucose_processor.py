@@ -8,7 +8,7 @@ structured clinical insights for AI model training.
 """
 
 import statistics
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -80,7 +80,7 @@ class BloodGlucoseProcessor(BaseClinicalProcessor):
         Returns:
             ProcessingResult with narrative and clinical insights
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
 
         try:
             # Extract glucose readings
@@ -112,7 +112,7 @@ class BloodGlucoseProcessor(BaseClinicalProcessor):
                 classifications, patterns, metrics
             )
 
-            processing_time = (datetime.utcnow() - start_time).total_seconds()
+            processing_time = (datetime.now(UTC) - start_time).total_seconds()
 
             self.logger.info(
                 "blood_glucose_processing_complete",
@@ -132,7 +132,7 @@ class BloodGlucoseProcessor(BaseClinicalProcessor):
             )
 
         except Exception as e:
-            processing_time = (datetime.utcnow() - start_time).total_seconds()
+            processing_time = (datetime.now(UTC) - start_time).total_seconds()
             self.logger.error(
                 "blood_glucose_processing_failed",
                 error=str(e),
@@ -183,7 +183,7 @@ class BloodGlucoseProcessor(BaseClinicalProcessor):
                 if glucose_mg_dl is not None and epoch_millis is not None:
                     readings.append({
                         'glucose_mg_dl': glucose_mg_dl,
-                        'timestamp': datetime.fromtimestamp(epoch_millis / 1000),
+                        'timestamp': datetime.fromtimestamp(epoch_millis / 1000, tz=UTC),
                         'epoch_millis': epoch_millis,
                         'relation_to_meal': relation_to_meal,
                         'specimen_source': specimen_source,
