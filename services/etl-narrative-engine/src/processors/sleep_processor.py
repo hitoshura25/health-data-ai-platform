@@ -8,7 +8,7 @@ model training.
 """
 
 import statistics
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -58,7 +58,7 @@ class SleepProcessor(BaseClinicalProcessor):
         Returns:
             ProcessingResult with narrative and clinical insights
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
 
         try:
             # Extract sleep sessions
@@ -88,7 +88,7 @@ class SleepProcessor(BaseClinicalProcessor):
                 analyzed_sessions, patterns, metrics
             )
 
-            processing_time = (datetime.utcnow() - start_time).total_seconds()
+            processing_time = (datetime.now(UTC) - start_time).total_seconds()
 
             return ProcessingResult(
                 success=True,
@@ -100,7 +100,7 @@ class SleepProcessor(BaseClinicalProcessor):
             )
 
         except Exception as e:
-            processing_time = (datetime.utcnow() - start_time).total_seconds()
+            processing_time = (datetime.now(UTC) - start_time).total_seconds()
             self.logger.error(
                 "sleep_processing_failed",
                 error=str(e),
@@ -215,13 +215,22 @@ class SleepProcessor(BaseClinicalProcessor):
             bedtime_hour = session["start_time"].hour
             waketime_hour = session["end_time"].hour
 
+            # Bedtime quality assessment
+            # Optimal: 9 PM - 11 PM (21-23)
+            # Acceptable: 8 PM - 9 PM (20) or after 11 PM to 1 AM (0)
+            # Poor: All other times
             if 21 <= bedtime_hour <= 23:
                 analysis["bedtime_quality"] = "optimal"
-            elif 20 <= bedtime_hour < 21 or 23 < bedtime_hour <= 24:
+            elif bedtime_hour == 20 or bedtime_hour == 0:
                 analysis["bedtime_quality"] = "acceptable"
+            elif 1 <= bedtime_hour <= 4:
+                # Very late bedtimes (1 AM - 4 AM) are poor
+                analysis["bedtime_quality"] = "poor"
             else:
+                # Other times (5 AM - 7 PM) are poor
                 analysis["bedtime_quality"] = "poor"
 
+            # Wake time quality assessment
             if 6 <= waketime_hour <= 8:
                 analysis["waketime_quality"] = "optimal"
             elif 5 <= waketime_hour < 6 or 8 < waketime_hour <= 9:
@@ -235,6 +244,9 @@ class SleepProcessor(BaseClinicalProcessor):
 
     def _analyze_sleep_stages(self, stages: list[dict[str, Any]]) -> dict[str, Any]:
         """Analyze sleep stage distribution"""
+
+        # Define valid stage types
+        valid_stages = {"AWAKE", "LIGHT", "DEEP", "REM", "UNKNOWN"}
 
         stage_durations = {
             "AWAKE": 0,
@@ -253,10 +265,17 @@ class SleepProcessor(BaseClinicalProcessor):
                 end_epoch = stage.get("endTime", {}).get("epochMillis")
 
                 if start_epoch and end_epoch and stage_type:
+                    # Map unexpected stage types to UNKNOWN
+                    if stage_type not in valid_stages:
+                        self.logger.warning(
+                            "unexpected_sleep_stage",
+                            stage_type=stage_type,
+                            mapped_to="UNKNOWN",
+                        )
+                        stage_type = "UNKNOWN"
+
                     duration_hours = (end_epoch - start_epoch) / (1000 * 3600)
-                    stage_durations[stage_type] = (
-                        stage_durations.get(stage_type, 0) + duration_hours
-                    )
+                    stage_durations[stage_type] += duration_hours
                     total_duration += duration_hours
 
             except (KeyError, TypeError):
@@ -381,11 +400,16 @@ class SleepProcessor(BaseClinicalProcessor):
         if len(analyzed_sessions) < 7:
             return patterns
 
-        # Bedtime consistency
-        bedtimes = [
-            s["start_time"].hour + s["start_time"].minute / 60
-            for s in analyzed_sessions
-        ]
+        # Bedtime consistency (normalize for midnight crossing)
+        # Early morning hours (0-5) are treated as 24+ for consistency calculation
+        bedtimes = []
+        for s in analyzed_sessions:
+            bedtime_decimal = s["start_time"].hour + s["start_time"].minute / 60
+            # Normalize early morning bedtimes (0-5 AM) as 24-29 hours
+            if bedtime_decimal < 6:
+                bedtime_decimal += 24
+            bedtimes.append(bedtime_decimal)
+
         bedtime_std = statistics.stdev(bedtimes) if len(bedtimes) > 1 else 0
 
         if bedtime_std < 0.5:  # Within 30 minutes
@@ -506,11 +530,21 @@ class SleepProcessor(BaseClinicalProcessor):
         if weekend_pattern:
             diff = weekend_pattern["difference_hours"]
             if diff > 1.0:
-                weekend_text = (
-                    f"Weekend sleep is {diff} hours longer than weekday sleep, "
-                    f"suggesting weekday sleep debt. Aim for consistent sleep "
-                    f"throughout the week."
-                )
+                weekday_avg = weekend_pattern["weekday_avg"]
+                weekend_avg = weekend_pattern["weekend_avg"]
+
+                if weekend_avg > weekday_avg:
+                    weekend_text = (
+                        f"Weekend sleep is {diff} hours longer than weekday sleep "
+                        f"({weekend_avg} vs {weekday_avg} hours), suggesting weekday "
+                        f"sleep debt. Aim for consistent sleep throughout the week."
+                    )
+                else:
+                    weekend_text = (
+                        f"Weekday sleep is {diff} hours longer than weekend sleep "
+                        f"({weekday_avg} vs {weekend_avg} hours). Consider maintaining "
+                        f"consistent sleep duration throughout the week."
+                    )
                 narrative_parts.append(weekend_text)
 
         # Recommendations
