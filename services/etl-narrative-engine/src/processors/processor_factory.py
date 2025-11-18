@@ -7,6 +7,7 @@ For Module 1, this provides stub/mock processors. Real processors come from Modu
 import structlog
 
 from .base_processor import BaseClinicalProcessor, ProcessingResult
+from .blood_glucose_processor import BloodGlucoseProcessor
 
 logger = structlog.get_logger()
 
@@ -93,12 +94,18 @@ class ProcessorFactory:
         Initialize all processors.
 
         For Module 1, this creates mock processors for each type.
-        Module 3 will replace with real clinical processors.
+        Module 3 processors (like BloodGlucoseProcessor) replace mocks.
         """
         self.logger.info("initializing_processor_factory")
 
         for record_type in self.SUPPORTED_TYPES:
-            processor = MockProcessor(record_type)
+            # Use real processor for BloodGlucoseRecord (Module 3a)
+            if record_type == "BloodGlucoseRecord":
+                processor = BloodGlucoseProcessor()
+            else:
+                # Mock processors for types not yet implemented
+                processor = MockProcessor(record_type)
+
             await processor.initialize()
             self._processors[record_type] = processor
 

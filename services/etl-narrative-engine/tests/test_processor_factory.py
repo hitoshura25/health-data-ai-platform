@@ -6,7 +6,8 @@ Tests Module 1 processor routing and mock processor functionality.
 
 import pytest
 
-from src.processors.base_processor import ProcessingResult
+from src.processors.base_processor import BaseClinicalProcessor, ProcessingResult
+from src.processors.blood_glucose_processor import BloodGlucoseProcessor
 from src.processors.processor_factory import MockProcessor, ProcessorFactory
 
 
@@ -24,7 +25,13 @@ async def test_processor_factory_initialization():
     for record_type in factory.SUPPORTED_TYPES:
         processor = factory.get_processor(record_type)
         assert processor is not None
-        assert isinstance(processor, MockProcessor)
+        # All processors should inherit from BaseClinicalProcessor
+        assert isinstance(processor, BaseClinicalProcessor)
+        # BloodGlucoseRecord uses real processor, others use mock
+        if record_type == "BloodGlucoseRecord":
+            assert isinstance(processor, BloodGlucoseProcessor)
+        else:
+            assert isinstance(processor, MockProcessor)
 
     await factory.cleanup()
 
@@ -36,14 +43,15 @@ async def test_processor_factory_get_processor():
     factory = ProcessorFactory()
     await factory.initialize()
 
-    # Test blood glucose processor
+    # Test blood glucose processor (real processor, Module 3a)
     processor = factory.get_processor("BloodGlucoseRecord")
     assert processor is not None
-    assert processor.record_type == "BloodGlucoseRecord"
+    assert isinstance(processor, BloodGlucoseProcessor)
 
-    # Test heart rate processor
+    # Test heart rate processor (mock processor)
     processor = factory.get_processor("HeartRateRecord")
     assert processor is not None
+    assert isinstance(processor, MockProcessor)
     assert processor.record_type == "HeartRateRecord"
 
     await factory.cleanup()
