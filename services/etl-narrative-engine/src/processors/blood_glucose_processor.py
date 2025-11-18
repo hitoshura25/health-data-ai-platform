@@ -32,6 +32,12 @@ class BloodGlucoseProcessor(BaseClinicalProcessor):
     - Extract structured clinical insights
     """
 
+    # Time-of-day pattern detection constants (hours in 24-hour format)
+    FASTING_START_HOUR = 6  # 6 AM
+    FASTING_END_HOUR = 10   # 10 AM
+    OVERNIGHT_START_HOUR = 22  # 10 PM
+    OVERNIGHT_END_HOUR = 6     # 6 AM (exclusive)
+
     async def initialize(self) -> None:
         """Initialize glucose processor with clinical ranges."""
         # Clinical ranges based on American Diabetes Association guidelines
@@ -277,10 +283,10 @@ class BloodGlucoseProcessor(BaseClinicalProcessor):
                     'severity': classification['category']
                 })
 
-        # Identify fasting readings (early morning, 6-10 AM)
+        # Identify fasting readings (early morning)
         for reading in readings:
             hour = reading['timestamp'].hour
-            if 6 <= hour <= 10:
+            if self.FASTING_START_HOUR <= hour <= self.FASTING_END_HOUR:
                 patterns['fasting_readings'].append({
                     'timestamp': reading['timestamp'],
                     'glucose': reading['glucose_mg_dl']
@@ -294,10 +300,10 @@ class BloodGlucoseProcessor(BaseClinicalProcessor):
                     'glucose': reading['glucose_mg_dl']
                 })
 
-        # Identify overnight readings (10 PM - 6 AM)
+        # Identify overnight readings
         for reading in readings:
             hour = reading['timestamp'].hour
-            if hour >= 22 or hour <= 6:
+            if hour >= self.OVERNIGHT_START_HOUR or hour < self.OVERNIGHT_END_HOUR:
                 patterns['overnight_readings'].append({
                     'timestamp': reading['timestamp'],
                     'glucose': reading['glucose_mg_dl']
