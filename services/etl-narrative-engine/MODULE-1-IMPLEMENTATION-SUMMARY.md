@@ -222,7 +222,7 @@ These features are **intentionally NOT implemented** per Module 1 scope:
 ## 📊 Test Coverage Summary
 
 **Total Tests**: 73 collected (67 unit + 6 integration)
-- ✅ **Deduplication**: 11 tests (5 SQLite + 6 Redis) ← UPDATED 2025-11-18
+- ✅ **Deduplication**: 11 tests (4 SQLite + 6 Redis + 1 dataclass) ← UPDATED 2025-11-18
 - ✅ **Error Recovery**: 11 tests (comprehensive)
 - ✅ **Processor Factory**: 7 tests (full coverage)
 - ✅ **Integration**: 6 deployment tests

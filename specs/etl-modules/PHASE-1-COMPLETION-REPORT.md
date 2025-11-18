@@ -28,7 +28,7 @@ Phase 1 (Foundation Modules 1, 2, and 6) is **complete and verified**. All criti
 | Requirement | Status | Evidence |
 |-------------|--------|----------|
 | RabbitMQ message consumption | ✅ VERIFIED | `src/consumer/etl_consumer.py` (454 lines) |
-| Deduplication (SQLite + Redis) | ✅ VERIFIED | 11/11 tests passing (5 SQLite + 6 Redis), both implementations working |
+| Deduplication (SQLite + Redis) | ✅ VERIFIED | 11/11 tests passing (4 SQLite + 6 Redis + 1 dataclass), both implementations working |
 | Error classification & retry | ✅ VERIFIED | 11/11 tests passing, 95% coverage |
 | S3 file download | ✅ IMPLEMENTED | `src/storage/s3_client.py` working |
 | Avro parsing | ✅ IMPLEMENTED | `src/storage/avro_parser.py` working |
@@ -84,7 +84,7 @@ Phase 1 (Foundation Modules 1, 2, and 6) is **complete and verified**. All criti
 ### Unit Tests: ✅ 67/67 PASSED (100%)
 
 **Module 1 Tests**: 29/29 PASSED (upgraded from 23)
-- Deduplication: 11/11 (5 SQLite + 6 Redis) ← NEW
+- Deduplication: 11/11 (4 SQLite + 6 Redis + 1 dataclass) ← NEW
 - Error Recovery: 11/11 (95% coverage)
 - Processor Factory: 7/7 (95% coverage)
 
