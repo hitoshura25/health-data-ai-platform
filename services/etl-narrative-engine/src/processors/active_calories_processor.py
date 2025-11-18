@@ -9,6 +9,7 @@ import statistics
 from datetime import UTC, datetime
 from typing import Any
 
+from ..validation.data_quality import ValidationResult
 from .base_processor import BaseClinicalProcessor, ProcessingResult
 
 
@@ -25,18 +26,21 @@ class ActiveCaloriesProcessor(BaseClinicalProcessor):
         self,
         records: list[dict[str, Any]],
         message_data: dict[str, Any],
-        validation_result: Any
+        validation_result: ValidationResult
     ) -> ProcessingResult:
         """Process active calories records"""
+        start_time = datetime.now(UTC)
 
         try:
             # Extract calorie records
             calorie_records = self._extract_calorie_records(records)
 
             if not calorie_records:
+                processing_time = (datetime.now(UTC) - start_time).total_seconds()
                 return ProcessingResult(
                     success=False,
-                    error_message="No valid calorie records found"
+                    error_message="No valid calorie records found",
+                    processing_time_seconds=processing_time
                 )
 
             # Aggregate by day
@@ -56,19 +60,24 @@ class ActiveCaloriesProcessor(BaseClinicalProcessor):
                 'metrics': metrics,
             }
 
+            processing_time = (datetime.now(UTC) - start_time).total_seconds()
+
             return ProcessingResult(
                 success=True,
                 narrative=narrative,
-                processing_time_seconds=0.5,
+                processing_time_seconds=processing_time,
                 records_processed=len(records),
+                quality_score=validation_result.quality_score,
                 clinical_insights=clinical_insights
             )
 
         except Exception as e:
+            processing_time = (datetime.now(UTC) - start_time).total_seconds()
             self.logger.error("calories_processing_failed", error=str(e))
             return ProcessingResult(
                 success=False,
-                error_message=f"Calories processing failed: {str(e)}"
+                error_message=f"Calories processing failed: {str(e)}",
+                processing_time_seconds=processing_time
             )
 
     def _extract_calorie_records(

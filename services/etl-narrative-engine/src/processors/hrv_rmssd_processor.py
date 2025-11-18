@@ -8,6 +8,7 @@ import statistics
 from datetime import UTC, datetime
 from typing import Any
 
+from ..validation.data_quality import ValidationResult
 from .base_processor import BaseClinicalProcessor, ProcessingResult
 
 
@@ -23,18 +24,21 @@ class HRVRmssdProcessor(BaseClinicalProcessor):
         self,
         records: list[dict[str, Any]],
         message_data: dict[str, Any],
-        validation_result: Any
+        validation_result: ValidationResult
     ) -> ProcessingResult:
         """Process HRV RMSSD records"""
+        start_time = datetime.now(UTC)
 
         try:
             # Extract HRV readings
             hrv_readings = self._extract_hrv_readings(records)
 
             if not hrv_readings:
+                processing_time = (datetime.now(UTC) - start_time).total_seconds()
                 return ProcessingResult(
                     success=False,
-                    error_message="No valid HRV readings found"
+                    error_message="No valid HRV readings found",
+                    processing_time_seconds=processing_time
                 )
 
             # Calculate metrics
@@ -54,19 +58,24 @@ class HRVRmssdProcessor(BaseClinicalProcessor):
                 'trends': trends,
             }
 
+            processing_time = (datetime.now(UTC) - start_time).total_seconds()
+
             return ProcessingResult(
                 success=True,
                 narrative=narrative,
-                processing_time_seconds=0.5,
+                processing_time_seconds=processing_time,
                 records_processed=len(records),
+                quality_score=validation_result.quality_score,
                 clinical_insights=clinical_insights
             )
 
         except Exception as e:
+            processing_time = (datetime.now(UTC) - start_time).total_seconds()
             self.logger.error("hrv_processing_failed", error=str(e))
             return ProcessingResult(
                 success=False,
-                error_message=f"HRV processing failed: {str(e)}"
+                error_message=f"HRV processing failed: {str(e)}",
+                processing_time_seconds=processing_time
             )
 
     def _extract_hrv_readings(

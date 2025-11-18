@@ -11,10 +11,23 @@ from src.processors.active_calories_processor import ActiveCaloriesProcessor
 from src.processors.base_processor import ProcessingResult
 from src.processors.hrv_rmssd_processor import HRVRmssdProcessor
 from src.processors.steps_processor import StepsProcessor
+from src.validation.data_quality import ValidationResult
 
 # ============================================================================
 # Test Fixtures
 # ============================================================================
+
+
+@pytest.fixture
+def sample_validation_result():
+    """Sample validation result for testing"""
+    return ValidationResult(
+        is_valid=True,
+        quality_score=0.95,
+        errors=[],
+        warnings=[],
+        metadata={}
+    )
 
 
 @pytest.fixture
@@ -110,7 +123,7 @@ def sample_hrv_records_for_trends():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_steps_processor_initialization():
+async def test_steps_processor_initialization(sample_validation_result):
     """Verify steps processor initializes correctly"""
     processor = StepsProcessor()
     await processor.initialize()
@@ -121,7 +134,7 @@ async def test_steps_processor_initialization():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_steps_processor_success(sample_steps_records):
+async def test_steps_processor_success(sample_steps_records, sample_validation_result):
     """Verify steps processor processes records successfully"""
     processor = StepsProcessor()
     await processor.initialize()
@@ -129,7 +142,7 @@ async def test_steps_processor_success(sample_steps_records):
     result = await processor.process_with_clinical_insights(
         records=sample_steps_records,
         message_data={},
-        validation_result=None
+        validation_result=sample_validation_result
     )
 
     assert isinstance(result, ProcessingResult)
@@ -149,7 +162,7 @@ async def test_steps_processor_success(sample_steps_records):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_steps_processor_metrics(sample_steps_records):
+async def test_steps_processor_metrics(sample_steps_records, sample_validation_result):
     """Verify steps processor calculates correct metrics"""
     processor = StepsProcessor()
     await processor.initialize()
@@ -157,7 +170,7 @@ async def test_steps_processor_metrics(sample_steps_records):
     result = await processor.process_with_clinical_insights(
         records=sample_steps_records,
         message_data={},
-        validation_result=None
+        validation_result=sample_validation_result
     )
 
     metrics = result.clinical_insights['metrics']
@@ -171,7 +184,7 @@ async def test_steps_processor_metrics(sample_steps_records):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_steps_processor_empty_records():
+async def test_steps_processor_empty_records(sample_validation_result):
     """Verify steps processor handles empty records"""
     processor = StepsProcessor()
     await processor.initialize()
@@ -179,7 +192,7 @@ async def test_steps_processor_empty_records():
     result = await processor.process_with_clinical_insights(
         records=[],
         message_data={},
-        validation_result=None
+        validation_result=sample_validation_result
     )
 
     assert result.success is False
@@ -189,7 +202,7 @@ async def test_steps_processor_empty_records():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_steps_processor_narrative_excellent():
+async def test_steps_processor_narrative_excellent(sample_validation_result):
     """Verify narrative for excellent activity level"""
     processor = StepsProcessor()
     await processor.initialize()
@@ -207,7 +220,7 @@ async def test_steps_processor_narrative_excellent():
     result = await processor.process_with_clinical_insights(
         records=high_steps_records,
         message_data={},
-        validation_result=None
+        validation_result=sample_validation_result
     )
 
     assert 'excellent' in result.narrative.lower()
@@ -221,7 +234,7 @@ async def test_steps_processor_narrative_excellent():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_active_calories_processor_initialization():
+async def test_active_calories_processor_initialization(sample_validation_result):
     """Verify active calories processor initializes correctly"""
     processor = ActiveCaloriesProcessor()
     await processor.initialize()
@@ -232,7 +245,7 @@ async def test_active_calories_processor_initialization():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_active_calories_processor_success(sample_calorie_records):
+async def test_active_calories_processor_success(sample_calorie_records, sample_validation_result):
     """Verify active calories processor processes records successfully"""
     processor = ActiveCaloriesProcessor()
     await processor.initialize()
@@ -240,7 +253,7 @@ async def test_active_calories_processor_success(sample_calorie_records):
     result = await processor.process_with_clinical_insights(
         records=sample_calorie_records,
         message_data={},
-        validation_result=None
+        validation_result=sample_validation_result
     )
 
     assert isinstance(result, ProcessingResult)
@@ -260,7 +273,7 @@ async def test_active_calories_processor_success(sample_calorie_records):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_active_calories_processor_metrics(sample_calorie_records):
+async def test_active_calories_processor_metrics(sample_calorie_records, sample_validation_result):
     """Verify active calories processor calculates correct metrics"""
     processor = ActiveCaloriesProcessor()
     await processor.initialize()
@@ -268,7 +281,7 @@ async def test_active_calories_processor_metrics(sample_calorie_records):
     result = await processor.process_with_clinical_insights(
         records=sample_calorie_records,
         message_data={},
-        validation_result=None
+        validation_result=sample_validation_result
     )
 
     metrics = result.clinical_insights['metrics']
@@ -282,7 +295,7 @@ async def test_active_calories_processor_metrics(sample_calorie_records):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_active_calories_processor_empty_records():
+async def test_active_calories_processor_empty_records(sample_validation_result):
     """Verify active calories processor handles empty records"""
     processor = ActiveCaloriesProcessor()
     await processor.initialize()
@@ -290,7 +303,7 @@ async def test_active_calories_processor_empty_records():
     result = await processor.process_with_clinical_insights(
         records=[],
         message_data={},
-        validation_result=None
+        validation_result=sample_validation_result
     )
 
     assert result.success is False
@@ -300,7 +313,7 @@ async def test_active_calories_processor_empty_records():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_active_calories_processor_narrative_high():
+async def test_active_calories_processor_narrative_high(sample_validation_result):
     """Verify narrative for very high activity level"""
     processor = ActiveCaloriesProcessor()
     await processor.initialize()
@@ -318,7 +331,7 @@ async def test_active_calories_processor_narrative_high():
     result = await processor.process_with_clinical_insights(
         records=high_calorie_records,
         message_data={},
-        validation_result=None
+        validation_result=sample_validation_result
     )
 
     assert 'very high' in result.narrative.lower()
@@ -332,7 +345,7 @@ async def test_active_calories_processor_narrative_high():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_hrv_processor_initialization():
+async def test_hrv_processor_initialization(sample_validation_result):
     """Verify HRV processor initializes correctly"""
     processor = HRVRmssdProcessor()
     await processor.initialize()
@@ -342,7 +355,7 @@ async def test_hrv_processor_initialization():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_hrv_processor_success(sample_hrv_records):
+async def test_hrv_processor_success(sample_hrv_records, sample_validation_result):
     """Verify HRV processor processes records successfully"""
     processor = HRVRmssdProcessor()
     await processor.initialize()
@@ -350,7 +363,7 @@ async def test_hrv_processor_success(sample_hrv_records):
     result = await processor.process_with_clinical_insights(
         records=sample_hrv_records,
         message_data={},
-        validation_result=None
+        validation_result=sample_validation_result
     )
 
     assert isinstance(result, ProcessingResult)
@@ -370,7 +383,7 @@ async def test_hrv_processor_success(sample_hrv_records):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_hrv_processor_metrics(sample_hrv_records):
+async def test_hrv_processor_metrics(sample_hrv_records, sample_validation_result):
     """Verify HRV processor calculates correct metrics"""
     processor = HRVRmssdProcessor()
     await processor.initialize()
@@ -378,7 +391,7 @@ async def test_hrv_processor_metrics(sample_hrv_records):
     result = await processor.process_with_clinical_insights(
         records=sample_hrv_records,
         message_data={},
-        validation_result=None
+        validation_result=sample_validation_result
     )
 
     metrics = result.clinical_insights['metrics']
@@ -392,7 +405,7 @@ async def test_hrv_processor_metrics(sample_hrv_records):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_hrv_processor_empty_records():
+async def test_hrv_processor_empty_records(sample_validation_result):
     """Verify HRV processor handles empty records"""
     processor = HRVRmssdProcessor()
     await processor.initialize()
@@ -400,7 +413,7 @@ async def test_hrv_processor_empty_records():
     result = await processor.process_with_clinical_insights(
         records=[],
         message_data={},
-        validation_result=None
+        validation_result=sample_validation_result
     )
 
     assert result.success is False
@@ -410,7 +423,7 @@ async def test_hrv_processor_empty_records():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_hrv_processor_trend_analysis(sample_hrv_records_for_trends):
+async def test_hrv_processor_trend_analysis(sample_hrv_records_for_trends, sample_validation_result):
     """Verify HRV processor analyzes trends correctly"""
     processor = HRVRmssdProcessor()
     await processor.initialize()
@@ -418,7 +431,7 @@ async def test_hrv_processor_trend_analysis(sample_hrv_records_for_trends):
     result = await processor.process_with_clinical_insights(
         records=sample_hrv_records_for_trends,
         message_data={},
-        validation_result=None
+        validation_result=sample_validation_result
     )
 
     trends = result.clinical_insights['trends']
@@ -430,7 +443,7 @@ async def test_hrv_processor_trend_analysis(sample_hrv_records_for_trends):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_hrv_processor_excellent_recovery():
+async def test_hrv_processor_excellent_recovery(sample_validation_result):
     """Verify narrative for excellent HRV"""
     processor = HRVRmssdProcessor()
     await processor.initialize()
@@ -447,7 +460,7 @@ async def test_hrv_processor_excellent_recovery():
     result = await processor.process_with_clinical_insights(
         records=excellent_hrv_records,
         message_data={},
-        validation_result=None
+        validation_result=sample_validation_result
     )
 
     assert 'excellent' in result.narrative.lower()
@@ -456,7 +469,7 @@ async def test_hrv_processor_excellent_recovery():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_hrv_processor_poor_recovery():
+async def test_hrv_processor_poor_recovery(sample_validation_result):
     """Verify narrative for low HRV"""
     processor = HRVRmssdProcessor()
     await processor.initialize()
@@ -473,7 +486,7 @@ async def test_hrv_processor_poor_recovery():
     result = await processor.process_with_clinical_insights(
         records=low_hrv_records,
         message_data={},
-        validation_result=None
+        validation_result=sample_validation_result
     )
 
     assert 'below optimal' in result.narrative.lower()
@@ -482,7 +495,7 @@ async def test_hrv_processor_poor_recovery():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_hrv_processor_insufficient_data_for_trends():
+async def test_hrv_processor_insufficient_data_for_trends(sample_validation_result):
     """Verify HRV processor handles insufficient data for trends"""
     processor = HRVRmssdProcessor()
     await processor.initialize()
@@ -497,7 +510,7 @@ async def test_hrv_processor_insufficient_data_for_trends():
             for i in range(3)
         ],
         message_data={},
-        validation_result=None
+        validation_result=sample_validation_result
     )
 
     trends = result.clinical_insights['trends']
