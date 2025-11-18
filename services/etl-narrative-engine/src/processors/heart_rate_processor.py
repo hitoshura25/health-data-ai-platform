@@ -150,7 +150,7 @@ class HeartRateProcessor(BaseClinicalProcessor):
                             {
                                 "bpm": bpm,
                                 "timestamp": datetime.fromtimestamp(
-                                    timestamp_millis / 1000
+                                    timestamp_millis / 1000, tz=UTC
                                 ),
                                 "epoch_millis": timestamp_millis,
                                 "metadata": metadata,

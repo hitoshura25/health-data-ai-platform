@@ -206,7 +206,7 @@ class TestPatternIdentification:
     @pytest.mark.asyncio
     async def test_identify_sleep_periods(self, processor):
         """Test identification of sleep periods (nighttime, low HR)"""
-        base_time = datetime(2024, 1, 1, 2, 0, 0)  # 2 AM
+        base_time = datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC)  # 2 AM
         samples = [
             {
                 "bpm": 60,
@@ -224,7 +224,7 @@ class TestPatternIdentification:
     @pytest.mark.asyncio
     async def test_identify_resting_heart_rate(self, processor):
         """Test calculation of resting heart rate from sleep periods"""
-        base_time = datetime(2024, 1, 1, 2, 0, 0)  # 2 AM
+        base_time = datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC)  # 2 AM
         samples = []
 
         # Create sleep period with varying HR
@@ -276,8 +276,8 @@ class TestPatternIdentification:
     async def test_identify_bradycardia_daytime_only(self, processor):
         """Test bradycardia detection excludes nighttime"""
         # Daytime bradycardia (should be detected)
-        daytime = datetime(2024, 1, 1, 14, 0, 0)  # 2 PM
-        nighttime = datetime(2024, 1, 1, 2, 0, 0)  # 2 AM
+        daytime = datetime(2024, 1, 1, 14, 0, 0, tzinfo=UTC)  # 2 PM
+        nighttime = datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC)  # 2 AM
 
         samples = [
             {
