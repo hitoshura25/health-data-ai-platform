@@ -8,7 +8,7 @@ narratives for AI model training.
 """
 
 import statistics
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -30,6 +30,8 @@ class HeartRateProcessor(BaseClinicalProcessor):
             "normal_resting": (60, 100),
             "elevated": (100, 120),
             "tachycardia": (120, 150),
+            # Upper bound of 220 bpm represents the typical maximum achievable heart rate
+            # Often calculated as 220 - age, though individual variation exists
             "severe_tachycardia": (150, 220),
         }
 
@@ -60,7 +62,7 @@ class HeartRateProcessor(BaseClinicalProcessor):
         Returns:
             ProcessingResult with narrative and clinical insights
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
 
         try:
             # Extract heart rate samples
@@ -92,7 +94,7 @@ class HeartRateProcessor(BaseClinicalProcessor):
                 classifications, patterns, metrics
             )
 
-            processing_time = (datetime.utcnow() - start_time).total_seconds()
+            processing_time = (datetime.now(UTC) - start_time).total_seconds()
 
             return ProcessingResult(
                 success=True,
@@ -104,7 +106,7 @@ class HeartRateProcessor(BaseClinicalProcessor):
             )
 
         except Exception as e:
-            processing_time = (datetime.utcnow() - start_time).total_seconds()
+            processing_time = (datetime.now(UTC) - start_time).total_seconds()
             self.logger.error(
                 "heart_rate_processing_failed",
                 error=str(e),

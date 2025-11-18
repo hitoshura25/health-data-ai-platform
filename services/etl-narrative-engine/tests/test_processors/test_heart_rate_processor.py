@@ -11,7 +11,7 @@ Tests heart rate clinical processing including:
 - Clinical insights extraction
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -130,7 +130,7 @@ class TestHeartRateClassification:
     async def test_classify_severe_bradycardia(self, processor):
         """Test classification of severe bradycardia (<40 bpm)"""
         samples = [
-            {"bpm": 35, "timestamp": datetime.utcnow(), "epoch_millis": 1700000000000}
+            {"bpm": 35, "timestamp": datetime.now(UTC), "epoch_millis": 1700000000000}
         ]
 
         classifications = processor._classify_heart_rate(samples)
@@ -143,7 +143,7 @@ class TestHeartRateClassification:
     async def test_classify_bradycardia(self, processor):
         """Test classification of bradycardia (40-59 bpm)"""
         samples = [
-            {"bpm": 55, "timestamp": datetime.utcnow(), "epoch_millis": 1700000000000}
+            {"bpm": 55, "timestamp": datetime.now(UTC), "epoch_millis": 1700000000000}
         ]
 
         classifications = processor._classify_heart_rate(samples)
@@ -155,7 +155,7 @@ class TestHeartRateClassification:
     async def test_classify_normal_resting(self, processor):
         """Test classification of normal resting HR (60-100 bpm)"""
         samples = [
-            {"bpm": 75, "timestamp": datetime.utcnow(), "epoch_millis": 1700000000000}
+            {"bpm": 75, "timestamp": datetime.now(UTC), "epoch_millis": 1700000000000}
         ]
 
         classifications = processor._classify_heart_rate(samples)
@@ -167,7 +167,7 @@ class TestHeartRateClassification:
     async def test_classify_elevated(self, processor):
         """Test classification of elevated HR (100-120 bpm)"""
         samples = [
-            {"bpm": 110, "timestamp": datetime.utcnow(), "epoch_millis": 1700000000000}
+            {"bpm": 110, "timestamp": datetime.now(UTC), "epoch_millis": 1700000000000}
         ]
 
         classifications = processor._classify_heart_rate(samples)
@@ -179,7 +179,7 @@ class TestHeartRateClassification:
     async def test_classify_tachycardia(self, processor):
         """Test classification of tachycardia (120-150 bpm)"""
         samples = [
-            {"bpm": 135, "timestamp": datetime.utcnow(), "epoch_millis": 1700000000000}
+            {"bpm": 135, "timestamp": datetime.now(UTC), "epoch_millis": 1700000000000}
         ]
 
         classifications = processor._classify_heart_rate(samples)
@@ -191,7 +191,7 @@ class TestHeartRateClassification:
     async def test_classify_severe_tachycardia(self, processor):
         """Test classification of severe tachycardia (>150 bpm)"""
         samples = [
-            {"bpm": 175, "timestamp": datetime.utcnow(), "epoch_millis": 1700000000000}
+            {"bpm": 175, "timestamp": datetime.now(UTC), "epoch_millis": 1700000000000}
         ]
 
         classifications = processor._classify_heart_rate(samples)
@@ -249,7 +249,7 @@ class TestPatternIdentification:
     @pytest.mark.asyncio
     async def test_identify_elevated_events(self, processor):
         """Test identification of elevated heart rate events"""
-        base_time = datetime.utcnow()
+        base_time = datetime.now(UTC)
         samples = [
             {
                 "bpm": 140,  # Tachycardia
@@ -306,7 +306,7 @@ class TestExerciseSessionDetection:
     @pytest.mark.asyncio
     async def test_detect_exercise_session(self, processor):
         """Test detection of exercise from sustained elevated HR"""
-        base_time = datetime.utcnow()
+        base_time = datetime.now(UTC)
         samples = []
 
         # Create 15-minute exercise session
@@ -341,7 +341,7 @@ class TestExerciseSessionDetection:
     @pytest.mark.asyncio
     async def test_exercise_session_recovery(self, processor):
         """Test heart rate recovery calculation"""
-        base_time = datetime.utcnow()
+        base_time = datetime.now(UTC)
         samples = []
 
         # Create exercise session
@@ -376,7 +376,7 @@ class TestExerciseSessionDetection:
     @pytest.mark.asyncio
     async def test_skip_short_exercise_sessions(self, processor):
         """Test that short elevated HR periods are not detected as exercise"""
-        base_time = datetime.utcnow()
+        base_time = datetime.now(UTC)
         samples = []
 
         # Create 5-minute elevated HR (too short)
@@ -413,7 +413,7 @@ class TestMetricsCalculation:
     @pytest.mark.asyncio
     async def test_calculate_basic_metrics(self, processor):
         """Test calculation of basic HR metrics"""
-        base_time = datetime.utcnow()
+        base_time = datetime.now(UTC)
         samples = [
             {
                 "bpm": 60,
@@ -476,7 +476,7 @@ class TestNarrativeGeneration:
     @pytest.mark.asyncio
     async def test_generate_narrative_basic(self, processor):
         """Test generation of basic narrative"""
-        base_time = datetime.utcnow()
+        base_time = datetime.now(UTC)
         samples = [
             {
                 "bpm": 72,
@@ -506,7 +506,7 @@ class TestNarrativeGeneration:
     @pytest.mark.asyncio
     async def test_narrative_includes_resting_assessment(self, processor):
         """Test narrative includes resting HR assessment"""
-        base_time = datetime.utcnow()
+        base_time = datetime.now(UTC)
         samples = [
             {
                 "bpm": 55,
@@ -528,7 +528,7 @@ class TestNarrativeGeneration:
     @pytest.mark.asyncio
     async def test_narrative_includes_exercise_sessions(self, processor):
         """Test narrative includes exercise session descriptions"""
-        base_time = datetime.utcnow()
+        base_time = datetime.now(UTC)
         samples = []
 
         # Create exercise session
@@ -571,7 +571,7 @@ class TestClinicalInsights:
     @pytest.mark.asyncio
     async def test_extract_clinical_insights(self, processor):
         """Test extraction of structured clinical insights"""
-        base_time = datetime.utcnow()
+        base_time = datetime.now(UTC)
         samples = [
             {
                 "bpm": 60,
@@ -601,7 +601,7 @@ class TestClinicalInsights:
     @pytest.mark.asyncio
     async def test_fitness_level_assessment(self, processor):
         """Test cardiovascular fitness level assessment"""
-        base_time = datetime.utcnow()
+        base_time = datetime.now(UTC)
 
         # Excellent fitness (RHR < 60)
         samples = [
