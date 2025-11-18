@@ -11,7 +11,7 @@ Tests cover:
 - End-to-end processing
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -130,7 +130,7 @@ async def test_classify_normal_fasting(processor):
     readings = [
         {
             'glucose_mg_dl': 85.0,
-            'timestamp': datetime.utcnow(),
+            'timestamp': datetime.now(UTC),
             'epoch_millis': 1700000000000
         }
     ]
@@ -149,7 +149,7 @@ async def test_classify_normal_general(processor):
     readings = [
         {
             'glucose_mg_dl': 120.0,
-            'timestamp': datetime.utcnow(),
+            'timestamp': datetime.now(UTC),
             'epoch_millis': 1700000000000
         }
     ]
@@ -166,7 +166,7 @@ async def test_classify_hypoglycemia(processor):
     readings = [
         {
             'glucose_mg_dl': 62.0,
-            'timestamp': datetime.utcnow(),
+            'timestamp': datetime.now(UTC),
             'epoch_millis': 1700000000000
         }
     ]
@@ -183,7 +183,7 @@ async def test_classify_severe_hypoglycemia(processor):
     readings = [
         {
             'glucose_mg_dl': 48.0,
-            'timestamp': datetime.utcnow(),
+            'timestamp': datetime.now(UTC),
             'epoch_millis': 1700000000000
         }
     ]
@@ -200,7 +200,7 @@ async def test_classify_hyperglycemia(processor):
     readings = [
         {
             'glucose_mg_dl': 165.0,
-            'timestamp': datetime.utcnow(),
+            'timestamp': datetime.now(UTC),
             'epoch_millis': 1700000000000
         }
     ]
@@ -217,7 +217,7 @@ async def test_classify_severe_hyperglycemia(processor):
     readings = [
         {
             'glucose_mg_dl': 250.0,
-            'timestamp': datetime.utcnow(),
+            'timestamp': datetime.now(UTC),
             'epoch_millis': 1700000000000
         }
     ]
@@ -233,11 +233,11 @@ async def test_variability_metrics_calculation(processor):
     """Test CV and TIR calculations."""
     # Create readings with known statistics
     readings = [
-        {'glucose_mg_dl': 100.0, 'timestamp': datetime.utcnow()},
-        {'glucose_mg_dl': 120.0, 'timestamp': datetime.utcnow()},
-        {'glucose_mg_dl': 140.0, 'timestamp': datetime.utcnow()},
-        {'glucose_mg_dl': 160.0, 'timestamp': datetime.utcnow()},
-        {'glucose_mg_dl': 180.0, 'timestamp': datetime.utcnow()},
+        {'glucose_mg_dl': 100.0, 'timestamp': datetime.now(UTC)},
+        {'glucose_mg_dl': 120.0, 'timestamp': datetime.now(UTC)},
+        {'glucose_mg_dl': 140.0, 'timestamp': datetime.now(UTC)},
+        {'glucose_mg_dl': 160.0, 'timestamp': datetime.now(UTC)},
+        {'glucose_mg_dl': 180.0, 'timestamp': datetime.now(UTC)},
     ]
 
     metrics = processor._calculate_variability_metrics(readings)
@@ -257,10 +257,10 @@ async def test_variability_metrics_calculation(processor):
 async def test_variability_metrics_with_outliers(processor):
     """Test metrics calculation with out-of-range values."""
     readings = [
-        {'glucose_mg_dl': 50.0, 'timestamp': datetime.utcnow()},  # Below range
-        {'glucose_mg_dl': 100.0, 'timestamp': datetime.utcnow()},
-        {'glucose_mg_dl': 120.0, 'timestamp': datetime.utcnow()},
-        {'glucose_mg_dl': 200.0, 'timestamp': datetime.utcnow()},  # Above range
+        {'glucose_mg_dl': 50.0, 'timestamp': datetime.now(UTC)},  # Below range
+        {'glucose_mg_dl': 100.0, 'timestamp': datetime.now(UTC)},
+        {'glucose_mg_dl': 120.0, 'timestamp': datetime.now(UTC)},
+        {'glucose_mg_dl': 200.0, 'timestamp': datetime.now(UTC)},  # Above range
     ]
 
     metrics = processor._calculate_variability_metrics(readings)
@@ -274,7 +274,7 @@ async def test_variability_metrics_with_outliers(processor):
 async def test_variability_metrics_insufficient_data(processor):
     """Test metrics with insufficient data."""
     readings = [
-        {'glucose_mg_dl': 100.0, 'timestamp': datetime.utcnow()},
+        {'glucose_mg_dl': 100.0, 'timestamp': datetime.now(UTC)},
     ]
 
     metrics = processor._calculate_variability_metrics(readings)
@@ -286,7 +286,7 @@ async def test_variability_metrics_insufficient_data(processor):
 @pytest.mark.asyncio
 async def test_pattern_identification_hypoglycemia(processor):
     """Test identification of hypoglycemic events."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     readings = [
         {'glucose_mg_dl': 65.0, 'timestamp': now, 'epoch_millis': int(now.timestamp() * 1000)},
         {'glucose_mg_dl': 48.0, 'timestamp': now + timedelta(hours=1), 'epoch_millis': int((now + timedelta(hours=1)).timestamp() * 1000)},
@@ -304,7 +304,7 @@ async def test_pattern_identification_hypoglycemia(processor):
 @pytest.mark.asyncio
 async def test_pattern_identification_hyperglycemia(processor):
     """Test identification of hyperglycemic events."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     readings = [
         {'glucose_mg_dl': 150.0, 'timestamp': now, 'epoch_millis': int(now.timestamp() * 1000)},
         {'glucose_mg_dl': 220.0, 'timestamp': now + timedelta(hours=1), 'epoch_millis': int((now + timedelta(hours=1)).timestamp() * 1000)},
@@ -323,10 +323,10 @@ async def test_pattern_identification_hyperglycemia(processor):
 async def test_pattern_identification_fasting(processor):
     """Test identification of fasting readings (6-10 AM)."""
     # Create reading at 8 AM
-    fasting_time = datetime(2025, 11, 18, 8, 0, 0)
+    fasting_time = datetime(2025, 11, 18, 8, 0, 0, tzinfo=UTC)
     readings = [
         {'glucose_mg_dl': 90.0, 'timestamp': fasting_time, 'epoch_millis': int(fasting_time.timestamp() * 1000)},
-        {'glucose_mg_dl': 110.0, 'timestamp': datetime(2025, 11, 18, 14, 0, 0), 'epoch_millis': int(datetime(2025, 11, 18, 14, 0, 0).timestamp() * 1000)},
+        {'glucose_mg_dl': 110.0, 'timestamp': datetime(2025, 11, 18, 14, 0, 0, tzinfo=UTC), 'epoch_millis': int(datetime(2025, 11, 18, 14, 0, 0, tzinfo=UTC).timestamp() * 1000)},
     ]
 
     classifications = processor._classify_readings(readings)
@@ -339,7 +339,7 @@ async def test_pattern_identification_fasting(processor):
 @pytest.mark.asyncio
 async def test_pattern_identification_post_meal(processor):
     """Test identification of post-meal readings."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     readings = [
         {'glucose_mg_dl': 140.0, 'timestamp': now, 'relation_to_meal': 'AFTER_MEAL', 'epoch_millis': int(now.timestamp() * 1000)},
         {'glucose_mg_dl': 90.0, 'timestamp': now + timedelta(hours=1), 'relation_to_meal': None, 'epoch_millis': int((now + timedelta(hours=1)).timestamp() * 1000)},
@@ -356,9 +356,9 @@ async def test_pattern_identification_post_meal(processor):
 async def test_pattern_identification_overnight(processor):
     """Test identification of overnight readings (10 PM - 6 AM)."""
     # Create overnight readings
-    overnight_time1 = datetime(2025, 11, 18, 23, 0, 0)  # 11 PM
-    overnight_time2 = datetime(2025, 11, 19, 2, 0, 0)   # 2 AM
-    day_time = datetime(2025, 11, 18, 14, 0, 0)         # 2 PM
+    overnight_time1 = datetime(2025, 11, 18, 23, 0, 0, tzinfo=UTC)  # 11 PM
+    overnight_time2 = datetime(2025, 11, 19, 2, 0, 0, tzinfo=UTC)   # 2 AM
+    day_time = datetime(2025, 11, 18, 14, 0, 0, tzinfo=UTC)         # 2 PM
 
     readings = [
         {'glucose_mg_dl': 100.0, 'timestamp': overnight_time1, 'epoch_millis': int(overnight_time1.timestamp() * 1000)},
@@ -375,7 +375,7 @@ async def test_pattern_identification_overnight(processor):
 @pytest.mark.asyncio
 async def test_analyze_trends_improving(processor):
     """Test trend analysis for improving glucose."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     # Create 10 readings: first 5 high, last 5 lower
     readings = []
     for i in range(5):
@@ -401,7 +401,7 @@ async def test_analyze_trends_improving(processor):
 @pytest.mark.asyncio
 async def test_analyze_trends_worsening(processor):
     """Test trend analysis for worsening glucose."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     # Create 10 readings: first 5 low, last 5 high
     readings = []
     for i in range(5):
@@ -427,7 +427,7 @@ async def test_analyze_trends_worsening(processor):
 @pytest.mark.asyncio
 async def test_analyze_trends_stable(processor):
     """Test trend analysis for stable glucose."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     # Create 10 readings with similar values
     readings = []
     for i in range(10):
@@ -448,7 +448,7 @@ async def test_analyze_trends_stable(processor):
 async def test_narrative_generation_normal_control(processor):
     """Test narrative for well-controlled glucose."""
     # Create 50 readings in normal range
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     readings = []
     for i in range(50):
         readings.append({
@@ -474,7 +474,7 @@ async def test_narrative_generation_normal_control(processor):
 @pytest.mark.asyncio
 async def test_narrative_generation_with_hypoglycemia(processor):
     """Test narrative includes hypoglycemia warnings."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     readings = [
         {'glucose_mg_dl': 45.0, 'timestamp': now, 'epoch_millis': int(now.timestamp() * 1000), 'relation_to_meal': None},  # Severe hypo
         {'glucose_mg_dl': 65.0, 'timestamp': now + timedelta(hours=1), 'epoch_millis': int((now + timedelta(hours=1)).timestamp() * 1000), 'relation_to_meal': None},  # Mild hypo
@@ -496,7 +496,7 @@ async def test_narrative_generation_with_hypoglycemia(processor):
 @pytest.mark.asyncio
 async def test_clinical_insights_extraction(processor):
     """Test extraction of structured clinical insights."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     readings = []
     # Mix of normal, hypo, and hyper readings
     for i in range(10):
@@ -528,7 +528,7 @@ async def test_clinical_insights_extraction(processor):
 @pytest.mark.asyncio
 async def test_clinical_insights_control_status_excellent(processor):
     """Test control status is 'excellent' for well-controlled glucose."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     # Create readings with low CV and high TIR
     readings = []
     for i in range(20):
@@ -638,7 +638,7 @@ async def test_processing_handles_exceptions(processor):
 def create_sample_glucose_avro_records() -> list[dict]:
     """Helper to create realistic glucose records."""
     records = []
-    base_time = datetime(2025, 11, 1, 6, 0, 0)
+    base_time = datetime(2025, 11, 1, 6, 0, 0, tzinfo=UTC)
 
     for i in range(100):
         # Simulate realistic glucose pattern
