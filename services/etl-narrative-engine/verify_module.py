@@ -14,13 +14,13 @@ try:
     # Test imports
     print("Testing imports...")
     from validation import (
-        ValidationResult,
+        CLINICAL_RANGES,
         DataQualityValidator,
         ValidationConfig,
-        CLINICAL_RANGES,
+        ValidationResult,
+        get_all_ranges,
         get_clinical_range,
         is_value_in_range,
-        get_all_ranges
     )
     print("✓ All imports successful")
 
