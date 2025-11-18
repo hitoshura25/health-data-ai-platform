@@ -5,7 +5,7 @@ Processes HRV RMSSD records and generates clinical narratives with recovery anal
 """
 
 import statistics
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from .base_processor import BaseClinicalProcessor, ProcessingResult
@@ -88,7 +88,7 @@ class HRVRmssdProcessor(BaseClinicalProcessor):
                 if rmssd_ms is not None and timestamp:
                     readings.append({
                         'rmssd_ms': rmssd_ms,
-                        'timestamp': datetime.fromtimestamp(timestamp / 1000),
+                        'timestamp': datetime.fromtimestamp(timestamp / 1000, tz=UTC),
                     })
 
             except (KeyError, TypeError):
@@ -119,7 +119,7 @@ class HRVRmssdProcessor(BaseClinicalProcessor):
         elif avg_hrv < 40:
             hrv_category = 'low'
             recovery_status = 'below_average'
-        elif avg_hrv < 60:
+        elif avg_hrv < self.optimal_hrv_threshold:
             hrv_category = 'average'
             recovery_status = 'normal'
         elif avg_hrv < 80:

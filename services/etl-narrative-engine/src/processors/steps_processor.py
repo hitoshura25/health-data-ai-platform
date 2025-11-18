@@ -5,7 +5,7 @@ Processes step count records and generates clinical narratives with activity ana
 """
 
 import statistics
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from .base_processor import BaseClinicalProcessor, ProcessingResult
@@ -87,8 +87,8 @@ class StepsProcessor(BaseClinicalProcessor):
                 if count and start_time and end_time:
                     step_records.append({
                         'count': count,
-                        'start_time': datetime.fromtimestamp(start_time / 1000),
-                        'end_time': datetime.fromtimestamp(end_time / 1000),
+                        'start_time': datetime.fromtimestamp(start_time / 1000, tz=UTC),
+                        'end_time': datetime.fromtimestamp(end_time / 1000, tz=UTC),
                     })
 
             except (KeyError, TypeError):
@@ -126,7 +126,7 @@ class StepsProcessor(BaseClinicalProcessor):
             'avg_daily_steps': round(statistics.mean(step_counts)),
             'max_daily_steps': max(step_counts),
             'min_daily_steps': min(step_counts),
-            'days_meeting_target': sum(1 for s in step_counts if s >= 10000),
+            'days_meeting_target': sum(1 for s in step_counts if s >= self.daily_target),
             'total_steps': sum(step_counts),
         }
 
@@ -150,20 +150,20 @@ class StepsProcessor(BaseClinicalProcessor):
         parts.append(summary)
 
         # Activity level assessment
-        if avg_steps >= 10000:
+        if avg_steps >= self.daily_target:
             activity_text = (
-                "Activity level is excellent, meeting WHO recommendation "
-                "of 10,000 steps daily."
+                f"Activity level is excellent, meeting WHO recommendation "
+                f"of {self.daily_target:,} steps daily."
             )
         elif avg_steps >= 7500:
             activity_text = (
                 f"Activity level is good ({avg_steps:,} steps), approaching "
-                f"recommended 10,000 steps."
+                f"recommended {self.daily_target:,} steps."
             )
         else:
             activity_text = (
                 f"Activity level is below recommended ({avg_steps:,} steps). "
-                f"Aim for 10,000 steps daily for optimal health."
+                f"Aim for {self.daily_target:,} steps daily for optimal health."
             )
         parts.append(activity_text)
 
@@ -172,7 +172,7 @@ class StepsProcessor(BaseClinicalProcessor):
             target_pct = (days_meeting_target / total_days) * 100
             target_text = (
                 f"{days_meeting_target} of {total_days} days ({target_pct:.0f}%) "
-                f"met the 10,000-step target."
+                f"met the {self.daily_target:,}-step target."
             )
             parts.append(target_text)
 

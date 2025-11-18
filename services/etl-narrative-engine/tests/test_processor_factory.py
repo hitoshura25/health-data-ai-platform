@@ -7,7 +7,7 @@ Tests all Module 3 real processor integration.
 import pytest
 
 from src.processors.active_calories_processor import ActiveCaloriesProcessor
-from src.processors.base_processor import BaseClinicalProcessor, ProcessingResult
+from src.processors.base_processor import BaseClinicalProcessor
 from src.processors.blood_glucose_processor import BloodGlucoseProcessor
 from src.processors.heart_rate_processor import HeartRateProcessor
 from src.processors.hrv_rmssd_processor import HRVRmssdProcessor

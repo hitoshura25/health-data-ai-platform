@@ -6,7 +6,7 @@ with activity level analysis.
 """
 
 import statistics
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from .base_processor import BaseClinicalProcessor, ProcessingResult
@@ -90,8 +90,8 @@ class ActiveCaloriesProcessor(BaseClinicalProcessor):
                 if calories and start_time and end_time:
                     calorie_records.append({
                         'calories': calories,
-                        'start_time': datetime.fromtimestamp(start_time / 1000),
-                        'end_time': datetime.fromtimestamp(end_time / 1000),
+                        'start_time': datetime.fromtimestamp(start_time / 1000, tz=UTC),
+                        'end_time': datetime.fromtimestamp(end_time / 1000, tz=UTC),
                     })
 
             except (KeyError, TypeError):
@@ -129,7 +129,7 @@ class ActiveCaloriesProcessor(BaseClinicalProcessor):
             'avg_daily_calories': round(statistics.mean(calorie_values)),
             'max_daily_calories': round(max(calorie_values)),
             'min_daily_calories': round(min(calorie_values)),
-            'days_meeting_target': sum(1 for c in calorie_values if c >= 500),
+            'days_meeting_target': sum(1 for c in calorie_values if c >= self.daily_target),
             'total_calories': round(sum(calorie_values)),
         }
 

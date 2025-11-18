@@ -8,7 +8,7 @@ All Module 3 processors are now real implementations (no more mocks).
 import structlog
 
 from .active_calories_processor import ActiveCaloriesProcessor
-from .base_processor import BaseClinicalProcessor, ProcessingResult
+from .base_processor import BaseClinicalProcessor
 from .blood_glucose_processor import BloodGlucoseProcessor
 from .heart_rate_processor import HeartRateProcessor
 from .hrv_rmssd_processor import HRVRmssdProcessor
