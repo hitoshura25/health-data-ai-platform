@@ -1,0 +1,274 @@
+# Default values for webauthn-stack
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Namespace where webauthn-stack will be deployed
+namespace: health-auth
+
+# WebAuthn Server Configuration
+webauthn:
+  enabled: true
+  replicaCount: 2
+
+  image:
+    repository: hitoshura25/webauthn-server
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+
+  # Resource limits for Oracle Always Free tier
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+  # WebAuthn configuration
+  config:
+    # Update these for your domain in production
+    relyingPartyId: "auth.health-platform.example.com"
+    relyingPartyName: "Health Data AI Platform"
+    relyingPartyOrigin: "https://auth.health-platform.example.com"
+
+    # JWT Key Rotation Configuration (HOCON duration format)
+    # Production values - override in values-production.yaml if needed
+    jwtKeyRotationEnabled: "true"
+    jwtKeyRotationInterval: "180d"  # 6 months
+    jwtKeyGracePeriod: "1h"
+    jwtKeyRetention: "1h"
+    jwtKeySize: "2048"
+    jwtKeyIdPrefix: "webauthn"
+
+  # Database connection (PostgreSQL in health-data namespace)
+  database:
+    host: postgresql-auth.health-data.svc.cluster.local
+    port: 5432
+    name: webauthn
+    user: webauthn_user
+    # Password from secret: webauthn-secrets
+
+  # Redis connection (Sessions in health-data namespace)
+  redis:
+    host: redis-auth.health-data.svc.cluster.local
+    port: 6379
+    # Password from secret: webauthn-secrets
+
+  # Jaeger tracing configuration
+  jaeger:
+    enabled: true
+    # Jaeger is in health-observability namespace (from Module 5)
+    # For now, we'll use the Jaeger from webauthn-stack until Module 5 is complete
+    agentHost: jaeger-agent.health-auth.svc.cluster.local
+    agentPort: 6831
+
+  # JVM optimization for containerized environments
+  javaOpts: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -XX:+UseStringDeduplication -XX:+OptimizeStringConcat -XX:+UnlockExperimentalVMOptions -XX:+EnableJVMCI -Djava.security.egd=file:/dev/./urandom"
+
+  # Health checks
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 60
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  # Pod security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+
+  # Container security context
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: false  # Java apps need writable /tmp
+    runAsNonRoot: true
+    runAsUser: 1000
+
+# Envoy Gateway Configuration
+envoy:
+  enabled: true
+  replicaCount: 2
+
+  image:
+    repository: envoyproxy/envoy
+    tag: "v1.29-latest"
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 8000
+    targetPort: 8000
+    adminPort: 9901
+
+  # Resource limits for Oracle Always Free tier
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  # Envoy configuration
+  config:
+    # JWKS cache duration (seconds)
+    jwksCacheDuration: 300  # 5 minutes (production)
+    # WebAuthn server for JWKS
+    jwksUri: "http://webauthn-server.health-auth.svc.cluster.local:8080/.well-known/jwks.json"
+    jwtIssuer: "https://auth.health-platform.example.com"
+
+  # Health checks
+  livenessProbe:
+    httpGet:
+      path: /ready
+      port: 9901
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: 9901
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 2
+    failureThreshold: 3
+
+  # Container security context
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 101  # Envoy default user
+
+# Jaeger Tracing (Temporary - until Module 5 is complete)
+# This will be removed when the observability stack is deployed
+jaeger:
+  enabled: true
+  replicaCount: 1
+
+  image:
+    repository: jaegertracing/all-in-one
+    tag: "1.53"
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    # UI port
+    uiPort: 16686
+    # Collector ports
+    collectorHttpPort: 14268
+    collectorGrpcPort: 14250
+    # OTLP ports
+    otlpGrpcPort: 4317
+    otlpHttpPort: 4318
+    # Agent ports
+    agentCompactPort: 6831
+    agentBinaryPort: 6832
+    agentConfigPort: 5778
+
+  resources:
+    requests:
+      cpu: 300m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+  # Environment configuration
+  env:
+    collectorOtlpEnabled: "true"
+
+# Ingress Configuration
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+
+  # Update this to your actual domain
+  host: auth.health-platform.example.com
+
+  tls:
+    enabled: true
+    secretName: webauthn-tls
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: true
+
+  webauthn:
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  envoy:
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+
+# Secrets Configuration
+# IMPORTANT: These are placeholder values for development
+# In production, use Sealed Secrets or external secret management
+secrets:
+  # PostgreSQL password (must match Module 2 postgresql-auth password)
+  databasePassword: "CHANGE_ME_POSTGRES_PASSWORD"
+
+  # Redis password (must match Module 2 redis-auth password)
+  redisPassword: "CHANGE_ME_REDIS_PASSWORD"
+
+  # JWT master encryption key (base64 encoded, 256-bit)
+  # Generate with: openssl rand -base64 32
+  jwtMasterKey: "CHANGE_ME_JWT_MASTER_KEY_BASE64"
+
+# ServiceMonitor for Prometheus (Module 5)
+serviceMonitor:
+  enabled: false  # Enable when Prometheus Operator is installed
+  interval: 30s
+  scrapeTimeout: 10s
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Node affinity and tolerations
+affinity: {}
+tolerations: []
+nodeSelector: {}
+
+# Pod annotations (for service mesh, monitoring, etc.)
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/metrics"

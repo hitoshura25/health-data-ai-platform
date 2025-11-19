@@ -1,0 +1,115 @@
+{{- if .Values.envoy.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: envoy-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: envoy-gateway
+    app.kubernetes.io/name: envoy-gateway
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/part-of: webauthn-stack
+data:
+  envoy.yaml: |
+    admin:
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 9901
+
+    static_resources:
+      listeners:
+      - name: listener_0
+        address:
+          socket_address:
+            address: 0.0.0.0
+            port_value: 8000
+        filter_chains:
+        - filters:
+          - name: envoy.filters.network.http_connection_manager
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+              stat_prefix: ingress_http
+              codec_type: AUTO
+              access_log:
+              - name: envoy.access_loggers.stdout
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+              http_filters:
+              # JWT Authentication Filter
+              - name: envoy.filters.http.jwt_authn
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
+                  providers:
+                    webauthn_jwt:
+                      issuer: {{ .Values.envoy.config.jwtIssuer | quote }}
+                      audiences:
+                      - {{ .Values.envoy.config.jwtIssuer | quote }}
+                      remote_jwks:
+                        http_uri:
+                          uri: {{ .Values.envoy.config.jwksUri | quote }}
+                          cluster: webauthn_server
+                          timeout: 5s
+                        cache_duration:
+                          seconds: {{ .Values.envoy.config.jwksCacheDuration }}
+                      forward: true
+                      forward_payload_header: "x-jwt-payload"
+                  rules:
+                  # Require JWT for /api/* routes
+                  - match:
+                      prefix: /api
+                    requires:
+                      provider_name: webauthn_jwt
+                  # Public routes (no JWT required)
+                  - match:
+                      prefix: /register
+                  - match:
+                      prefix: /authenticate
+                  - match:
+                      prefix: /health
+                  - match:
+                      prefix: /.well-known
+                  - match:
+                      prefix: /public-key
+
+              # Router filter (must be last)
+              - name: envoy.filters.http.router
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+              route_config:
+                name: local_route
+                virtual_hosts:
+                - name: webauthn_backend
+                  domains: ["*"]
+                  routes:
+                  # Route all traffic to WebAuthn server
+                  - match:
+                      prefix: "/"
+                    route:
+                      cluster: webauthn_server
+                      timeout: 30s
+
+      clusters:
+      - name: webauthn_server
+        connect_timeout: 0.25s
+        type: STRICT_DNS
+        lb_policy: ROUND_ROBIN
+        load_assignment:
+          cluster_name: webauthn_server
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: webauthn-server.{{ .Values.namespace }}.svc.cluster.local
+                    port_value: {{ .Values.webauthn.service.port }}
+        health_checks:
+        - timeout: 1s
+          interval: 5s
+          unhealthy_threshold: 2
+          healthy_threshold: 2
+          http_health_check:
+            path: /health
+{{- end }}
