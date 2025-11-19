@@ -25,11 +25,7 @@ import pytest
 
 from src.config.settings import ConsumerSettings
 from src.consumer.deduplication import SQLiteDeduplicationStore
-from src.output.training_formatter import TrainingDataFormatter
-from src.processors.processor_factory import ProcessorFactory
 from src.storage.s3_client import S3Client
-from src.validation.config import ValidationConfig
-from src.validation.data_quality import DataQualityValidator
 
 
 @pytest.fixture(scope="module")
@@ -259,26 +255,26 @@ async def test_full_pipeline_all_sample_files(
     # Note: S3Client uses aioboto3 context managers, no explicit initialization needed
 
     # Note: validator, processor_factory, and training_formatter would be used
-    # in full consumer implementation - kept here for reference
-    validation_config = ValidationConfig(
-        quality_threshold=0.5,  # Lower threshold for sample files
-        enable_quarantine=True
-    )
-    _validator = DataQualityValidator(
-        config=validation_config,
-        s3_client=s3_storage,
-        bucket_name=bucket
-    )
-
-    processor_factory = ProcessorFactory()
-    await processor_factory.initialize_all()
-
-    _training_formatter = TrainingDataFormatter(
-        s3_client=s3_storage._client,
-        bucket_name=bucket,
-        training_prefix='training/',
-        include_metadata=True
-    )
+    # in full consumer implementation - commented out as they're not needed for this test
+    # validation_config = ValidationConfig(
+    #     quality_threshold=0.5,  # Lower threshold for sample files
+    #     enable_quarantine=True
+    # )
+    # _validator = DataQualityValidator(
+    #     config=validation_config,
+    #     s3_client=s3_storage,
+    #     bucket_name=bucket
+    # )
+    #
+    # processor_factory = ProcessorFactory()
+    # await processor_factory.initialize()
+    #
+    # _training_formatter = TrainingDataFormatter(
+    #     s3_client=s3_storage,  # Would need aioboto3 client in real usage
+    #     bucket_name=bucket,
+    #     training_prefix='training/',
+    #     include_metadata=True
+    # )
 
     # Process messages manually (simulating consumer)
     processed_count = 0
