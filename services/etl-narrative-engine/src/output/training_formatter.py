@@ -335,6 +335,12 @@ class TrainingDataFormatter:
 
         Returns:
             SHA-256 hash hex string
+
+        Raises:
+            ValueError: If narrative or source_key is empty
         """
+        if not narrative or not source_key:
+            raise ValueError("narrative and source_key must not be empty")
+
         content = f"{narrative}::{source_key}"
         return hashlib.sha256(content.encode('utf-8')).hexdigest()

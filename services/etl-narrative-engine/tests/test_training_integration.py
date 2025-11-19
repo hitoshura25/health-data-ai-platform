@@ -4,11 +4,12 @@ Integration tests for Module 4: Training Data Output.
 These tests require MinIO running:
     docker-compose up -d minio
 
-Tests verify:
+5 integration tests verify:
 - End-to-end training data generation
 - JSONL file creation and appending
-- S3 storage structure
+- S3 storage structure (multiple domains)
 - Deduplication across multiple runs
+- JSONL format validity
 """
 
 import json
@@ -54,9 +55,11 @@ async def s3_client(s3_config):
             pass  # Bucket already exists and we own it - this is fine
         except client.exceptions.BucketAlreadyExists:
             pass  # Bucket already exists - this is fine for integration tests
-        except Exception:
+        except Exception as e:
             # For other exceptions during bucket creation, log but don't fail
             # This handles cases where bucket might exist from previous test runs
+            import logging
+            logging.debug(f"Bucket creation issue (may already exist): {e}")
             pass
 
         yield client
