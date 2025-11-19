@@ -1,0 +1,78 @@
+# Oracle Cloud Infrastructure Configuration
+# Copy this file to terraform.tfvars and fill in your actual values
+# IMPORTANT: Never commit terraform.tfvars to Git (it's in .gitignore)
+
+# =============================================================================
+# OCI Provider Configuration
+# =============================================================================
+# Get these values from Oracle Cloud Console:
+# - User Settings → User Information → OCID (user_ocid)
+# - Tenancy Details → Tenancy Information → OCID (tenancy_ocid)
+# - User Settings → API Keys → Fingerprint (after adding public key)
+
+tenancy_ocid     = "ocid1.tenancy.oc1..aaaaaaaa..."
+user_ocid        = "ocid1.user.oc1..aaaaaaaa..."
+fingerprint      = "aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99"
+private_key_path = "~/.oci/oci_api_key.pem"
+region           = "eu-amsterdam-1"
+
+# Compartment OCID (can be same as tenancy_ocid for root compartment)
+compartment_id = "ocid1.compartment.oc1..aaaaaaaa..."
+
+# =============================================================================
+# Cluster Configuration
+# =============================================================================
+cluster_name       = "health-platform-prod"
+kubernetes_version = "v1.28.2"
+cluster_type       = "BASIC_CLUSTER" # FREE control plane
+use_always_free    = true            # Use ARM Ampere A1 instances
+
+# =============================================================================
+# Network Configuration
+# =============================================================================
+vcn_cidr     = "10.0.0.0/16"
+pod_cidr     = "10.244.0.0/16"
+service_cidr = "10.96.0.0/16"
+
+# =============================================================================
+# Node Pools (Always Free: 4 OCPU, 24 GB RAM total)
+# =============================================================================
+# Configuration for 3 ARM nodes:
+# - 1x system-pool: 2 OCPU, 12 GB RAM (monitoring, ingress, system services)
+# - 2x app-pool: 1 OCPU, 6 GB RAM each (application workloads)
+node_pools = [
+  {
+    name       = "system-pool"
+    ocpu_count = 2
+    memory_gb  = 12
+    node_count = 1
+    auto_scale = false
+    min_nodes  = 1
+    max_nodes  = 1
+  },
+  {
+    name       = "app-pool"
+    ocpu_count = 1
+    memory_gb  = 6
+    node_count = 2
+    auto_scale = false
+    min_nodes  = 2
+    max_nodes  = 2
+  }
+]
+
+# =============================================================================
+# SSH Configuration
+# =============================================================================
+# Path to your SSH public key for node access
+ssh_public_key_path = "~/.ssh/id_rsa.pub"
+
+# =============================================================================
+# Tags
+# =============================================================================
+tags = {
+  Project     = "health-data-ai-platform"
+  ManagedBy   = "terraform"
+  Environment = "production"
+  CostCenter  = "always-free"
+}
