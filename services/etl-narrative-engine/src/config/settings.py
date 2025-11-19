@@ -58,6 +58,10 @@ class ConsumerSettings(BaseSettings):
     quarantine_prefix: str = "quarantine"
     raw_data_prefix: str = "raw"
 
+    # Module 4: Training Data Output
+    enable_training_output: bool = True
+    include_training_metadata: bool = True
+
     # Observability - Metrics
     enable_metrics: bool = True
     metrics_port: int = 8004
