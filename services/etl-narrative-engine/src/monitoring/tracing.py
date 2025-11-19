@@ -232,7 +232,7 @@ class TracingContext:
     Context manager for creating spans with automatic error handling.
 
     Usage:
-        async with TracingContext("download_from_s3", {"bucket": "health-data"}):
+        with TracingContext("download_from_s3", {"bucket": "health-data"}):
             # Operations to trace
             data = await download_file()
     """

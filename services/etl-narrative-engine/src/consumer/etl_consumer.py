@@ -246,6 +246,17 @@ class ETLConsumer:
                     correlation_id=message_data.get("correlation_id")
                 )
 
+                # Check deduplication early (before incrementing counter)
+                idempotency_key = message_data.get("idempotency_key")
+                if await self.dedup_store.is_already_processed(idempotency_key):
+                    self.logger.info(
+                        "message_already_processed_skipping",
+                        idempotency_key=idempotency_key
+                    )
+                    record_duplicate_detected(message_data.get("record_type", "unknown"))
+                    await message.ack()
+                    return
+
                 # Create top-level span for message processing
                 with tracer.start_as_current_span("process_message"):
                     # Track messages in progress
@@ -261,18 +272,6 @@ class ETLConsumer:
                             "message.bucket": message_data.get("bucket", "unknown"),
                             "message.key": message_data.get("key", "unknown")
                         })
-
-                        # Check deduplication
-                        idempotency_key = message_data.get("idempotency_key")
-                        if await self.dedup_store.is_already_processed(idempotency_key):
-                            self.logger.info(
-                                "message_already_processed_skipping",
-                                idempotency_key=idempotency_key
-                            )
-                            add_span_attributes({"processing.duplicate": True})
-                            record_duplicate_detected(message_data.get("record_type", "unknown"))
-                            await message.ack()
-                            return
 
                         # Mark as processing started
                         await self.dedup_store.mark_processing_started(

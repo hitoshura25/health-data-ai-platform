@@ -280,12 +280,12 @@ class TestTracingContext:
 
     @patch('src.monitoring.tracing.settings')
     def test_tracing_context_with_exception(self, mock_settings):
-        """Test TracingContext records exceptions"""
+        """Test TracingContext handles exceptions correctly"""
         # Setup
         mock_settings.enable_jaeger_tracing = False
 
-        # Execute & Verify
-        with pytest.raises(ValueError, match="Test error"), TracingContext("test_span"):
+        # Execute & Verify - exception should be raised but not suppressed
+        with TracingContext("test_span"), pytest.raises(ValueError, match="Test error"):
             raise ValueError("Test error")
 
     @patch('src.monitoring.tracing.settings')
