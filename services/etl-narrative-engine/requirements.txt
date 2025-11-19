@@ -53,6 +53,7 @@ pytest-timeout==2.4.0
 fakeredis==2.31.3
 requests==2.32.3
 httpx==0.27.0  # Required by FastAPI TestClient
+psutil~=5.9.8  # For memory efficiency testing (allows patch updates)
 
 # Type checking and linting
 typing_extensions==4.15.0
