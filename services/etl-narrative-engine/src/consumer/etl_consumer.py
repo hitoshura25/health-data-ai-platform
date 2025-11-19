@@ -20,6 +20,16 @@ import structlog
 from aio_pika import ExchangeType, IncomingMessage, Message, connect_robust
 
 from ..config.settings import settings
+from ..monitoring import (
+    add_span_attributes,
+    decrement_messages_in_progress,
+    get_tracer,
+    increment_messages_in_progress,
+    record_duplicate_detected,
+    record_message_processed,
+    record_processing_error,
+    record_processing_time,
+)
 from ..output.training_deduplicator import TrainingDeduplicator
 from ..output.training_formatter import TrainingDataFormatter
 from ..processors.processor_factory import MOCK_QUALITY_SCORE, ProcessorFactory
@@ -219,6 +229,7 @@ class ETLConsumer:
         """
         async with message.process(ignore_processed=True):
             processing_start = time.time()
+            tracer = get_tracer()
 
             try:
                 # Parse message body
@@ -235,49 +246,85 @@ class ETLConsumer:
                     correlation_id=message_data.get("correlation_id")
                 )
 
-                # Check deduplication
+                # Check deduplication early (before incrementing counter)
                 idempotency_key = message_data.get("idempotency_key")
                 if await self.dedup_store.is_already_processed(idempotency_key):
                     self.logger.info(
                         "message_already_processed_skipping",
                         idempotency_key=idempotency_key
                     )
+                    record_duplicate_detected(message_data.get("record_type", "unknown"))
                     await message.ack()
                     return
 
-                # Mark as processing started
-                await self.dedup_store.mark_processing_started(
-                    message_data,
-                    idempotency_key
-                )
+                # Create top-level span for message processing
+                with tracer.start_as_current_span("process_message"):
+                    # Track messages in progress
+                    increment_messages_in_progress()
 
-                # Process the message
-                await self._handle_message_processing(message_data)
+                    try:
+                        # Add message attributes to span
+                        add_span_attributes({
+                            "message.id": message_data.get("message_id", "unknown"),
+                            "message.record_type": message_data.get("record_type", "unknown"),
+                            "message.correlation_id": message_data.get("correlation_id", "unknown"),
+                            "message.user_id": message_data.get("user_id", "unknown"),
+                            "message.bucket": message_data.get("bucket", "unknown"),
+                            "message.key": message_data.get("key", "unknown")
+                        })
 
-                # Mark as completed
-                processing_time = time.time() - processing_start
-                # Note: In Module 4, we'll get actual narrative and quality score
-                await self.dedup_store.mark_processing_completed(
-                    idempotency_key=idempotency_key,
-                    processing_time=processing_time,
-                    records_processed=message_data.get("record_count", 0),
-                    narrative="Processing completed (Module 1 stub)",
-                    quality_score=MOCK_QUALITY_SCORE
-                )
+                        # Mark as processing started
+                        await self.dedup_store.mark_processing_started(
+                            message_data,
+                            idempotency_key
+                        )
 
-                # ACK message
-                await message.ack()
+                        # Process the message
+                        await self._handle_message_processing(message_data)
 
-                self.logger.info(
-                    "message_processed_successfully",
-                    message_id=message_data.get("message_id"),
-                    processing_time=processing_time
-                )
+                        # Mark as completed
+                        processing_time = time.time() - processing_start
+                        # Note: In Module 4, we'll get actual narrative and quality score
+                        await self.dedup_store.mark_processing_completed(
+                            idempotency_key=idempotency_key,
+                            processing_time=processing_time,
+                            records_processed=message_data.get("record_count", 0),
+                            narrative="Processing completed (Module 1 stub)",
+                            quality_score=MOCK_QUALITY_SCORE
+                        )
+
+                        # ACK message
+                        await message.ack()
+
+                        # Record successful processing metrics
+                        record_message_processed(message_data.get("record_type", "unknown"), "success")
+                        record_processing_time(message_data.get("record_type", "unknown"), processing_time)
+
+                        # Add processing metrics to span
+                        add_span_attributes({
+                            "processing.duration_seconds": processing_time,
+                            "processing.success": True
+                        })
+
+                        self.logger.info(
+                            "message_processed_successfully",
+                            message_id=message_data.get("message_id"),
+                            processing_time=processing_time
+                        )
+
+                    finally:
+                        # Always decrement messages in progress
+                        decrement_messages_in_progress()
 
             except Exception as e:
                 # Classify error
                 error_type = self.error_manager.classify_error(e)
                 retry_count = message_data.get("retry_count", 0) if 'message_data' in locals() else 0
+
+                # Record error metrics
+                record_type = message_data.get("record_type", "unknown") if 'message_data' in locals() else "unknown"
+                record_processing_error(error_type.value, record_type)
+                record_message_processed(record_type, "failed")
 
                 self.logger.error(
                     "message_processing_failed",
@@ -349,55 +396,93 @@ class ETLConsumer:
         Raises:
             Various exceptions that will be caught by _process_message
         """
-        # 1. Download file from S3
-        s3_key = message_data.get("key")
-        self.logger.info("downloading_file_from_s3", key=s3_key)
+        tracer = get_tracer()
+        record_type = message_data.get("record_type")
 
-        file_content = await self.s3_client.download_file(
-            key=s3_key,
-            max_size_mb=self.settings.max_file_size_mb
-        )
+        # 1. Download file from S3
+        with tracer.start_as_current_span("download_from_s3"):
+            s3_key = message_data.get("key")
+            add_span_attributes({
+                "s3.bucket": message_data.get("bucket", "unknown"),
+                "s3.key": s3_key,
+                "s3.max_size_mb": self.settings.max_file_size_mb
+            })
+
+            self.logger.info("downloading_file_from_s3", key=s3_key)
+
+            file_content = await self.s3_client.download_file(
+                key=s3_key,
+                max_size_mb=self.settings.max_file_size_mb
+            )
+
+            add_span_attributes({"s3.file_size_bytes": len(file_content)})
 
         # 2. Parse Avro records
-        record_type = message_data.get("record_type")
-        self.logger.info("parsing_avro_records", record_type=record_type)
+        with tracer.start_as_current_span("parse_avro_records"):
+            add_span_attributes({
+                "avro.record_type": record_type,
+                "avro.file_size_bytes": len(file_content)
+            })
 
-        records = self.avro_parser.parse_records(
-            avro_data=file_content,
-            expected_record_type=record_type
-        )
+            self.logger.info("parsing_avro_records", record_type=record_type)
+
+            records = self.avro_parser.parse_records(
+                avro_data=file_content,
+                expected_record_type=record_type
+            )
+
+            add_span_attributes({"avro.records_parsed": len(records)})
 
         # 3. Get processor for record type
         # Note: get_processor() raises ValueError/RuntimeError if not found, never returns None
         processor = self.processor_factory.get_processor(record_type)
 
         # 4. Process records with clinical processor
-        # Note: validation_result is None for Module 1, Module 2 will provide it
-        self.logger.info("processing_with_clinical_processor", record_type=record_type)
+        with tracer.start_as_current_span("clinical_processing"):
+            add_span_attributes({
+                "clinical.record_type": record_type,
+                "clinical.record_count": len(records)
+            })
 
-        result = await processor.process_with_clinical_insights(
-            records=records,
-            message_data=message_data,
-            validation_result=None  # Module 2 will provide validation
-        )
+            # Note: validation_result is None for Module 1, Module 2 will provide it
+            self.logger.info("processing_with_clinical_processor", record_type=record_type)
 
-        if not result.success:
-            raise Exception(f"Processing failed: {result.error_message}")
+            result = await processor.process_with_clinical_insights(
+                records=records,
+                message_data=message_data,
+                validation_result=None  # Module 2 will provide validation
+            )
 
-        self.logger.info(
-            "clinical_processing_completed",
-            record_type=record_type,
-            records_processed=result.records_processed,
-            quality_score=result.quality_score
-        )
+            if not result.success:
+                raise Exception(f"Processing failed: {result.error_message}")
+
+            add_span_attributes({
+                "clinical.success": True,
+                "clinical.records_processed": result.records_processed,
+                "clinical.quality_score": result.quality_score or 0.0,
+                "clinical.narrative_length": len(result.narrative) if result.narrative else 0
+            })
+
+            self.logger.info(
+                "clinical_processing_completed",
+                record_type=record_type,
+                records_processed=result.records_processed,
+                quality_score=result.quality_score
+            )
 
         # 5. Generate training data output (Module 4)
         if self.settings.enable_training_output and self.training_formatter:
-            await self._generate_training_output(
-                narrative=result.narrative,
-                message_data=message_data,
-                result=result
-            )
+            with tracer.start_as_current_span("generate_training_output"):
+                add_span_attributes({
+                    "training.enabled": True,
+                    "training.record_type": record_type
+                })
+
+                await self._generate_training_output(
+                    narrative=result.narrative,
+                    message_data=message_data,
+                    result=result
+                )
 
     async def _publish_delayed_retry(
         self, message_data: dict[str, Any], delay_seconds: int

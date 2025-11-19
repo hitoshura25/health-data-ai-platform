@@ -1,7 +1,7 @@
 """
 Monitoring module for ETL Narrative Engine.
 
-Provides metrics collection and health check endpoints.
+Provides metrics collection, health check endpoints, and distributed tracing.
 """
 
 from .metrics import (
@@ -26,8 +26,18 @@ from .metrics import (
     set_s3_status,
 )
 from .server import MetricsServer
+from .tracing import (
+    TracingContext,
+    add_span_attributes,
+    create_span,
+    get_tracer,
+    record_exception,
+    setup_tracing,
+    trace_async_function,
+)
 
 __all__ = [
+    # Metrics
     'MetricsServer',
     'initialize_metrics',
     'record_message_processed',
@@ -48,4 +58,12 @@ __all__ = [
     'increment_messages_in_progress',
     'decrement_messages_in_progress',
     'set_deduplication_cache_size',
+    # Tracing
+    'setup_tracing',
+    'get_tracer',
+    'trace_async_function',
+    'add_span_attributes',
+    'record_exception',
+    'create_span',
+    'TracingContext',
 ]

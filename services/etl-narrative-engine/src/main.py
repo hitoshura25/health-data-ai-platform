@@ -12,7 +12,7 @@ import structlog
 
 from .config.settings import settings
 from .consumer.etl_consumer import ETLConsumer
-from .monitoring import MetricsServer, initialize_metrics
+from .monitoring import MetricsServer, initialize_metrics, setup_tracing
 
 logger = structlog.get_logger()
 
@@ -47,6 +47,9 @@ async def main():
         version=settings.version,
         environment=settings.environment
     )
+
+    # Initialize distributed tracing
+    setup_tracing()
 
     # Create metrics server
     metrics_server = MetricsServer()
