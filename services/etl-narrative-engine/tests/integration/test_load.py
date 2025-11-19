@@ -22,6 +22,7 @@ from uuid import uuid4
 
 import aio_pika
 import aioboto3
+import psutil
 import pytest
 
 from src.consumer.deduplication import SQLiteDeduplicationStore
@@ -81,10 +82,9 @@ async def s3_client(s3_config):
             await client.create_bucket(Bucket=s3_config['bucket_name'])
         except (
             client.exceptions.BucketAlreadyOwnedByYou,
-            client.exceptions.BucketAlreadyExists,
-            Exception
+            client.exceptions.BucketAlreadyExists
         ):
-            pass  # Bucket exists from previous runs
+            pass  # Bucket already exists, safe to continue
         yield client
 
 
@@ -228,7 +228,7 @@ async def test_concurrent_file_uploads(sample_files, s3_client, s3_config):
     # Execute all uploads concurrently
     start_time = time.time()
     results = await asyncio.gather(*upload_tasks, return_exceptions=True)
-    duration = time.time() - start_time
+    duration = max(time.time() - start_time, 0.001)  # Guard against division by zero
 
     # Count successes and failures
     successes = sum(1 for r in results if isinstance(r, int))
@@ -285,7 +285,7 @@ async def test_concurrent_message_publishing(
     # Execute all publishes concurrently
     start_time = time.time()
     results = await asyncio.gather(*publish_tasks, return_exceptions=True)
-    duration = time.time() - start_time
+    duration = max(time.time() - start_time, 0.001)  # Guard against division by zero
 
     # Count successes
     failures = sum(1 for r in results if isinstance(r, Exception))
@@ -347,7 +347,7 @@ async def test_concurrent_message_processing(
     # Execute all processing concurrently
     start_time = time.time()
     results = await asyncio.gather(*processing_tasks)
-    duration = time.time() - start_time
+    duration = max(time.time() - start_time, 0.001)  # Guard against division by zero
 
     # Analyze results
     success_count = sum(1 for r in results if r['status'] == 'success')
@@ -430,7 +430,9 @@ async def test_throughput_benchmark(
 
     processing_tasks = []
     for s3_key in uploaded_keys:
-        idempotency_key = f"{bucket}:{s3_key}_{uuid4().hex}"  # Unique key to avoid dedup
+        # Intentionally bypass deduplication with unique key to measure raw processing throughput
+        # Note: Production behavior uses bucket:key without random UUID for proper deduplication
+        idempotency_key = f"{bucket}:{s3_key}_{uuid4().hex}"
         task = process_message_concurrent(
             s3_client, bucket, s3_key, dedup_store, idempotency_key, semaphore
         )
@@ -450,7 +452,7 @@ async def test_throughput_benchmark(
                 processed_count += 1
                 total_bytes += result.get('size', 0)
 
-    duration = time.time() - start_time
+    duration = max(time.time() - start_time, 0.001)  # Guard against division by zero
     throughput = processed_count / duration
     megabytes_per_sec = (total_bytes / 1024 / 1024) / duration
 
@@ -568,10 +570,6 @@ async def test_memory_efficiency(sample_files, s3_client, s3_config):
     """
     Test memory efficiency: Process many files without memory leaks
     """
-    import os
-
-    import psutil
-
     bucket = s3_config['bucket_name']
     process = psutil.Process(os.getpid())
 

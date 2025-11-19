@@ -77,15 +77,13 @@ async def s3_client(s3_config):
         use_ssl=False
     ) as client:
         # Ensure bucket exists
-        try:
+        try:  # noqa: SIM105
             await client.create_bucket(Bucket=s3_config['bucket_name'])
         except (
             client.exceptions.BucketAlreadyOwnedByYou,
             client.exceptions.BucketAlreadyExists
         ):
-            pass
-        except Exception:
-            pass  # Bucket might exist from previous runs
+            pass  # Bucket already exists, safe to continue
 
         yield client
 
@@ -254,44 +252,17 @@ async def test_full_pipeline_all_sample_files(
     )
     # Note: S3Client uses aioboto3 context managers, no explicit initialization needed
 
-    # Note: validator, processor_factory, and training_formatter would be used
-    # in full consumer implementation - commented out as they're not needed for this test
-    # validation_config = ValidationConfig(
-    #     quality_threshold=0.5,  # Lower threshold for sample files
-    #     enable_quarantine=True
-    # )
-    # _validator = DataQualityValidator(
-    #     config=validation_config,
-    #     s3_client=s3_storage,
-    #     bucket_name=bucket
-    # )
-    #
-    # processor_factory = ProcessorFactory()
-    # await processor_factory.initialize()
-    #
-    # _training_formatter = TrainingDataFormatter(
-    #     s3_client=s3_storage,  # Would need aioboto3 client in real usage
-    #     bucket_name=bucket,
-    #     training_prefix='training/',
-    #     include_metadata=True
-    # )
-
-    # Process messages manually (simulating consumer)
+    # Process messages manually (simulating consumer without full validation/processing pipeline)
     processed_count = 0
     failed_count = 0
-    _quarantined_count = 0  # Would be used in full implementation
     start_time = time.time()
 
     print("\n🔄 Processing messages...")
 
     for message_data in messages_published:
         try:
-            # Download file
-            _file_content = await s3_storage.download_file(message_data['key'])
-
-            # Parse records (simplified - actual consumer uses AvroParser)
-            # For this test, we'll assume parsing works if file is downloaded
-            _records = []  # Would parse Avro here
+            # Download file to verify S3 access works
+            await s3_storage.download_file(message_data['key'])
 
             # Check if we should skip (would do validation here)
             # For testing, we'll process all files
@@ -317,7 +288,7 @@ async def test_full_pipeline_all_sample_files(
             failed_count += 1
             print(f"  ✗ Failed: {message_data['record_type']} - {e}")
 
-    processing_duration = time.time() - start_time
+    processing_duration = max(time.time() - start_time, 0.001)  # Guard against division by zero
 
     # Note: S3Client uses context managers, no explicit cleanup needed
 
@@ -349,14 +320,12 @@ async def test_deduplication_prevents_reprocessing(
     all_sample_files,
     s3_client,
     s3_config,
-    rabbitmq_connection,
     dedup_store
 ):
     """
     Verify that duplicate messages are not reprocessed
     """
     bucket = s3_config['bucket_name']
-    # Note: queue_name would be used in full implementation with RabbitMQ
 
     # Take first sample file
     sample_file = all_sample_files[0]
@@ -478,7 +447,7 @@ async def test_performance_benchmark(
 
         processed_count += 1
 
-    duration = time.time() - start_time
+    duration = max(time.time() - start_time, 0.001)  # Guard against division by zero
     throughput = processed_count / duration
 
     print("\n⚡ Performance Metrics:")

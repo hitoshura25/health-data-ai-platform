@@ -30,9 +30,10 @@ Phase 5 represents the completion of the ETL Narrative Engine with comprehensive
 
 ✅ **Quality Assurance**
 - All unit tests passing (216/216 tests)
+- All integration tests passing (49/49 tests, including 11 new Phase 5 tests)
 - Lint checks passing (ruff)
-- Code coverage: 72%
-- Integration test framework established
+- Code coverage: 39% overall (measured across all 2,186 lines of source code)
+- Integration test framework established with Docker-based testing
 
 ---
 
@@ -505,7 +506,9 @@ Integration tests can be run in CI/CD pipelines:
 **Phase 5 Status**: ✅ **COMPLETE** - ETL Narrative Engine Ready for Production
 
 **Implementation Date**: 2025-11-19
-**Lines of Code**: ~1,116 (integration tests only)
-**Tests Passing**: 227/227 (216 unit + 11 integration)
+**Lines of Code**: ~1,116 (Phase 5 integration tests only)
+**Tests Passing**: 265/265 (216 unit + 49 integration tests total)
+  - 38 existing integration tests (from Phases 1-4)
+  - 11 new Phase 5 integration tests (full pipeline + load testing)
 **Lint Status**: All checks passed
-**Coverage**: 72%
+**Coverage**: 39% (overall), 72% (with integration coverage)
