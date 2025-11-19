@@ -255,7 +255,7 @@ async def test_full_pipeline_all_sample_files(
         bucket_name=settings.s3_bucket_name,
         region='us-east-1'
     )
-    await s3_storage.initialize()
+    # Note: S3Client uses aioboto3 context managers, no explicit initialization needed
 
     # Note: validator, processor_factory, and training_formatter would be used
     # in full consumer implementation - kept here for reference
@@ -318,7 +318,7 @@ async def test_full_pipeline_all_sample_files(
 
     processing_duration = time.time() - start_time
 
-    await s3_storage.close()
+    # Note: S3Client uses context managers, no explicit cleanup needed
 
     # Step 3: Verify results
     print("\n📈 Results:")
