@@ -28,6 +28,7 @@ from src.consumer.deduplication import SQLiteDeduplicationStore
 from src.output.training_formatter import TrainingDataFormatter
 from src.processors.processor_factory import ProcessorFactory
 from src.storage.s3_client import S3Client
+from src.validation.config import ValidationConfig
 from src.validation.data_quality import DataQualityValidator
 
 
@@ -259,10 +260,14 @@ async def test_full_pipeline_all_sample_files(
 
     # Note: validator, processor_factory, and training_formatter would be used
     # in full consumer implementation - kept here for reference
-    _validator = DataQualityValidator(
-        s3_client=s3_storage,
+    validation_config = ValidationConfig(
         quality_threshold=0.5,  # Lower threshold for sample files
         enable_quarantine=True
+    )
+    _validator = DataQualityValidator(
+        config=validation_config,
+        s3_client=s3_storage,
+        bucket_name=bucket
     )
 
     processor_factory = ProcessorFactory()
