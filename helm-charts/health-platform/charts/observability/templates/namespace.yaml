@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.global.namespace }}
+  labels:
+    name: {{ .Values.global.namespace }}
+    environment: {{ .Values.global.environment }}
+    cluster: {{ .Values.global.clusterName }}
+    app.kubernetes.io/name: observability
+    app.kubernetes.io/part-of: health-platform

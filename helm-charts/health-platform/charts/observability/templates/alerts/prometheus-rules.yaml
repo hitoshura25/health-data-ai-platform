@@ -1,0 +1,371 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: health-platform-alerts
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: kube-prometheus-stack
+    release: {{ .Release.Name }}
+    app.kubernetes.io/name: prometheus-rules
+    app.kubernetes.io/part-of: health-platform
+spec:
+  groups:
+  # Health API Alerts
+  - name: health-api
+    interval: 30s
+    rules:
+    - alert: HealthAPIHighErrorRate
+      expr: |
+        rate(http_requests_total{namespace="health-api",status=~"5.."}[5m]) > 0.05
+      for: 5m
+      labels:
+        severity: critical
+        component: health-api
+      annotations:
+        summary: "High error rate on Health API"
+        description: "Health API error rate is {{ $value | humanize }} errors/sec (threshold: 0.05)"
+
+    - alert: HealthAPIHighLatency
+      expr: |
+        histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{namespace="health-api"}[5m])) > 1
+      for: 5m
+      labels:
+        severity: warning
+        component: health-api
+      annotations:
+        summary: "High latency on Health API"
+        description: "Health API p95 latency is {{ $value | humanizeDuration }} (threshold: 1s)"
+
+    - alert: HealthAPIPodDown
+      expr: |
+        kube_deployment_status_replicas_available{namespace="health-api"} < 1
+      for: 1m
+      labels:
+        severity: critical
+        component: health-api
+      annotations:
+        summary: "No Health API pods available"
+        description: "Health API deployment has {{ $value }} available replicas (expected: ≥1)"
+
+    - alert: HealthAPIHighMemoryUsage
+      expr: |
+        container_memory_working_set_bytes{namespace="health-api",container="health-api"} /
+        container_spec_memory_limit_bytes{namespace="health-api",container="health-api"} > 0.85
+      for: 5m
+      labels:
+        severity: warning
+        component: health-api
+      annotations:
+        summary: "Health API high memory usage"
+        description: "Health API memory usage is {{ $value | humanizePercentage }} of limit"
+
+  # WebAuthn Service Alerts
+  - name: webauthn
+    interval: 30s
+    rules:
+    - alert: WebAuthnHighErrorRate
+      expr: |
+        rate(http_requests_total{namespace="health-auth",job="webauthn-server",status=~"5.."}[5m]) > 0.05
+      for: 5m
+      labels:
+        severity: critical
+        component: webauthn
+      annotations:
+        summary: "High error rate on WebAuthn service"
+        description: "WebAuthn error rate is {{ $value | humanize }} errors/sec"
+
+    - alert: WebAuthnPodDown
+      expr: |
+        kube_deployment_status_replicas_available{namespace="health-auth",deployment="webauthn-server"} < 1
+      for: 1m
+      labels:
+        severity: critical
+        component: webauthn
+      annotations:
+        summary: "No WebAuthn pods available"
+        description: "WebAuthn deployment has {{ $value }} available replicas"
+
+  # ETL Narrative Engine Alerts
+  - name: etl-engine
+    interval: 30s
+    rules:
+    - alert: ETLProcessingFailure
+      expr: |
+        rate(etl_processing_failures_total{namespace="health-etl"}[5m]) > 0
+      for: 5m
+      labels:
+        severity: warning
+        component: etl-engine
+      annotations:
+        summary: "ETL processing failures detected"
+        description: "ETL engine is experiencing {{ $value | humanize }} failures/sec"
+
+    - alert: ETLQueueBacklog
+      expr: |
+        etl_queue_depth{namespace="health-etl"} > 1000
+      for: 10m
+      labels:
+        severity: warning
+        component: etl-engine
+      annotations:
+        summary: "ETL queue backlog growing"
+        description: "ETL queue has {{ $value }} pending items"
+
+  # PostgreSQL Infrastructure Alerts
+  - name: postgresql
+    interval: 30s
+    rules:
+    - alert: PostgreSQLDown
+      expr: |
+        pg_up{namespace="health-data"} == 0
+      for: 1m
+      labels:
+        severity: critical
+        component: postgresql
+      annotations:
+        summary: "PostgreSQL is down"
+        description: "PostgreSQL instance {{ $labels.instance }} is down"
+
+    - alert: PostgreSQLHighConnections
+      expr: |
+        sum(pg_stat_activity_count) by (instance) / pg_settings_max_connections > 0.8
+      for: 5m
+      labels:
+        severity: warning
+        component: postgresql
+      annotations:
+        summary: "PostgreSQL connection limit approaching"
+        description: "PostgreSQL is using {{ $value | humanizePercentage }} of max connections"
+
+    - alert: PostgreSQLSlowQueries
+      expr: |
+        rate(pg_slow_queries_total[5m]) > 5
+      for: 5m
+      labels:
+        severity: warning
+        component: postgresql
+      annotations:
+        summary: "PostgreSQL slow queries detected"
+        description: "{{ $value | humanize }} slow queries/sec detected"
+
+    - alert: PostgreSQLDiskSpaceHigh
+      expr: |
+        (pg_database_size_bytes / 1024 / 1024 / 1024) > 50
+      for: 10m
+      labels:
+        severity: warning
+        component: postgresql
+      annotations:
+        summary: "PostgreSQL database size growing"
+        description: "Database size is {{ $value | humanize }} GB (threshold: 50GB)"
+
+  # Redis Infrastructure Alerts
+  - name: redis
+    interval: 30s
+    rules:
+    - alert: RedisDown
+      expr: |
+        redis_up{namespace="health-data"} == 0
+      for: 1m
+      labels:
+        severity: critical
+        component: redis
+      annotations:
+        summary: "Redis is down"
+        description: "Redis instance {{ $labels.instance }} is down"
+
+    - alert: RedisHighMemoryUsage
+      expr: |
+        redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+      for: 5m
+      labels:
+        severity: warning
+        component: redis
+      annotations:
+        summary: "Redis memory usage high"
+        description: "Redis is using {{ $value | humanizePercentage }} of max memory"
+
+    - alert: RedisHighEvictionRate
+      expr: |
+        rate(redis_evicted_keys_total[5m]) > 10
+      for: 5m
+      labels:
+        severity: warning
+        component: redis
+      annotations:
+        summary: "Redis high eviction rate"
+        description: "Redis is evicting {{ $value | humanize }} keys/sec"
+
+  # MinIO Data Lake Alerts
+  - name: minio
+    interval: 30s
+    rules:
+    - alert: MinIODown
+      expr: |
+        minio_cluster_nodes_offline_total > 0
+      for: 1m
+      labels:
+        severity: critical
+        component: minio
+      annotations:
+        summary: "MinIO nodes offline"
+        description: "{{ $value }} MinIO nodes are offline"
+
+    - alert: MinIODiskFull
+      expr: |
+        minio_cluster_capacity_usable_free_bytes / minio_cluster_capacity_usable_total_bytes < 0.2
+      for: 5m
+      labels:
+        severity: warning
+        component: minio
+      annotations:
+        summary: "MinIO disk space low"
+        description: "MinIO has {{ $value | humanizePercentage }} free space remaining"
+
+  # RabbitMQ Message Queue Alerts
+  - name: rabbitmq
+    interval: 30s
+    rules:
+    - alert: RabbitMQDown
+      expr: |
+        rabbitmq_up{namespace="health-data"} == 0
+      for: 1m
+      labels:
+        severity: critical
+        component: rabbitmq
+      annotations:
+        summary: "RabbitMQ is down"
+        description: "RabbitMQ instance {{ $labels.instance }} is down"
+
+    - alert: RabbitMQQueueBacklog
+      expr: |
+        rabbitmq_queue_messages_ready > 1000
+      for: 10m
+      labels:
+        severity: warning
+        component: rabbitmq
+      annotations:
+        summary: "RabbitMQ queue backlog"
+        description: "Queue {{ $labels.queue }} has {{ $value }} ready messages"
+
+    - alert: RabbitMQNoConsumers
+      expr: |
+        rabbitmq_queue_consumers == 0
+      for: 5m
+      labels:
+        severity: warning
+        component: rabbitmq
+      annotations:
+        summary: "RabbitMQ queue has no consumers"
+        description: "Queue {{ $labels.queue }} has no active consumers"
+
+  # Kubernetes Node Alerts
+  - name: kubernetes-nodes
+    interval: 30s
+    rules:
+    - alert: NodeCPUHigh
+      expr: |
+        (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) by (instance)) > 0.8
+      for: 10m
+      labels:
+        severity: warning
+        component: kubernetes
+      annotations:
+        summary: "Node CPU usage high"
+        description: "Node {{ $labels.instance }} CPU usage is {{ $value | humanizePercentage }}"
+
+    - alert: NodeMemoryHigh
+      expr: |
+        (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.85
+      for: 10m
+      labels:
+        severity: warning
+        component: kubernetes
+      annotations:
+        summary: "Node memory usage high"
+        description: "Node {{ $labels.instance }} memory usage is {{ $value | humanizePercentage }}"
+
+    - alert: NodeDiskSpaceHigh
+      expr: |
+        (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.2
+      for: 5m
+      labels:
+        severity: warning
+        component: kubernetes
+      annotations:
+        summary: "Node disk space low"
+        description: "Node {{ $labels.instance }} has {{ $value | humanizePercentage }} disk free"
+
+    - alert: NodeNotReady
+      expr: |
+        kube_node_status_condition{condition="Ready",status="true"} == 0
+      for: 5m
+      labels:
+        severity: critical
+        component: kubernetes
+      annotations:
+        summary: "Kubernetes node not ready"
+        description: "Node {{ $labels.node }} is not ready"
+
+  # Persistent Volume Alerts
+  - name: storage
+    interval: 30s
+    rules:
+    - alert: PersistentVolumeSpaceHigh
+      expr: |
+        (kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) > 0.8
+      for: 5m
+      labels:
+        severity: warning
+        component: storage
+      annotations:
+        summary: "Persistent volume usage high"
+        description: "PVC {{ $labels.persistentvolumeclaim }} in namespace {{ $labels.namespace }} is {{ $value | humanizePercentage }} full"
+
+    - alert: PersistentVolumeFull
+      expr: |
+        (kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) > 0.95
+      for: 1m
+      labels:
+        severity: critical
+        component: storage
+      annotations:
+        summary: "Persistent volume almost full"
+        description: "PVC {{ $labels.persistentvolumeclaim }} in namespace {{ $labels.namespace }} is {{ $value | humanizePercentage }} full"
+
+  # Cost Monitoring Alerts (Oracle Free Tier)
+  - name: cost-monitoring
+    interval: 1h
+    rules:
+    - alert: TotalCPUUsageHigh
+      expr: |
+        sum(rate(container_cpu_usage_seconds_total[5m])) > 3.8
+      for: 30m
+      labels:
+        severity: warning
+        component: cost-monitoring
+      annotations:
+        summary: "Cluster CPU usage approaching free tier limit"
+        description: "Total CPU usage is {{ $value | humanize }} cores (free tier: 4 cores)"
+
+    - alert: TotalMemoryUsageHigh
+      expr: |
+        sum(container_memory_working_set_bytes) / 1024 / 1024 / 1024 > 22
+      for: 30m
+      labels:
+        severity: warning
+        component: cost-monitoring
+      annotations:
+        summary: "Cluster memory usage approaching free tier limit"
+        description: "Total memory usage is {{ $value | humanize }} GB (free tier: 24 GB)"
+
+    - alert: TotalStorageUsageHigh
+      expr: |
+        sum(kubelet_volume_stats_used_bytes) / 1024 / 1024 / 1024 > 180
+      for: 1h
+      labels:
+        severity: warning
+        component: cost-monitoring
+      annotations:
+        summary: "Total storage usage approaching free tier limit"
+        description: "Total storage usage is {{ $value | humanize }} GB (free tier: 200 GB)"

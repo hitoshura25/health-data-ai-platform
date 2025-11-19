@@ -1,0 +1,248 @@
+█████████████████████████████████████████████████████████████████████████████
+█                                                                           █
+█  Health Platform - Observability Stack Successfully Deployed!            █
+█                                                                           █
+█████████████████████████████████████████████████████████████████████████████
+
+Environment: {{ .Values.global.environment }}
+Cluster: {{ .Values.global.clusterName }}
+Namespace: {{ .Values.global.namespace }}
+
+═══════════════════════════════════════════════════════════════════════════════
+  DEPLOYED COMPONENTS
+═══════════════════════════════════════════════════════════════════════════════
+
+{{- if .Values.kube-prometheus-stack.enabled }}
+✓ Prometheus - Metrics collection (30-day retention)
+✓ Grafana - Visualization dashboards
+✓ AlertManager - Alert routing and notifications
+{{- end }}
+
+{{- if .Values.jaeger.enabled }}
+✓ Jaeger - Distributed tracing (OTLP enabled)
+{{- end }}
+
+{{- if .Values.loki.enabled }}
+✓ Loki - Log aggregation (7-day retention)
+{{- end }}
+
+{{- if .Values.promtail.enabled }}
+✓ Promtail - Log shipping (DaemonSet on all nodes)
+{{- end }}
+
+═══════════════════════════════════════════════════════════════════════════════
+  ACCESSING THE DASHBOARDS
+═══════════════════════════════════════════════════════════════════════════════
+
+{{- if .Values.kube-prometheus-stack.grafana.enabled }}
+
+1. GRAFANA (Visualization & Dashboards)
+
+   Port-forward for local access:
+
+     kubectl port-forward -n {{ .Values.global.namespace }} \
+       svc/{{ .Release.Name }}-grafana 3000:80
+
+   Access: http://localhost:3000
+
+   {{- if eq .Values.global.environment "development" }}
+   Username: admin
+   Password: {{ .Values.kube-prometheus-stack.grafana.adminPassword }}
+   {{- else }}
+   Username: admin
+   Password: <configured in sealed secret>
+   {{- end }}
+
+   Pre-configured Dashboards:
+     • Health Platform - Application Overview
+     • Infrastructure Health - Databases & Queues
+     • Cost Monitoring - Oracle Free Tier Usage
+     • Security Dashboard - Authentication & Access
+     • Kubernetes Cluster Overview (from Grafana.com)
+     • Node Exporter Metrics (from Grafana.com)
+
+{{- end }}
+
+{{- if .Values.jaeger.enabled }}
+
+2. JAEGER (Distributed Tracing)
+
+   Port-forward for local access:
+
+     kubectl port-forward -n {{ .Values.global.namespace }} \
+       svc/jaeger-query 16686:16686
+
+   Access: http://localhost:16686
+
+   OTLP Endpoints (for service instrumentation):
+     • gRPC: jaeger-collector.{{ .Values.global.namespace }}:4317
+     • HTTP: jaeger-collector.{{ .Values.global.namespace }}:4318
+
+{{- end }}
+
+3. PROMETHEUS (Metrics & Queries)
+
+   Port-forward for local access:
+
+     kubectl port-forward -n {{ .Values.global.namespace }} \
+       svc/{{ .Release.Name }}-kube-prometheus-prometheus 9090:9090
+
+   Access: http://localhost:9090
+
+4. ALERTMANAGER (Alert Management)
+
+   Port-forward for local access:
+
+     kubectl port-forward -n {{ .Values.global.namespace }} \
+       svc/{{ .Release.Name }}-kube-prometheus-alertmanager 9093:9093
+
+   Access: http://localhost:9093
+
+═══════════════════════════════════════════════════════════════════════════════
+  VERIFICATION STEPS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Check all pods are running:
+
+   kubectl get pods -n {{ .Values.global.namespace }}
+
+2. Verify Prometheus is scraping targets:
+
+   kubectl port-forward -n {{ .Values.global.namespace }} \
+     svc/{{ .Release.Name }}-kube-prometheus-prometheus 9090:9090
+
+   Visit: http://localhost:9090/targets
+
+3. Check ServiceMonitors are discovered:
+
+   kubectl get servicemonitors -A
+
+4. View Prometheus rules (alerts):
+
+   kubectl get prometheusrules -n {{ .Values.global.namespace }}
+
+5. Test Loki log aggregation:
+
+   kubectl port-forward -n {{ .Values.global.namespace }} \
+     svc/{{ .Release.Name }}-loki 3100:3100
+
+   Query: curl http://localhost:3100/loki/api/v1/labels
+
+═══════════════════════════════════════════════════════════════════════════════
+  STORAGE USAGE
+═══════════════════════════════════════════════════════════════════════════════
+
+Check persistent volume usage:
+
+  kubectl get pvc -n {{ .Values.global.namespace }}
+
+Expected storage allocation:
+  • Prometheus: 20 GB (30-day retention)
+  • Jaeger: 10 GB (trace storage)
+  • Loki: 5 GB (7-day log retention)
+  • Grafana: 5 GB (dashboards & settings)
+  • AlertManager: 5 GB (alert history)
+  ────────────────────────────
+  Total: 45 GB (within 200 GB free tier)
+
+═══════════════════════════════════════════════════════════════════════════════
+  IMPORTANT: PRODUCTION CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+{{- if eq .Values.global.environment "production" }}
+
+Before going to production, ensure:
+
+  [ ] Change Grafana admin password from default
+  [ ] Configure AlertManager receivers (Slack, PagerDuty, email)
+  [ ] Set up ingress with SSL certificates
+  [ ] Configure authentication for Grafana (LDAP/OAuth)
+  [ ] Enable auth for Jaeger UI (basic auth or OAuth)
+  [ ] Review and adjust alert thresholds
+  [ ] Set up backup for Grafana dashboards
+  [ ] Test disaster recovery procedures
+  [ ] Configure log retention based on compliance requirements
+  [ ] Review resource limits vs. actual usage
+
+{{- else }}
+
+NOTE: This is a {{ .Values.global.environment }} deployment.
+For production deployment, use: --values values-production.yaml
+
+{{- end }}
+
+═══════════════════════════════════════════════════════════════════════════════
+  INSTRUMENTATION GUIDE
+═══════════════════════════════════════════════════════════════════════════════
+
+To instrument your services for observability:
+
+1. METRICS (Prometheus)
+
+   Add /metrics endpoint to your services and create ServiceMonitor:
+
+   apiVersion: monitoring.coreos.com/v1
+   kind: ServiceMonitor
+   metadata:
+     name: my-service
+     namespace: my-namespace
+   spec:
+     selector:
+       matchLabels:
+         app: my-service
+     endpoints:
+     - port: metrics
+       interval: 15s
+
+2. TRACING (Jaeger via OpenTelemetry)
+
+   Configure OTLP exporter in your application:
+
+   OTLP_ENDPOINT: jaeger-collector.{{ .Values.global.namespace }}:4317
+
+3. LOGGING (Loki via Promtail)
+
+   Use structured JSON logging to stdout/stderr:
+
+   {
+     "timestamp": "2025-01-19T12:00:00Z",
+     "level": "info",
+     "service": "my-service",
+     "trace_id": "abc123",
+     "message": "Request processed"
+   }
+
+═══════════════════════════════════════════════════════════════════════════════
+  TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════════════════════
+
+If pods are not starting:
+  • Check resource availability: kubectl top nodes
+  • View pod events: kubectl describe pod <pod-name> -n {{ .Values.global.namespace }}
+  • Check logs: kubectl logs <pod-name> -n {{ .Values.global.namespace }}
+
+If metrics are not appearing:
+  • Verify ServiceMonitor selectors match Service labels
+  • Check Prometheus targets: http://localhost:9090/targets
+  • Ensure services expose /metrics endpoint
+
+If logs are not aggregating:
+  • Verify Promtail is running on all nodes
+  • Check Promtail logs for errors
+  • Ensure pods are logging to stdout/stderr
+
+═══════════════════════════════════════════════════════════════════════════════
+  RESOURCES & DOCUMENTATION
+═══════════════════════════════════════════════════════════════════════════════
+
+  • Prometheus: https://prometheus.io/docs/
+  • Grafana: https://grafana.com/docs/
+  • Jaeger: https://www.jaegertracing.io/docs/
+  • Loki: https://grafana.com/docs/loki/
+  • kube-prometheus-stack: https://github.com/prometheus-community/helm-charts
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Happy Monitoring! 🚀📊📈
+
+For support, check: /helm-charts/health-platform/charts/observability/README.md

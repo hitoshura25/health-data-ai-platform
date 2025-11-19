@@ -1,0 +1,375 @@
+# Production overrides for observability stack
+# Oracle Cloud Infrastructure - Always Free Tier optimized
+
+# Global settings
+global:
+  namespace: health-observability
+  clusterName: health-platform-prod
+  environment: production
+  storageClass: oci-bv
+
+# Jaeger - Production configuration
+jaeger:
+  enabled: true
+
+  resources:
+    requests:
+      cpu: 300m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+  persistence:
+    enabled: true
+    storageClass: oci-bv
+    size: 10Gi
+
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/auth-type: basic
+      nginx.ingress.kubernetes.io/auth-secret: jaeger-basic-auth
+      nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required - Jaeger'
+    host: jaeger.yourdomain.com
+    tls:
+      enabled: true
+      secretName: jaeger-tls
+
+# kube-prometheus-stack - Production configuration
+kube-prometheus-stack:
+  enabled: true
+
+  prometheus:
+    enabled: true
+
+    prometheusSpec:
+      # Production resource limits (Always Free tier)
+      resources:
+        requests:
+          cpu: 500m
+          memory: 2Gi
+        limits:
+          cpu: 1000m
+          memory: 4Gi
+
+      # Storage configuration
+      retention: 30d
+      retentionSize: "18GB"
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: oci-bv
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 20Gi
+
+      # External labels
+      externalLabels:
+        cluster: health-platform-prod
+        environment: production
+        region: eu-amsterdam-1
+
+      # Security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+
+  grafana:
+    enabled: true
+
+    # IMPORTANT: Change this password!
+    adminPassword: "CHANGE_ME_SECURE_PASSWORD_IN_SEALED_SECRET"
+
+    persistence:
+      enabled: true
+      storageClassName: oci-bv
+      size: 5Gi
+
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+
+    ingress:
+      enabled: true
+      ingressClassName: nginx
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+        nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      hosts:
+        - grafana.yourdomain.com
+      tls:
+        - secretName: grafana-tls
+          hosts:
+            - grafana.yourdomain.com
+
+    # Grafana configuration
+    grafana.ini:
+      server:
+        domain: grafana.yourdomain.com
+        root_url: https://grafana.yourdomain.com
+        enforce_domain: true
+
+      security:
+        admin_user: admin
+        cookie_secure: true
+        cookie_samesite: strict
+        strict_transport_security: true
+        x_content_type_options: true
+        x_xss_protection: true
+
+      auth:
+        disable_login_form: false
+        disable_signout_menu: false
+
+      auth.anonymous:
+        enabled: false
+
+      analytics:
+        reporting_enabled: false
+        check_for_updates: false
+
+      log:
+        mode: console
+        level: info
+
+    # Security context
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 472
+      fsGroup: 472
+
+  alertmanager:
+    enabled: true
+
+    alertmanagerSpec:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+
+      storage:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: oci-bv
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 5Gi
+
+      # Security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+
+    config:
+      global:
+        resolve_timeout: 5m
+        # Add your SMTP, Slack, PagerDuty credentials here
+
+      route:
+        group_by: ['alertname', 'cluster', 'service', 'namespace']
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 4h
+        receiver: 'default'
+        routes:
+        - match:
+            severity: critical
+          receiver: critical
+          repeat_interval: 30m
+          continue: true
+        - match:
+            severity: warning
+          receiver: warning
+          repeat_interval: 2h
+
+      receivers:
+      - name: 'default'
+        # Configure your default notification channel
+        # Example: webhook, email, etc.
+        webhook_configs:
+        - url: 'https://your-webhook-url.com/alerts'
+          send_resolved: true
+
+      - name: 'critical'
+        # Critical alerts - immediate notification
+        # Add Slack webhook:
+        # slack_configs:
+        # - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        #   channel: '#alerts-critical'
+        #   title: 'Critical Alert: {{ .GroupLabels.alertname }}'
+        #   text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        webhook_configs:
+        - url: 'https://your-webhook-url.com/critical'
+          send_resolved: true
+
+      - name: 'warning'
+        # Warning alerts - standard notification
+        webhook_configs:
+        - url: 'https://your-webhook-url.com/warning'
+          send_resolved: true
+
+  # Node Exporter - Always Free tier optimized
+  prometheus-node-exporter:
+    enabled: true
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+
+  # Kube State Metrics
+  kube-state-metrics:
+    enabled: true
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+
+# Loki - Production configuration
+loki:
+  enabled: true
+
+  loki:
+    auth_enabled: false
+
+    storage:
+      type: filesystem
+
+    limits_config:
+      retention_period: 168h  # 7 days
+      max_query_series: 10000
+      max_query_lookback: 168h
+      ingestion_rate_mb: 10
+      ingestion_burst_size_mb: 20
+
+    compactor:
+      retention_enabled: true
+      retention_delete_delay: 2h
+      working_directory: /data/compactor
+      compaction_interval: 10m
+
+  singleBinary:
+    replicas: 1
+
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 400m
+        memory: 1Gi
+
+    persistence:
+      enabled: true
+      storageClass: oci-bv
+      size: 5Gi
+
+    # Security context
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 10001
+      fsGroup: 10001
+      runAsGroup: 10001
+
+# Promtail - Production configuration
+promtail:
+  enabled: true
+
+  config:
+    clients:
+      - url: http://{{ .Release.Name }}-loki:3100/loki/api/v1/push
+
+    snippets:
+      pipelineStages:
+        # Parse container logs
+        - cri: {}
+
+        # Parse JSON logs from our services
+        - json:
+            expressions:
+              level: level
+              msg: message
+              trace_id: trace_id
+              service: service
+              timestamp: timestamp
+
+        # Add labels
+        - labels:
+            level:
+            service:
+
+        # Timestamp extraction
+        - timestamp:
+            source: timestamp
+            format: RFC3339Nano
+
+        # Drop debug logs in production (save space)
+        - match:
+            selector: '{level="debug"}'
+            action: drop
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  # Security context
+  securityContext:
+    runAsUser: 0
+    privileged: false
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+
+# ServiceMonitors - All enabled for production
+serviceMonitors:
+  enabled: true
+
+  healthApi:
+    enabled: true
+  webauthn:
+    enabled: true
+  etlEngine:
+    enabled: true
+  postgresql:
+    enabled: true
+  redis:
+    enabled: true
+  minio:
+    enabled: true
+  rabbitmq:
+    enabled: true
+
+# Custom Dashboards - All enabled
+dashboards:
+  healthPlatform:
+    enabled: true
+  infrastructure:
+    enabled: true
+  costMonitoring:
+    enabled: true
+  security:
+    enabled: true

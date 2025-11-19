@@ -1,0 +1,89 @@
+{{- if .Values.jaeger.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: jaeger
+    component: all-in-one
+    app.kubernetes.io/name: jaeger
+    app.kubernetes.io/component: tracing
+    app.kubernetes.io/part-of: health-platform
+spec:
+  replicas: {{ .Values.jaeger.replicaCount }}
+  selector:
+    matchLabels:
+      app: jaeger
+  template:
+    metadata:
+      labels:
+        app: jaeger
+        component: all-in-one
+    spec:
+      containers:
+      - name: jaeger
+        image: "{{ .Values.jaeger.image.repository }}:{{ .Values.jaeger.image.tag }}"
+        imagePullPolicy: {{ .Values.jaeger.image.pullPolicy }}
+        ports:
+        - containerPort: 5775
+          protocol: UDP
+          name: zipkin-compact
+        - containerPort: 6831
+          protocol: UDP
+          name: jaeger-compact
+        - containerPort: 6832
+          protocol: UDP
+          name: jaeger-binary
+        - containerPort: 5778
+          protocol: TCP
+          name: jaeger-config
+        - containerPort: 16686
+          protocol: TCP
+          name: jaeger-ui
+        - containerPort: 14250
+          protocol: TCP
+          name: jaeger-grpc
+        - containerPort: 14268
+          protocol: TCP
+          name: jaeger-http
+        - containerPort: 14269
+          protocol: TCP
+          name: jaeger-admin
+        - containerPort: 4317
+          protocol: TCP
+          name: otlp-grpc
+        - containerPort: 4318
+          protocol: TCP
+          name: otlp-http
+        env:
+        {{- range $key, $value := .Values.jaeger.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.jaeger.resources | nindent 10 }}
+        volumeMounts:
+        - name: badger-data
+          mountPath: /badger
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 14269
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 14269
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: badger-data
+        {{- if .Values.jaeger.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: jaeger-pvc
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
+{{- end }}

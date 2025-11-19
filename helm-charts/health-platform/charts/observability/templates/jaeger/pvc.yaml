@@ -1,0 +1,18 @@
+{{- if and .Values.jaeger.enabled .Values.jaeger.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jaeger-pvc
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: jaeger
+    app.kubernetes.io/name: jaeger
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.jaeger.persistence.storageClass | default .Values.global.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.jaeger.persistence.size }}
+{{- end }}

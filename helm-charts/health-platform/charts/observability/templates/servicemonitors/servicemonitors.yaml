@@ -1,0 +1,156 @@
+{{- if .Values.serviceMonitors.enabled }}
+---
+# Health API ServiceMonitor
+{{- if .Values.serviceMonitors.healthApi.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: health-api
+  namespace: {{ .Values.serviceMonitors.healthApi.namespace }}
+  labels:
+    app: health-api
+    release: {{ .Release.Name }}
+    app.kubernetes.io/name: health-api
+    app.kubernetes.io/component: monitoring
+spec:
+  selector:
+    {{- toYaml .Values.serviceMonitors.healthApi.selector | nindent 4 }}
+  endpoints:
+    {{- toYaml .Values.serviceMonitors.healthApi.endpoints | nindent 4 }}
+  namespaceSelector:
+    matchNames:
+    - {{ .Values.serviceMonitors.healthApi.namespace }}
+{{- end }}
+---
+# WebAuthn ServiceMonitor
+{{- if .Values.serviceMonitors.webauthn.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: webauthn-server
+  namespace: {{ .Values.serviceMonitors.webauthn.namespace }}
+  labels:
+    app: webauthn-server
+    release: {{ .Release.Name }}
+    app.kubernetes.io/name: webauthn-server
+    app.kubernetes.io/component: monitoring
+spec:
+  selector:
+    {{- toYaml .Values.serviceMonitors.webauthn.selector | nindent 4 }}
+  endpoints:
+    {{- toYaml .Values.serviceMonitors.webauthn.endpoints | nindent 4 }}
+  namespaceSelector:
+    matchNames:
+    - {{ .Values.serviceMonitors.webauthn.namespace }}
+{{- end }}
+---
+# ETL Narrative Engine ServiceMonitor
+{{- if .Values.serviceMonitors.etlEngine.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: etl-narrative-engine
+  namespace: {{ .Values.serviceMonitors.etlEngine.namespace }}
+  labels:
+    app: etl-narrative-engine
+    release: {{ .Release.Name }}
+    app.kubernetes.io/name: etl-narrative-engine
+    app.kubernetes.io/component: monitoring
+spec:
+  selector:
+    {{- toYaml .Values.serviceMonitors.etlEngine.selector | nindent 4 }}
+  endpoints:
+    {{- toYaml .Values.serviceMonitors.etlEngine.endpoints | nindent 4 }}
+  namespaceSelector:
+    matchNames:
+    - {{ .Values.serviceMonitors.etlEngine.namespace }}
+{{- end }}
+---
+# PostgreSQL Exporter ServiceMonitor
+{{- if .Values.serviceMonitors.postgresql.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: postgres-exporter
+  namespace: {{ .Values.serviceMonitors.postgresql.namespace }}
+  labels:
+    app: postgres-exporter
+    release: {{ .Release.Name }}
+    app.kubernetes.io/name: postgres-exporter
+    app.kubernetes.io/component: monitoring
+spec:
+  selector:
+    {{- toYaml .Values.serviceMonitors.postgresql.selector | nindent 4 }}
+  endpoints:
+    {{- toYaml .Values.serviceMonitors.postgresql.endpoints | nindent 4 }}
+  namespaceSelector:
+    matchNames:
+    - {{ .Values.serviceMonitors.postgresql.namespace }}
+{{- end }}
+---
+# Redis Exporter ServiceMonitor
+{{- if .Values.serviceMonitors.redis.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: redis-exporter
+  namespace: {{ .Values.serviceMonitors.redis.namespace }}
+  labels:
+    app: redis-exporter
+    release: {{ .Release.Name }}
+    app.kubernetes.io/name: redis-exporter
+    app.kubernetes.io/component: monitoring
+spec:
+  selector:
+    {{- toYaml .Values.serviceMonitors.redis.selector | nindent 4 }}
+  endpoints:
+    {{- toYaml .Values.serviceMonitors.redis.endpoints | nindent 4 }}
+  namespaceSelector:
+    matchNames:
+    - {{ .Values.serviceMonitors.redis.namespace }}
+{{- end }}
+---
+# MinIO ServiceMonitor
+{{- if .Values.serviceMonitors.minio.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: minio
+  namespace: {{ .Values.serviceMonitors.minio.namespace }}
+  labels:
+    app: minio
+    release: {{ .Release.Name }}
+    app.kubernetes.io/name: minio
+    app.kubernetes.io/component: monitoring
+spec:
+  selector:
+    {{- toYaml .Values.serviceMonitors.minio.selector | nindent 4 }}
+  endpoints:
+    {{- toYaml .Values.serviceMonitors.minio.endpoints | nindent 4 }}
+  namespaceSelector:
+    matchNames:
+    - {{ .Values.serviceMonitors.minio.namespace }}
+{{- end }}
+---
+# RabbitMQ ServiceMonitor
+{{- if .Values.serviceMonitors.rabbitmq.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: rabbitmq
+  namespace: {{ .Values.serviceMonitors.rabbitmq.namespace }}
+  labels:
+    app: rabbitmq
+    release: {{ .Release.Name }}
+    app.kubernetes.io/name: rabbitmq
+    app.kubernetes.io/component: monitoring
+spec:
+  selector:
+    {{- toYaml .Values.serviceMonitors.rabbitmq.selector | nindent 4 }}
+  endpoints:
+    {{- toYaml .Values.serviceMonitors.rabbitmq.endpoints | nindent 4 }}
+  namespaceSelector:
+    matchNames:
+    - {{ .Values.serviceMonitors.rabbitmq.namespace }}
+{{- end }}
+{{- end }}

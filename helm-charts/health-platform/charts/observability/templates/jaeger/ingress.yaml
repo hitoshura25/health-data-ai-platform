@@ -1,0 +1,32 @@
+{{- if and .Values.jaeger.enabled .Values.jaeger.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jaeger-ingress
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: jaeger
+    app.kubernetes.io/name: jaeger
+    app.kubernetes.io/component: ingress
+  annotations:
+    {{- toYaml .Values.jaeger.ingress.annotations | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.jaeger.ingress.className }}
+  {{- if .Values.jaeger.ingress.tls.enabled }}
+  tls:
+  - hosts:
+    - {{ .Values.jaeger.ingress.host }}
+    secretName: {{ .Values.jaeger.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+  - host: {{ .Values.jaeger.ingress.host }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: jaeger-query
+            port:
+              number: {{ .Values.jaeger.service.ports.query }}
+{{- end }}

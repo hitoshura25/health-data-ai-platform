@@ -1,0 +1,89 @@
+{{- if .Values.jaeger.enabled }}
+---
+# Jaeger Agent Service (for UDP ports)
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-agent
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: jaeger
+    component: agent
+    app.kubernetes.io/name: jaeger
+    app.kubernetes.io/component: agent
+spec:
+  type: {{ .Values.jaeger.service.type }}
+  ports:
+  - port: 6831
+    protocol: UDP
+    targetPort: 6831
+    name: jaeger-compact
+  - port: 6832
+    protocol: UDP
+    targetPort: 6832
+    name: jaeger-binary
+  - port: 5778
+    protocol: TCP
+    targetPort: 5778
+    name: jaeger-config
+  selector:
+    app: jaeger
+---
+# Jaeger Query Service (UI)
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-query
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: jaeger
+    component: query
+    app.kubernetes.io/name: jaeger
+    app.kubernetes.io/component: query
+spec:
+  type: {{ .Values.jaeger.service.type }}
+  ports:
+  - port: {{ .Values.jaeger.service.ports.query }}
+    protocol: TCP
+    targetPort: 16686
+    name: jaeger-ui
+  selector:
+    app: jaeger
+---
+# Jaeger Collector Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-collector
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: jaeger
+    component: collector
+    app.kubernetes.io/name: jaeger
+    app.kubernetes.io/component: collector
+spec:
+  type: {{ .Values.jaeger.service.type }}
+  ports:
+  - port: 14250
+    protocol: TCP
+    targetPort: 14250
+    name: jaeger-grpc
+  - port: 14268
+    protocol: TCP
+    targetPort: 14268
+    name: jaeger-http
+  - port: {{ .Values.jaeger.service.ports.otlpGrpc }}
+    protocol: TCP
+    targetPort: 4317
+    name: otlp-grpc
+  - port: {{ .Values.jaeger.service.ports.otlpHttp }}
+    protocol: TCP
+    targetPort: 4318
+    name: otlp-http
+  - port: {{ .Values.jaeger.service.ports.zipkin }}
+    protocol: TCP
+    targetPort: 9411
+    name: zipkin
+  selector:
+    app: jaeger
+{{- end }}
