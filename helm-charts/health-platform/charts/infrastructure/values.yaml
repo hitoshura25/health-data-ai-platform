@@ -1,0 +1,531 @@
+# Infrastructure Layer Values
+# Oracle Always Free Tier: 4 vCPU, 24 GB RAM, 200 GB storage
+# Total infrastructure allocation: ~630m CPU, ~2.4 Gi RAM, 185 Gi storage
+
+# Namespace for data layer
+namespace: health-data
+
+# Secrets configuration (replace with Sealed Secrets in production)
+secrets:
+  postgresqlHealth:
+    adminPassword: "changeme-admin-health"
+    userPassword: "changeme-user-health"
+    username: "healthapi"
+    database: "healthdb"
+
+  postgresqlAuth:
+    adminPassword: "changeme-admin-auth"
+    userPassword: "changeme-user-auth"
+    username: "webauthn"
+    database: "webauthn"
+
+  redisHealth:
+    password: "changeme-redis-health"
+
+  redisAuth:
+    password: "changeme-redis-auth"
+
+  minio:
+    rootUser: "admin"
+    rootPassword: "changeme-minio-password"
+
+  rabbitmq:
+    password: "changeme-rabbitmq-password"
+    erlangCookie: "changeme-erlang-cookie-32-characters"
+
+# ==============================================================================
+# PostgreSQL - Health Data (Primary Database)
+# ==============================================================================
+postgresql-health:
+  enabled: true
+
+  global:
+    postgresql:
+      auth:
+        existingSecret: postgresql-health-secret
+        secretKeys:
+          adminPasswordKey: postgres-password
+          userPasswordKey: password
+        username: healthapi
+        database: healthdb
+
+  # Primary instance configuration
+  primary:
+    name: primary
+
+    # Persistence configuration
+    persistence:
+      enabled: true
+      storageClass: "oci-bv"  # OCI Block Volume
+      size: 60Gi
+      accessModes:
+        - ReadWriteOnce
+
+    # Resource allocation
+    resources:
+      requests:
+        cpu: 300m      # 0.3 vCPU
+        memory: 1Gi    # 1 GB RAM
+      limits:
+        cpu: 500m      # Allow bursting to 0.5 vCPU
+        memory: 2Gi    # Max 2 GB RAM
+
+    # Security context
+    podSecurityContext:
+      enabled: true
+      fsGroup: 1001
+
+    containerSecurityContext:
+      enabled: true
+      runAsUser: 1001
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+
+    # PostgreSQL configuration
+    extendedConfiguration: |
+      # Performance tuning for 1GB RAM allocation
+      shared_buffers = 256MB
+      effective_cache_size = 768MB
+      maintenance_work_mem = 64MB
+      checkpoint_completion_target = 0.9
+      wal_buffers = 16MB
+      default_statistics_target = 100
+      random_page_cost = 1.1
+      effective_io_concurrency = 200
+      work_mem = 2621kB
+      min_wal_size = 1GB
+      max_wal_size = 4GB
+      max_connections = 100
+
+  # Metrics and monitoring
+  metrics:
+    enabled: true
+
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+
+    serviceMonitor:
+      enabled: true
+      namespace: health-observability
+      interval: 30s
+      scrapeTimeout: 10s
+
+  # No read replicas (free tier limitation)
+  readReplicas:
+    replicaCount: 0
+
+# ==============================================================================
+# PostgreSQL - WebAuthn Authentication
+# ==============================================================================
+postgresql-auth:
+  enabled: true
+
+  global:
+    postgresql:
+      auth:
+        existingSecret: postgresql-auth-secret
+        secretKeys:
+          adminPasswordKey: postgres-password
+          userPasswordKey: password
+        username: webauthn
+        database: webauthn
+
+  primary:
+    persistence:
+      enabled: true
+      storageClass: "oci-bv"
+      size: 20Gi
+      accessModes:
+        - ReadWriteOnce
+
+    resources:
+      requests:
+        cpu: 150m      # 0.15 vCPU (smaller auth database)
+        memory: 512Mi  # 512 MB RAM
+      limits:
+        cpu: 300m
+        memory: 1Gi
+
+    podSecurityContext:
+      enabled: true
+      fsGroup: 1001
+
+    containerSecurityContext:
+      enabled: true
+      runAsUser: 1001
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+
+    extendedConfiguration: |
+      # Performance tuning for 512MB RAM allocation
+      shared_buffers = 128MB
+      effective_cache_size = 384MB
+      maintenance_work_mem = 32MB
+      checkpoint_completion_target = 0.9
+      wal_buffers = 8MB
+      default_statistics_target = 100
+      random_page_cost = 1.1
+      effective_io_concurrency = 200
+      work_mem = 1310kB
+      min_wal_size = 512MB
+      max_wal_size = 2GB
+      max_connections = 50
+
+  metrics:
+    enabled: true
+
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+
+    serviceMonitor:
+      enabled: true
+      namespace: health-observability
+      interval: 30s
+
+  readReplicas:
+    replicaCount: 0
+
+# ==============================================================================
+# Redis - Health Data (Rate Limiting, Caching)
+# ==============================================================================
+redis-health:
+  enabled: true
+  architecture: standalone  # No clustering in free tier
+
+  auth:
+    enabled: true
+    existingSecret: redis-health-secret
+    existingSecretPasswordKey: password
+
+  master:
+    # Persistence configuration
+    persistence:
+      enabled: true
+      storageClass: "oci-bv"
+      size: 5Gi
+      accessModes:
+        - ReadWriteOnce
+
+    # Resource allocation
+    resources:
+      requests:
+        cpu: 100m      # 0.1 vCPU
+        memory: 256Mi  # 256 MB RAM
+      limits:
+        cpu: 200m
+        memory: 512Mi
+
+    # Security context
+    podSecurityContext:
+      enabled: true
+      fsGroup: 1001
+
+    containerSecurityContext:
+      enabled: true
+      runAsUser: 1001
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+
+    # Redis configuration
+    configuration: |
+      # Memory management
+      maxmemory 200mb
+      maxmemory-policy allkeys-lru
+      # Persistence
+      save 900 1
+      save 300 10
+      save 60 10000
+
+  # Metrics
+  metrics:
+    enabled: true
+
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+
+    serviceMonitor:
+      enabled: true
+      namespace: health-observability
+      interval: 30s
+
+  # No replicas
+  replica:
+    replicaCount: 0
+
+# ==============================================================================
+# Redis - WebAuthn Sessions
+# ==============================================================================
+redis-auth:
+  enabled: true
+  architecture: standalone
+
+  auth:
+    enabled: true
+    existingSecret: redis-auth-secret
+    existingSecretPasswordKey: password
+
+  master:
+    persistence:
+      enabled: true
+      storageClass: "oci-bv"
+      size: 5Gi
+      accessModes:
+        - ReadWriteOnce
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 200m
+        memory: 512Mi
+
+    podSecurityContext:
+      enabled: true
+      fsGroup: 1001
+
+    containerSecurityContext:
+      enabled: true
+      runAsUser: 1001
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+
+    configuration: |
+      # Memory management for sessions
+      maxmemory 200mb
+      maxmemory-policy allkeys-lru
+      # Session persistence
+      save 900 1
+      save 300 10
+
+  metrics:
+    enabled: true
+
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+
+    serviceMonitor:
+      enabled: true
+      namespace: health-observability
+      interval: 30s
+
+  replica:
+    replicaCount: 0
+
+# ==============================================================================
+# MinIO - S3-Compatible Data Lake
+# ==============================================================================
+minio:
+  enabled: true
+  mode: standalone  # Single node for free tier (no distributed mode)
+
+  auth:
+    existingSecret: minio-secret
+    rootUser: admin
+
+  # Persistence
+  persistence:
+    enabled: true
+    storageClass: "oci-bv"
+    size: 80Gi
+    accessModes:
+      - ReadWriteOnce
+
+  # Resource allocation
+  resources:
+    requests:
+      cpu: 200m      # 0.2 vCPU
+      memory: 512Mi  # 512 MB RAM
+    limits:
+      cpu: 400m
+      memory: 1Gi
+
+  # Security context
+  podSecurityContext:
+    enabled: true
+    fsGroup: 1001
+
+  containerSecurityContext:
+    enabled: true
+    runAsUser: 1001
+    runAsNonRoot: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    ports:
+      api: 9000
+      console: 9001
+
+  # Ingress for MinIO Console (optional, for production)
+  ingress:
+    enabled: false  # Enable in production values
+    ingressClassName: nginx
+    hostname: minio.health-platform.example.com
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    tls: true
+
+  # Metrics
+  metrics:
+    serviceMonitor:
+      enabled: true
+      namespace: health-observability
+      interval: 30s
+
+  # MinIO default buckets (created at startup)
+  defaultBuckets: "health-data,processed-data,backups"
+
+  # Environment variables for configuration
+  extraEnvVars:
+    - name: MINIO_BROWSER_REDIRECT_URL
+      value: "http://localhost:9001"
+
+# ==============================================================================
+# RabbitMQ - Message Queue
+# ==============================================================================
+rabbitmq:
+  enabled: true
+  replicaCount: 1  # Single instance for free tier
+
+  auth:
+    username: user
+    existingPasswordSecret: rabbitmq-secret
+    existingErlangSecret: rabbitmq-erlang-secret
+
+  # Persistence
+  persistence:
+    enabled: true
+    storageClass: "oci-bv"
+    size: 15Gi
+    accessModes:
+      - ReadWriteOnce
+
+  # Resource allocation
+  resources:
+    requests:
+      cpu: 300m      # 0.3 vCPU
+      memory: 512Mi  # 512 MB RAM
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+  # Security context
+  podSecurityContext:
+    enabled: true
+    fsGroup: 1001
+
+  containerSecurityContext:
+    enabled: true
+    runAsUser: 1001
+    runAsNonRoot: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    ports:
+      amqp: 5672
+      manager: 15672
+      epmd: 4369
+
+  # Ingress for RabbitMQ Management UI (optional)
+  ingress:
+    enabled: false  # Enable in production values
+    ingressClassName: nginx
+    hostname: rabbitmq.health-platform.example.com
+    tls: true
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+
+  # Metrics
+  metrics:
+    enabled: true
+
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+
+    serviceMonitor:
+      enabled: true
+      namespace: health-observability
+      interval: 30s
+
+  # RabbitMQ configuration
+  extraConfiguration: |
+    # Memory and disk limits
+    vm_memory_high_watermark.relative = 0.6
+    disk_free_limit.absolute = 2GB
+    # Queue configuration
+    default_vhost = /
+    default_user_tags.administrator = true
+
+  # Community plugins
+  communityPlugins: ""
+
+  # Extra plugins to enable
+  extraPlugins: "rabbitmq_management rabbitmq_prometheus"
+
+  # Memory configuration
+  memoryHighWatermark:
+    enabled: true
+    type: relative
+    value: 0.6
+
+# ==============================================================================
+# Resource Summary (for Oracle Always Free Tier)
+# ==============================================================================
+# Total CPU Requests:  300m + 150m + 100m + 100m + 200m + 300m = 1150m (1.15 vCPU)
+# Total CPU Limits:    500m + 300m + 200m + 200m + 400m + 500m = 2100m (2.1 vCPU)
+#
+# Total RAM Requests:  1Gi + 512Mi + 256Mi + 256Mi + 512Mi + 512Mi = ~3.0 Gi
+# Total RAM Limits:    2Gi + 1Gi + 512Mi + 512Mi + 1Gi + 1Gi = ~6 Gi
+#
+# Total Storage:       60Gi + 20Gi + 5Gi + 5Gi + 80Gi + 15Gi = 185 Gi (within 200 GB limit)
+#
+# Note: These are base infrastructure resources. Application pods will use
+# remaining resources: ~2.85 vCPU and ~18 GB RAM available for apps
+# ==============================================================================

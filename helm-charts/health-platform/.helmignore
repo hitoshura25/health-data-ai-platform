@@ -1,0 +1,77 @@
+# Patterns to ignore when building packages.
+# This supports shell glob matching, relative path matching, and
+# negation (prefixed with !). Only one pattern per line.
+
+# Common development files
+.DS_Store
+.git/
+.gitignore
+.bzr/
+.bzrignore
+.hg/
+.hgignore
+.svn/
+
+# Common backup files
+*.swp
+*.bak
+*.tmp
+*.orig
+*~
+
+# Various IDEs
+.project
+.idea/
+*.tmproj
+.vscode/
+*.code-workspace
+
+# Documentation (include only essential docs)
+docs/
+*.md
+!README.md
+!*/README.md
+
+# CI/CD files
+.travis.yml
+.gitlab-ci.yml
+.github/
+.circleci/
+
+# Test files
+test/
+tests/
+*.test.js
+*.test.yaml
+
+# Lock files
+package-lock.json
+yarn.lock
+
+# Build outputs
+dist/
+build/
+target/
+
+# Temporary files
+tmp/
+temp/
+
+# Example files
+examples/
+example/
+
+# Scripts (unless needed for deployment)
+scripts/
+*.sh
+!charts/*/templates/*.sh
+
+# Development values (keep production values)
+values-dev.yaml
+values-local.yaml
+values-test.yaml
+
+# Sealed secrets source files (keep sealed versions)
+sealed-secrets/
+*-secret.yaml
+!*-sealed-secret.yaml

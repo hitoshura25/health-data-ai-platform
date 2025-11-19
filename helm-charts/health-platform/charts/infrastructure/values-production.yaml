@@ -1,0 +1,345 @@
+# Production Values Override for Infrastructure Layer
+# Oracle Cloud Infrastructure - Always Free Tier
+# Region: eu-amsterdam-1 (100% renewable energy)
+
+# WARNING: Replace all CHANGE_ME values with actual secrets
+# IMPORTANT: Use Sealed Secrets or OCI Vault for production secrets
+
+namespace: health-data
+
+# ==============================================================================
+# Production Secrets (REPLACE THESE!)
+# ==============================================================================
+secrets:
+  postgresqlHealth:
+    # Generate with: openssl rand -base64 32
+    adminPassword: "CHANGE_ME_POSTGRESQL_HEALTH_ADMIN_PASSWORD_32_CHARS_MIN"
+    userPassword: "CHANGE_ME_POSTGRESQL_HEALTH_USER_PASSWORD_32_CHARS_MIN"
+    username: "healthapi"
+    database: "healthdb"
+
+  postgresqlAuth:
+    adminPassword: "CHANGE_ME_POSTGRESQL_AUTH_ADMIN_PASSWORD_32_CHARS_MIN"
+    userPassword: "CHANGE_ME_POSTGRESQL_AUTH_USER_PASSWORD_32_CHARS_MIN"
+    username: "webauthn"
+    database: "webauthn"
+
+  redisHealth:
+    password: "CHANGE_ME_REDIS_HEALTH_PASSWORD_32_CHARS_MIN"
+
+  redisAuth:
+    password: "CHANGE_ME_REDIS_AUTH_PASSWORD_32_CHARS_MIN"
+
+  minio:
+    rootUser: "admin"
+    rootPassword: "CHANGE_ME_MINIO_PASSWORD_32_CHARS_MIN"
+
+  rabbitmq:
+    password: "CHANGE_ME_RABBITMQ_PASSWORD_32_CHARS_MIN"
+    # Must be exactly 32 characters for Erlang cookie
+    erlangCookie: "CHANGE_ME_ERLANG_COOKIE_32_CHARACTERS_EXACTLY"
+
+# ==============================================================================
+# PostgreSQL Health - Production Configuration
+# ==============================================================================
+postgresql-health:
+  enabled: true
+
+  primary:
+    persistence:
+      size: 60Gi  # Full allocation for production
+
+    resources:
+      requests:
+        cpu: 300m
+        memory: 1Gi
+      limits:
+        cpu: 500m
+        memory: 2Gi
+
+    # Production-grade PostgreSQL configuration
+    extendedConfiguration: |
+      # Performance tuning for production
+      shared_buffers = 256MB
+      effective_cache_size = 768MB
+      maintenance_work_mem = 64MB
+      checkpoint_completion_target = 0.9
+      wal_buffers = 16MB
+      default_statistics_target = 100
+      random_page_cost = 1.1
+      effective_io_concurrency = 200
+      work_mem = 2621kB
+      min_wal_size = 1GB
+      max_wal_size = 4GB
+      max_connections = 100
+
+      # Logging
+      log_statement = 'ddl'
+      log_duration = on
+      log_min_duration_statement = 1000
+
+      # Connection pooling compatibility
+      max_prepared_transactions = 0
+
+      # Autovacuum tuning
+      autovacuum_max_workers = 2
+      autovacuum_naptime = 30s
+
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      namespace: health-observability
+      interval: 30s
+
+# ==============================================================================
+# PostgreSQL Auth - Production Configuration
+# ==============================================================================
+postgresql-auth:
+  enabled: true
+
+  primary:
+    persistence:
+      size: 20Gi
+
+    resources:
+      requests:
+        cpu: 150m
+        memory: 512Mi
+      limits:
+        cpu: 300m
+        memory: 1Gi
+
+    extendedConfiguration: |
+      # Optimized for authentication workload
+      shared_buffers = 128MB
+      effective_cache_size = 384MB
+      maintenance_work_mem = 32MB
+      checkpoint_completion_target = 0.9
+      wal_buffers = 8MB
+      work_mem = 1310kB
+      min_wal_size = 512MB
+      max_wal_size = 2GB
+      max_connections = 50
+
+      # Logging
+      log_statement = 'ddl'
+      log_min_duration_statement = 500
+
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      namespace: health-observability
+
+# ==============================================================================
+# Redis Health - Production Configuration
+# ==============================================================================
+redis-health:
+  enabled: true
+
+  master:
+    persistence:
+      size: 5Gi
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 200m
+        memory: 512Mi
+
+    configuration: |
+      # Production Redis configuration
+      maxmemory 200mb
+      maxmemory-policy allkeys-lru
+
+      # Persistence for production
+      save 900 1
+      save 300 10
+      save 60 10000
+
+      # Append-only file for durability
+      appendonly yes
+      appendfsync everysec
+
+      # Slow log
+      slowlog-log-slower-than 10000
+      slowlog-max-len 128
+
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      namespace: health-observability
+
+# ==============================================================================
+# Redis Auth - Production Configuration
+# ==============================================================================
+redis-auth:
+  enabled: true
+
+  master:
+    persistence:
+      size: 5Gi
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 200m
+        memory: 512Mi
+
+    configuration: |
+      # Session storage configuration
+      maxmemory 200mb
+      maxmemory-policy allkeys-lru
+
+      # Shorter persistence interval for sessions
+      save 900 1
+      save 300 10
+
+      appendonly yes
+      appendfsync everysec
+
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      namespace: health-observability
+
+# ==============================================================================
+# MinIO - Production Configuration
+# ==============================================================================
+minio:
+  enabled: true
+  mode: standalone
+
+  persistence:
+    size: 80Gi
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 400m
+      memory: 1Gi
+
+  # Enable ingress for production (requires cert-manager)
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hostname: minio.health-platform.example.com  # CHANGE THIS to your domain
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    tls: true
+
+  # MinIO configuration
+  extraEnvVars:
+    - name: MINIO_BROWSER_REDIRECT_URL
+      value: "https://minio.health-platform.example.com"  # CHANGE THIS
+    - name: MINIO_PROMETHEUS_AUTH_TYPE
+      value: "public"
+
+  metrics:
+    serviceMonitor:
+      enabled: true
+      namespace: health-observability
+      interval: 30s
+
+# ==============================================================================
+# RabbitMQ - Production Configuration
+# ==============================================================================
+rabbitmq:
+  enabled: true
+  replicaCount: 1  # Single replica for free tier
+
+  persistence:
+    size: 15Gi
+
+  resources:
+    requests:
+      cpu: 300m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+  # Enable ingress for management UI
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hostname: rabbitmq.health-platform.example.com  # CHANGE THIS to your domain
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    tls: true
+
+  # Production RabbitMQ configuration
+  extraConfiguration: |
+    # Memory and disk limits
+    vm_memory_high_watermark.relative = 0.6
+    disk_free_limit.absolute = 2GB
+
+    # Queue configuration
+    default_vhost = /
+    default_user_tags.administrator = true
+
+    # Logging
+    log.console.level = info
+    log.file.level = info
+
+    # Management plugin
+    management.load_definitions = /etc/rabbitmq/definitions.json
+
+  extraPlugins: "rabbitmq_management rabbitmq_prometheus rabbitmq_shovel rabbitmq_shovel_management"
+
+  memoryHighWatermark:
+    enabled: true
+    type: relative
+    value: 0.6
+
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      namespace: health-observability
+      interval: 30s
+
+# ==============================================================================
+# Production Deployment Notes
+# ==============================================================================
+#
+# 1. Before deploying to production:
+#    - Replace all CHANGE_ME values with actual secrets
+#    - Use Sealed Secrets or OCI Vault for secret management
+#    - Update domain names in ingress configurations
+#    - Verify cert-manager is installed and configured
+#
+# 2. Generate strong passwords:
+#    openssl rand -base64 32
+#
+# 3. Create Sealed Secrets:
+#    kubectl create secret generic postgresql-health-secret \
+#      --from-literal=postgres-password=$(openssl rand -base64 32) \
+#      --from-literal=password=$(openssl rand -base64 32) \
+#      --dry-run=client -o yaml | \
+#      kubeseal -o yaml > sealed-secrets/postgresql-health-sealed.yaml
+#
+# 4. Deploy with production values:
+#    helm install infrastructure ./charts/infrastructure \
+#      -f values-production.yaml \
+#      --namespace health-data \
+#      --create-namespace
+#
+# 5. Verify deployment:
+#    kubectl get pods -n health-data
+#    kubectl get pvc -n health-data
+#    kubectl get svc -n health-data
+#
+# ==============================================================================

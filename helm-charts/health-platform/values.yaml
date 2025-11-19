@@ -1,0 +1,120 @@
+# Health Data AI Platform - Default Values
+# This is the umbrella chart that deploys all components
+
+# ==============================================================================
+# Global Configuration
+# ==============================================================================
+global:
+  # Image pull settings
+  imagePullSecrets: []
+
+  # Storage class for all persistent volumes (Oracle Cloud)
+  storageClass: "oci-bv"
+
+  # Monitoring namespace
+  monitoring:
+    namespace: health-observability
+    enabled: true
+
+  # Security settings
+  podSecurityStandards:
+    enforced: true
+    profile: restricted
+
+# ==============================================================================
+# Infrastructure Layer (Module 2)
+# ==============================================================================
+infrastructure:
+  enabled: true
+
+  # All infrastructure values are defined in charts/infrastructure/values.yaml
+  # Override specific values here if needed for development
+
+  # Namespace for infrastructure services
+  namespace: health-data
+
+# ==============================================================================
+# WebAuthn Stack (Module 3) - Not yet implemented
+# ==============================================================================
+webauthn-stack:
+  enabled: false
+
+  # Future configuration for WebAuthn services
+  # Will include:
+  # - WebAuthn server
+  # - Envoy gateway
+  # - PostgreSQL auth (using infrastructure layer)
+  # - Redis sessions (using infrastructure layer)
+
+# ==============================================================================
+# Health API Service (Module 4) - Not yet implemented
+# ==============================================================================
+health-api:
+  enabled: false
+
+  # Future configuration for Health API
+  # Will include:
+  # - FastAPI application
+  # - HorizontalPodAutoscaler
+  # - Service and Ingress
+
+# ==============================================================================
+# ETL Narrative Engine (Module 4) - Not yet implemented
+# ==============================================================================
+etl-engine:
+  enabled: false
+
+  # Future configuration for ETL Engine
+  # Will include:
+  # - ETL processing service
+  # - CronJobs for scheduled processing
+  # - Job templates
+
+# ==============================================================================
+# AI Query Interface (Future) - Not yet implemented
+# ==============================================================================
+ai-query:
+  enabled: false
+
+  # Future configuration for AI Query Interface
+  # Will include:
+  # - MLflow deployment
+  # - Model serving
+  # - Query API
+
+# ==============================================================================
+# Observability Stack (Module 5) - Not yet implemented
+# ==============================================================================
+observability:
+  enabled: false
+
+  # Future configuration for monitoring
+  # Will include:
+  # - Prometheus
+  # - Grafana
+  # - Loki
+  # - Promtail
+  # Note: Jaeger is already running in webauthn-stack
+
+# ==============================================================================
+# Deployment Notes
+# ==============================================================================
+#
+# Current Status: Module 2 (Infrastructure Layer) Ready
+#
+# To deploy only infrastructure:
+#   helm install health-platform . \
+#     --namespace health-data \
+#     --create-namespace
+#
+# To customize for development:
+#   helm install health-platform . \
+#     -f values.yaml \
+#     --namespace health-data
+#
+# To deploy to production:
+#   helm install health-platform . \
+#     -f values-production.yaml \
+#     --namespace health-data
+#
+# ==============================================================================
