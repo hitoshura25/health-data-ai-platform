@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: etl-engine
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: etl-engine
+    app.kubernetes.io/name: etl-engine
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: etl
+    app.kubernetes.io/part-of: health-platform
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+  - port: {{ .Values.service.port }}
+    targetPort: http
+    protocol: TCP
+    name: http
+  - port: {{ .Values.service.metricsPort }}
+    targetPort: metrics
+    protocol: TCP
+    name: metrics
+  selector:
+    app: etl-engine
+    app.kubernetes.io/name: etl-engine
+    app.kubernetes.io/instance: {{ .Release.Name }}
