@@ -233,7 +233,7 @@ async def test_full_pipeline_all_sample_files(
 
     # Step 2: Create consumer and process messages
     settings = ConsumerSettings(
-        rabbitmq_url=rabbitmq_connection.url.geturl(),
+        rabbitmq_url=str(rabbitmq_connection.url),
         queue_name=queue_name,
         s3_endpoint_url=s3_config['endpoint_url'],
         s3_access_key=s3_config['access_key'],
@@ -296,13 +296,17 @@ async def test_full_pipeline_all_sample_files(
             # For testing, we'll process all files
 
             # Mark as processed in dedup store
-            await dedup_store.mark_started(
-                message_data['idempotency_key'],
-                message_data
+            await dedup_store.mark_processing_started(
+                message_data,
+                message_data['idempotency_key']
             )
 
-            await dedup_store.mark_completed(
-                message_data['idempotency_key']
+            await dedup_store.mark_processing_completed(
+                message_data['idempotency_key'],
+                processing_time=1.0,
+                records_processed=0,
+                narrative="",
+                quality_score=1.0
             )
 
             processed_count += 1
@@ -378,8 +382,14 @@ async def test_deduplication_prevents_reprocessing(
     is_duplicate = await dedup_store.is_already_processed(message_data['idempotency_key'])
     assert not is_duplicate, "Should not be duplicate on first processing"
 
-    await dedup_store.mark_started(message_data['idempotency_key'], message_data)
-    await dedup_store.mark_completed(message_data['idempotency_key'])
+    await dedup_store.mark_processing_started(message_data, message_data['idempotency_key'])
+    await dedup_store.mark_processing_completed(
+        message_data['idempotency_key'],
+        processing_time=1.0,
+        records_processed=100,
+        narrative="Test narrative",
+        quality_score=0.95
+    )
 
     # Check if marked as processed
     is_processed = await dedup_store.is_already_processed(message_data['idempotency_key'])
@@ -455,8 +465,15 @@ async def test_performance_benchmark(
 
         # Mark as processed (simulating processing)
         idempotency_key = f"{bucket}:{s3_key}"
-        await dedup_store.mark_started(idempotency_key, {})
-        await dedup_store.mark_completed(idempotency_key)
+        message_data = {'key': s3_key, 'bucket': bucket}
+        await dedup_store.mark_processing_started(message_data, idempotency_key)
+        await dedup_store.mark_processing_completed(
+            idempotency_key,
+            processing_time=0.5,
+            records_processed=50,
+            narrative="",
+            quality_score=1.0
+        )
 
         processed_count += 1
 
@@ -500,8 +517,15 @@ async def test_no_data_loss(
 
         # Mark as processed
         idempotency_key = f"{bucket}:{s3_key}"
-        await dedup_store.mark_started(idempotency_key, {})
-        await dedup_store.mark_completed(idempotency_key)
+        message_data = {'key': s3_key, 'bucket': bucket}
+        await dedup_store.mark_processing_started(message_data, idempotency_key)
+        await dedup_store.mark_processing_completed(
+            idempotency_key,
+            processing_time=0.5,
+            records_processed=100,
+            narrative="",
+            quality_score=1.0
+        )
 
     # Verify all files exist in S3
     existing_count = 0

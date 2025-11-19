@@ -163,7 +163,8 @@ async def process_message_concurrent(
             return {'status': 'duplicate', 'key': s3_key}
 
         # Mark as started
-        await dedup_store.mark_started(idempotency_key, {'key': s3_key})
+        message_data = {'key': s3_key, 'bucket': bucket}
+        await dedup_store.mark_processing_started(message_data, idempotency_key)
 
         try:
             # Download file (simulating processing)
@@ -174,7 +175,13 @@ async def process_message_concurrent(
             await asyncio.sleep(0.1)
 
             # Mark as completed
-            await dedup_store.mark_completed(idempotency_key)
+            await dedup_store.mark_processing_completed(
+                idempotency_key,
+                processing_time=0.1,
+                records_processed=len(content) // 100,
+                narrative="",
+                quality_score=1.0
+            )
 
             return {
                 'status': 'success',
@@ -182,7 +189,11 @@ async def process_message_concurrent(
                 'size': len(content)
             }
         except Exception as e:
-            await dedup_store.mark_failed(idempotency_key, str(e))
+            await dedup_store.mark_processing_failed(
+                idempotency_key,
+                error_message=str(e),
+                error_type=type(e).__name__
+            )
             return {'status': 'failed', 'key': s3_key, 'error': str(e)}
 
 
