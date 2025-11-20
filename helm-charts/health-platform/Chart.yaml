@@ -46,11 +46,11 @@ dependencies:
     repository: file://./charts/etl-engine
     condition: etl-engine.enabled
 
-  # Module 5: Observability Stack (pending merge)
-  # - name: observability
-  #   version: 1.0.0
-  #   repository: file://./charts/observability
-  #   condition: observability.enabled
+  # Module 5: Observability Stack (Prometheus, Grafana, Jaeger, Loki)
+  - name: observability
+    version: 1.0.0
+    repository: file://./charts/observability
+    condition: observability.enabled
 
 annotations:
   # Helm chart metadata
@@ -62,7 +62,7 @@ annotations:
   cloud.oracle.com/tier: always-free
   cloud.oracle.com/region: eu-amsterdam-1
 
-  # Resource requirements
-  cloud.oracle.com/cpu-request: "1150m"
-  cloud.oracle.com/memory-request: "3Gi"
-  cloud.oracle.com/storage-request: "185Gi"
+  # Resource requirements (Complete Platform - Modules 1-5)
+  cloud.oracle.com/cpu-request: "4550m"
+  cloud.oracle.com/memory-request: "10.6Gi"
+  cloud.oracle.com/storage-request: "231Gi"

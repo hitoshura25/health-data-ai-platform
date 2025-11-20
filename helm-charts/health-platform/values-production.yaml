@@ -329,20 +329,45 @@ etl-engine:
     rabbitmqPassword: "CHANGE_ME_USE_SAME_AS_RABBITMQ_PASSWORD"
 
 # ==============================================================================
-# Observability Stack - Production Configuration (Module 5)
+# Observability Stack - Production Configuration (Module 5) ✅ IMPLEMENTED
 # ==============================================================================
 observability:
-  enabled: false  # Enable after Module 5 implementation
+  enabled: true
 
-  # Future configuration
-  # prometheus:
-  #   retention: 30d
-  #   storage: 20Gi
-  # grafana:
-  #   enabled: true
-  # loki:
-  #   retention: 7d
-  #   storage: 5Gi
+  namespace: health-observability
+
+  # Prometheus configuration
+  prometheus:
+    enabled: true
+
+  # Grafana configuration
+  grafana:
+    enabled: true
+
+  # Jaeger distributed tracing
+  jaeger:
+    enabled: true
+
+  # Loki log aggregation
+  loki:
+    enabled: true
+
+  # Production settings (inherited from charts/observability/values-production.yaml)
+  kube-prometheus-stack:
+    grafana:
+      # ⚠️ CRITICAL: Set Grafana admin password before deployment!
+      # Generate with: openssl rand -base64 32
+      adminPassword: "CHANGE_ME_GRAFANA_ADMIN_PASSWORD_32_CHARS_MIN"
+
+      # Ingress configuration
+      ingress:
+        enabled: true
+        hosts:
+          - grafana.health-platform.example.com  # CHANGE THIS
+        tls:
+          - secretName: grafana-tls
+            hosts:
+              - grafana.health-platform.example.com
 
 # ==============================================================================
 # Production Deployment Checklist
@@ -415,7 +440,7 @@ observability:
 #
 # ==============================================================================
 #
-# Resource Summary (Oracle Always Free Tier) - Modules 1-4 Deployed:
+# Resource Summary (Oracle Always Free Tier) - COMPLETE PLATFORM (Modules 1-5):
 #
 # Infrastructure Layer (Module 2):
 #   CPU Requests:  1150m (1.15 vCPU)
@@ -431,16 +456,45 @@ observability:
 #   Memory Requests: ~1.3 Gi (2x Health API @ 256Mi, 1x ETL @ 512Mi)
 #   Storage: 1 Gi (ETL deduplication DB)
 #
-# TOTAL PLATFORM USAGE:
-#   CPU Requests:  ~2.55 vCPU out of 4 vCPU ✅ (63.75%)
-#   CPU Limits:    ~6.2 vCPU (allows bursting)
-#   Memory Requests: ~5.6 Gi out of 24 Gi ✅ (23.3%)
-#   Memory Limits:   ~13.5 Gi (includes 5Gi model cache)
-#   Storage:       186 Gi out of 200 Gi ✅ (93%)
+# Observability Stack (Module 5):
+#   CPU Requests:  ~2000m (Prometheus 500m, Grafana 200m, Jaeger 300m, Loki 200m,
+#                          Promtail 300m, AlertManager 100m, Node Exporter 300m,
+#                          Kube State Metrics 100m)
+#   Memory Requests: ~5 Gi (Prometheus 2Gi, Grafana 512Mi, Jaeger 512Mi, Loki 512Mi,
+#                           Promtail 384Mi, AlertManager 128Mi, Node Exporter 192Mi,
+#                           Kube State Metrics 128Mi)
+#   Storage: 45 Gi (Prometheus 20Gi, Grafana 5Gi, Jaeger 10Gi, Loki 5Gi,
+#                   AlertManager 5Gi)
 #
-# Remaining resources for Module 5 (Observability):
-#   CPU:     ~1.45 vCPU
-#   Memory:  ~18.4 Gi
-#   Storage: ~14 Gi
+# ============================================================================
+# COMPLETE PLATFORM RESOURCE USAGE:
+# ============================================================================
+#
+#   CPU Requests:  ~4.55 vCPU out of 4 vCPU ⚠️  (113.75% - EXCEEDS FREE TIER)
+#   CPU Limits:    ~10+ vCPU (allows bursting)
+#   Memory Requests: ~10.6 Gi out of 24 Gi ✅ (44.2%)
+#   Memory Limits:   ~20+ Gi
+#   Storage:       231 Gi out of 200 Gi ⚠️  (115.5% - EXCEEDS FREE TIER)
+#
+# ⚠️  WARNING: Complete platform EXCEEDS Always Free tier limits!
+#
+# RECOMMENDATIONS:
+#   1. Reduce observability component replicas (Promtail, Node Exporter)
+#   2. Reduce Prometheus retention from 30d to 15d (saves ~10GB storage)
+#   3. Reduce Jaeger storage from 10Gi to 5Gi
+#   4. Consider disabling some health service replicas
+#   5. OR upgrade to paid tier for full platform deployment
+#
+# OPTION A - Stay Within Free Tier (Minimal Observability):
+#   - Disable Loki/Promtail (saves 500m CPU, 896Mi memory, 10Gi storage)
+#   - Reduce Prometheus retention to 15d (saves 10Gi storage)
+#   - Reduce Jaeger storage to 5Gi
+#   Result: ~4 vCPU, ~9.7 Gi memory, ~196 Gi storage ✅
+#
+# OPTION B - Optimize All Services:
+#   - Reduce all service replicas to minimum (1 each)
+#   - Reduce resource requests by 20%
+#   - Minimal observability
+#   Result: Fits within free tier but reduced HA
 #
 # ==============================================================================

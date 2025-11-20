@@ -97,29 +97,34 @@ ai-query:
   # - Query API
 
 # ==============================================================================
-# Observability Stack (Module 5) - Not yet implemented
+# Observability Stack (Module 5) ✅ IMPLEMENTED
 # ==============================================================================
 observability:
-  enabled: false
+  enabled: true
 
-  # Future configuration for monitoring
-  # Will include:
-  # - Prometheus
-  # - Grafana
-  # - Loki
-  # - Promtail
-  # Note: Jaeger is already running in webauthn-stack
+  # All Observability values are defined in charts/observability/values.yaml
+  # Override specific values here if needed
+
+  # Namespace for observability services
+  namespace: health-observability
+
+  # Components:
+  # - Prometheus (metrics collection, 30-day retention, 20GB storage)
+  # - Grafana (dashboards and visualization, 5GB storage)
+  # - Jaeger (distributed tracing, 10GB storage)
+  # - Loki + Promtail (log aggregation, 7-day retention, 5GB storage)
+  # - AlertManager (alerting and notifications, 5GB storage)
 
 # ==============================================================================
 # Deployment Notes
 # ==============================================================================
 #
-# Current Status: Modules 1-4 COMPLETE ✅
+# Current Status: ALL MODULES COMPLETE ✅
 #   ✅ Module 1: Terraform Infrastructure (OKE cluster)
 #   ✅ Module 2: Infrastructure Helm (PostgreSQL, Redis, MinIO, RabbitMQ)
 #   ✅ Module 3: WebAuthn Stack Helm (Authentication)
 #   ✅ Module 4: Health Services Helm (Health API, ETL Engine)
-#   ⏳ Module 5: Observability (pending merge)
+#   ✅ Module 5: Observability (Prometheus, Grafana, Jaeger, Loki)
 #
 # Prerequisites:
 #   1. OKE cluster provisioned (terraform apply from terraform/environments/production/)
