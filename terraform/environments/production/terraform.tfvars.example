@@ -1,0 +1,98 @@
+# Oracle Cloud Infrastructure Configuration
+# Copy this file to terraform.tfvars and fill in your actual values
+# IMPORTANT: Never commit terraform.tfvars to Git (it's in .gitignore)
+
+# =============================================================================
+# OCI Provider Configuration
+# =============================================================================
+# Get these values from Oracle Cloud Console:
+# - User Settings → User Information → OCID (user_ocid)
+# - Tenancy Details → Tenancy Information → OCID (tenancy_ocid)
+# - User Settings → API Keys → Fingerprint (after adding public key)
+
+tenancy_ocid     = "ocid1.tenancy.oc1..aaaaaaaa..."
+user_ocid        = "ocid1.user.oc1..aaaaaaaa..."
+fingerprint      = "aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99"
+private_key_path = "~/.oci/oci_api_key.pem"
+region           = "eu-amsterdam-1"
+
+# Compartment OCID (can be same as tenancy_ocid for root compartment)
+compartment_id = "ocid1.compartment.oc1..aaaaaaaa..."
+
+# =============================================================================
+# Cluster Configuration
+# =============================================================================
+cluster_name       = "health-platform-prod"
+kubernetes_version = "v1.28.2"
+cluster_type       = "BASIC_CLUSTER" # FREE control plane
+use_always_free    = true            # Use ARM Ampere A1 instances
+
+# =============================================================================
+# Network Configuration
+# =============================================================================
+vcn_cidr     = "10.0.0.0/16"
+pod_cidr     = "10.244.0.0/16"
+service_cidr = "10.96.0.0/16"
+
+# =============================================================================
+# Node Pools (Always Free: 4 OCPU, 24 GB RAM total)
+# =============================================================================
+# Configuration for 3 ARM nodes (fixed size, no autoscaling):
+# - 1x system-pool: 2 OCPU, 12 GB RAM (monitoring, ingress, system services)
+# - 2x app-pool: 1 OCPU, 6 GB RAM each (application workloads)
+#
+# NOTE: Total resources are validated automatically:
+#   - Max 4 OCPUs total (2*1 + 1*2 = 4 ✓)
+#   - Max 24 GB RAM total (12*1 + 6*2 = 24 ✓)
+node_pools = [
+  {
+    name       = "system-pool"
+    ocpu_count = 2
+    memory_gb  = 12
+    node_count = 1
+  },
+  {
+    name       = "app-pool"
+    ocpu_count = 1
+    memory_gb  = 6
+    node_count = 2
+  }
+]
+
+# =============================================================================
+# SSH Configuration
+# =============================================================================
+# Path to your SSH public key for node access
+ssh_public_key_path = "~/.ssh/id_rsa.pub"
+
+# =============================================================================
+# Security Configuration
+# =============================================================================
+# CIDR blocks allowed to SSH to worker nodes
+# IMPORTANT: Restrict this in production! Use your VPN or office IP range
+# Examples:
+#   - Your home IP: ["1.2.3.4/32"]
+#   - Your office network: ["10.0.0.0/8"]
+#   - Multiple ranges: ["1.2.3.4/32", "5.6.7.0/24"]
+allowed_ssh_cidrs = ["0.0.0.0/0"] # WARNING: Open to internet (for testing only)
+
+# CIDR blocks allowed to access Kubernetes API
+# Standard practice is to allow from anywhere for managed K8s, but you can restrict
+# Examples:
+#   - Your home IP: ["1.2.3.4/32"]
+#   - CloudFlare IPs + your IP: ["1.2.3.4/32", "103.21.244.0/22"]
+allowed_api_cidrs = ["0.0.0.0/0"] # Allow from anywhere (standard for managed K8s)
+
+# Use private worker nodes (no public IPs)
+# Set to true for enhanced security - nodes will use NAT gateway for outbound only
+use_private_nodes = false # Set to true for production
+
+# =============================================================================
+# Tags
+# =============================================================================
+tags = {
+  Project     = "health-data-ai-platform"
+  ManagedBy   = "terraform"
+  Environment = "production"
+  CostCenter  = "always-free"
+}
