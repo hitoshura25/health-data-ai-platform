@@ -58,6 +58,12 @@ dependencies:
     repository: file://./charts/observability
     condition: observability.enabled
 
+  # Disaster Recovery (Module 8)
+  - name: velero
+    version: 1.0.0
+    repository: file://./charts/velero
+    condition: velero.enabled
+
 annotations:
   # Helm chart metadata
   category: Healthcare

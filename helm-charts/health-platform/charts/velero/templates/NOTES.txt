@@ -1,0 +1,97 @@
+Velero Disaster Recovery has been deployed!
+
+==============================================
+Velero Backup and Restore Configuration
+==============================================
+
+Velero is now installed and configured for disaster recovery.
+
+BACKUP SCHEDULES:
+-----------------
+1. Daily Full Backup:     Every day at 2:00 AM UTC (30-day retention)
+2. Health Data Backup:    Every 6 hours (7-day retention)
+3. Config Backup:         Every hour (7-day retention)
+
+DATABASE BACKUP JOBS:
+---------------------
+{{- if .Values.backupJobs.postgresql.enabled }}
+- PostgreSQL (health-data):  Daily at 3:00 AM UTC
+- PostgreSQL (webauthn-auth): Daily at 3:00 AM UTC
+{{- end }}
+{{- if .Values.backupJobs.minio.enabled }}
+- MinIO Data Lake:           Daily at 4:00 AM UTC
+{{- end }}
+{{- if .Values.backupJobs.rabbitmq.enabled }}
+- RabbitMQ Definitions:      Daily at 5:00 AM UTC
+{{- end }}
+
+BACKUP VERIFICATION:
+--------------------
+{{- if .Values.backupVerification.enabled }}
+- Automated verification runs daily at 6:00 AM UTC
+{{- end }}
+
+QUICK START COMMANDS:
+---------------------
+
+# Check Velero status
+kubectl get all -n {{ .Release.Namespace }}
+
+# List all backups
+velero backup get
+
+# Describe a backup
+velero backup describe <backup-name>
+
+# Trigger manual backup
+velero backup create manual-backup-$(date +%Y%m%d-%H%M%S) \
+  --include-namespaces health-api,health-auth,health-etl,health-data
+
+# Restore from backup
+velero restore create --from-backup <backup-name>
+
+# Monitor restore
+velero restore describe <restore-name>
+velero restore logs <restore-name>
+
+MONITORING:
+-----------
+{{- if .Values.velero.metrics.enabled }}
+- Prometheus metrics: Enabled
+- ServiceMonitor: {{ .Values.velero.metrics.serviceMonitor.enabled }}
+- PrometheusRule: {{ .Values.velero.metrics.prometheusRule.enabled }}
+{{- end }}
+
+Alerts configured for:
+- Backup failures
+- Backups older than 24 hours
+- Partial backup failures
+
+IMPORTANT NOTES:
+----------------
+1. Configure OCI credentials before using:
+   kubectl create secret generic velero-oci-credentials \
+     --namespace {{ .Release.Namespace }} \
+     --from-file=cloud=<oci-credentials-file>
+
+2. Update OCI namespace in values:
+   oci.namespace: "YOUR_OCI_NAMESPACE"
+
+3. Review disaster recovery documentation:
+   See DISASTER-RECOVERY.md for detailed procedures
+
+4. Test restore procedures regularly:
+   Monthly DR drills recommended
+
+DISASTER RECOVERY SUPPORT:
+--------------------------
+RTO (Recovery Time Objective):
+- Resource deletion: 15 minutes
+- Database corruption: 30 minutes
+- Cluster failure: 2-4 hours
+
+RPO (Recovery Point Objective):
+- Kubernetes resources: 1 hour (hourly config backups)
+- Databases: 24 hours (daily backups)
+
+For more information, see the disaster recovery runbook.

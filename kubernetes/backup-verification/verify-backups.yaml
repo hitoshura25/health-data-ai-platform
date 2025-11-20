@@ -1,0 +1,305 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-verification-script
+  namespace: velero
+data:
+  verify.sh: |
+    #!/bin/bash
+    set -e
+
+    echo "==========================================="
+    echo "Backup Verification"
+    echo "Started at: $(date)"
+    echo "==========================================="
+
+    # Color codes for output
+    GREEN='\033[0;32m'
+    RED='\033[0;31m'
+    YELLOW='\033[1;33m'
+    NC='\033[0m' # No Color
+
+    VERIFICATION_FAILED=0
+
+    # Function to check backup age
+    check_backup_age() {
+      local backup_name=$1
+      local max_age_hours=$2
+
+      echo ""
+      echo "-------------------------------------------"
+      echo "Checking backup: ${backup_name}"
+
+      # Get backup creation time
+      BACKUP_TIME=$(kubectl get backup ${backup_name} -n velero -o jsonpath='{.status.startTimestamp}' 2>/dev/null || echo "")
+
+      if [ -z "${BACKUP_TIME}" ]; then
+        echo -e "${RED}✗ Backup not found${NC}"
+        return 1
+      fi
+
+      # Convert to Unix timestamp
+      BACKUP_TIMESTAMP=$(date -d "${BACKUP_TIME}" +%s)
+      CURRENT_TIMESTAMP=$(date +%s)
+      AGE_HOURS=$(( (CURRENT_TIMESTAMP - BACKUP_TIMESTAMP) / 3600 ))
+
+      echo "Backup age: ${AGE_HOURS} hours"
+
+      if [ ${AGE_HOURS} -gt ${max_age_hours} ]; then
+        echo -e "${RED}✗ Backup is too old (max: ${max_age_hours} hours)${NC}"
+        return 1
+      fi
+
+      # Check backup status
+      BACKUP_STATUS=$(kubectl get backup ${backup_name} -n velero -o jsonpath='{.status.phase}')
+      echo "Backup status: ${BACKUP_STATUS}"
+
+      if [ "${BACKUP_STATUS}" != "Completed" ]; then
+        echo -e "${RED}✗ Backup not completed${NC}"
+        return 1
+      fi
+
+      # Check for errors
+      ERRORS=$(kubectl get backup ${backup_name} -n velero -o jsonpath='{.status.errors}')
+      if [ ! -z "${ERRORS}" ] && [ "${ERRORS}" != "0" ]; then
+        echo -e "${YELLOW}⚠ Backup has ${ERRORS} errors${NC}"
+        VERIFICATION_FAILED=1
+      fi
+
+      # Check backup size
+      BACKUP_SIZE=$(kubectl get backup ${backup_name} -n velero -o jsonpath='{.status.progress.totalItems}')
+      echo "Items backed up: ${BACKUP_SIZE}"
+
+      if [ -z "${BACKUP_SIZE}" ] || [ "${BACKUP_SIZE}" -eq 0 ]; then
+        echo -e "${RED}✗ Backup is empty${NC}"
+        return 1
+      fi
+
+      echo -e "${GREEN}✓ Backup verification passed${NC}"
+      return 0
+    }
+
+    # Function to verify PostgreSQL backups in OCI
+    check_database_backup() {
+      local backup_prefix=$1
+      local max_age_days=$2
+      local namespace=$3
+
+      echo ""
+      echo "-------------------------------------------"
+      echo "Checking database backup: ${backup_prefix} in namespace ${namespace}"
+
+      # This would require OCI CLI or API access
+      # For now, just check if the CronJob ran successfully
+      JOB_NAME="${backup_prefix}-backup"
+
+      LAST_SUCCESS=$(kubectl get cronjob ${JOB_NAME} -n ${namespace} -o jsonpath='{.status.lastSuccessfulTime}' 2>/dev/null || echo "")
+
+      if [ -z "${LAST_SUCCESS}" ]; then
+        echo -e "${RED}✗ No successful backup found${NC}"
+        VERIFICATION_FAILED=1
+        return 1
+      fi
+
+      LAST_SUCCESS_TIMESTAMP=$(date -d "${LAST_SUCCESS}" +%s)
+      CURRENT_TIMESTAMP=$(date +%s)
+      AGE_DAYS=$(( (CURRENT_TIMESTAMP - LAST_SUCCESS_TIMESTAMP) / 86400 ))
+
+      echo "Last successful backup: ${AGE_DAYS} days ago"
+
+      if [ ${AGE_DAYS} -gt ${max_age_days} ]; then
+        echo -e "${RED}✗ Backup is too old (max: ${max_age_days} days)${NC}"
+        VERIFICATION_FAILED=1
+        return 1
+      fi
+
+      echo -e "${GREEN}✓ Database backup verification passed${NC}"
+      return 0
+    }
+
+    # Verify Velero backups
+    echo ""
+    echo "==========================================="
+    echo "Verifying Velero Backups"
+    echo "==========================================="
+
+    # Get latest backups for each schedule
+    DAILY_BACKUP=$(kubectl get backups -n velero -l velero.io/schedule-name=daily-full-backup --sort-by=.status.startTimestamp -o jsonpath='{.items[-1].metadata.name}' 2>/dev/null || echo "")
+    HEALTH_BACKUP=$(kubectl get backups -n velero -l velero.io/schedule-name=health-data-backup --sort-by=.status.startTimestamp -o jsonpath='{.items[-1].metadata.name}' 2>/dev/null || echo "")
+    CONFIG_BACKUP=$(kubectl get backups -n velero -l velero.io/schedule-name=config-backup --sort-by=.status.startTimestamp -o jsonpath='{.items[-1].metadata.name}' 2>/dev/null || echo "")
+
+    # Check daily backup (should be < 25 hours old)
+    if [ ! -z "${DAILY_BACKUP}" ]; then
+      check_backup_age "${DAILY_BACKUP}" 25 || VERIFICATION_FAILED=1
+    else
+      echo -e "${RED}✗ Daily backup not found${NC}"
+      VERIFICATION_FAILED=1
+    fi
+
+    # Check health data backup (should be < 7 hours old)
+    if [ ! -z "${HEALTH_BACKUP}" ]; then
+      check_backup_age "${HEALTH_BACKUP}" 7 || VERIFICATION_FAILED=1
+    else
+      echo -e "${RED}✗ Health data backup not found${NC}"
+      VERIFICATION_FAILED=1
+    fi
+
+    # Check config backup (should be < 2 hours old)
+    if [ ! -z "${CONFIG_BACKUP}" ]; then
+      check_backup_age "${CONFIG_BACKUP}" 2 || VERIFICATION_FAILED=1
+    else
+      echo -e "${RED}✗ Config backup not found${NC}"
+      VERIFICATION_FAILED=1
+    fi
+
+    # Verify database backups
+    echo ""
+    echo "==========================================="
+    echo "Verifying Database Backups"
+    echo "==========================================="
+
+    check_database_backup "postgresql-health" 2 "health-data" || true
+    check_database_backup "postgresql-auth" 2 "health-auth" || true
+    check_database_backup "minio" 2 "health-data" || true
+    check_database_backup "rabbitmq" 2 "health-data" || true
+
+    # Summary
+    echo ""
+    echo "==========================================="
+    echo "Verification Summary"
+    echo "==========================================="
+
+    if [ ${VERIFICATION_FAILED} -eq 0 ]; then
+      echo -e "${GREEN}✓ All backup verifications passed${NC}"
+      echo "Finished at: $(date)"
+      exit 0
+    else
+      echo -e "${RED}✗ Some backup verifications failed${NC}"
+      echo "Finished at: $(date)"
+      exit 1
+    fi
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-verification
+  namespace: velero
+  labels:
+    app: backup-verification
+spec:
+  schedule: "0 6 * * *"  # Daily at 6 AM UTC (after all backups complete)
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+
+  jobTemplate:
+    metadata:
+      labels:
+        app: backup-verification
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: backup-verification
+        spec:
+          restartPolicy: Never
+          serviceAccountName: backup-verification
+
+          containers:
+          - name: verify
+            image: bitnami/kubectl:1.28
+            command: ["/bin/bash"]
+            args: ["/scripts/verify.sh"]
+
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 256Mi
+
+            volumeMounts:
+            - name: verification-script
+              mountPath: /scripts
+              readOnly: true
+
+          volumes:
+          - name: verification-script
+            configMap:
+              name: backup-verification-script
+              defaultMode: 0755
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backup-verification
+  namespace: velero
+  labels:
+    app: backup-verification
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: backup-verification
+  labels:
+    app: backup-verification
+rules:
+- apiGroups: ["velero.io"]
+  resources: ["backups"]
+  verbs: ["get", "list"]
+- apiGroups: ["batch"]
+  resources: ["cronjobs"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: backup-verification
+  labels:
+    app: backup-verification
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: backup-verification
+subjects:
+- kind: ServiceAccount
+  name: backup-verification
+  namespace: velero
+
+---
+# Alert configuration for backup verification failures
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-verification-alerts
+  namespace: velero
+data:
+  alert-webhook.sh: |
+    #!/bin/bash
+    # Send alert when backup verification fails
+    # This script can be called from the verification CronJob on failure
+
+    WEBHOOK_URL="${ALERT_WEBHOOK_URL}"
+
+    if [ -z "${WEBHOOK_URL}" ]; then
+      echo "No webhook URL configured, skipping alert"
+      exit 0
+    fi
+
+    MESSAGE="🚨 Backup Verification Failed\n\nCluster: ${CLUSTER_NAME:-unknown}\nTime: $(date)\n\nPlease check backup status immediately."
+
+    # Send to Slack/Teams/Discord webhook
+    curl -X POST "${WEBHOOK_URL}" \
+      -H "Content-Type: application/json" \
+      -d "{\"text\":\"${MESSAGE}\"}"
+
+    echo "Alert sent to webhook"
