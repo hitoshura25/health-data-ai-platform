@@ -1,0 +1,257 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-backup-script
+  namespace: health-data
+data:
+  backup.sh: |
+    #!/bin/bash
+    set -e
+
+    TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+    BACKUP_FILE="rabbitmq-definitions-${TIMESTAMP}.json"
+    BACKUP_PATH="/tmp/${BACKUP_FILE}"
+
+    echo "==========================================="
+    echo "RabbitMQ Definitions Backup"
+    echo "Started at: $(date)"
+    echo "==========================================="
+
+    # Export RabbitMQ definitions (queues, exchanges, bindings, etc.)
+    echo "Exporting RabbitMQ definitions..."
+    curl -u "${RABBITMQ_USER}:${RABBITMQ_PASSWORD}" \
+      -H "content-type:application/json" \
+      "http://${RABBITMQ_HOST}:15672/api/definitions" \
+      -o "${BACKUP_PATH}"
+
+    if [ ! -f "${BACKUP_PATH}" ]; then
+      echo "ERROR: Failed to export RabbitMQ definitions"
+      exit 1
+    fi
+
+    BACKUP_SIZE=$(du -h "${BACKUP_PATH}" | cut -f1)
+    echo "Definitions exported: ${BACKUP_FILE} (${BACKUP_SIZE})"
+
+    # Pretty print for verification
+    echo "Backup contents:"
+    jq -r '.rabbit_version, (.users | length) as $users | (.vhosts | length) as $vhosts | (.queues | length) as $queues | (.exchanges | length) as $exchanges | "Users: \($users), VHosts: \($vhosts), Queues: \($queues), Exchanges: \($exchanges)"' "${BACKUP_PATH}"
+
+    # Compress backup
+    gzip "${BACKUP_PATH}"
+    BACKUP_PATH="${BACKUP_PATH}.gz"
+    BACKUP_FILE="${BACKUP_FILE}.gz"
+
+    # Upload to OCI Object Storage
+    if [ -n "${OCI_UPLOAD_URL}" ]; then
+      echo "Uploading to OCI Object Storage..."
+      HTTP_CODE=$(curl -X PUT \
+        --upload-file "${BACKUP_PATH}" \
+        "${OCI_UPLOAD_URL}/${BACKUP_FILE}" \
+        --write-out "%{http_code}" \
+        --silent \
+        --output /dev/null)
+
+      if [ "${HTTP_CODE}" -eq 200 ] || [ "${HTTP_CODE}" -eq 201 ]; then
+        echo "Upload successful (HTTP ${HTTP_CODE})"
+      else
+        echo "ERROR: Upload failed with HTTP ${HTTP_CODE}"
+        exit 1
+      fi
+    else
+      echo "WARNING: OCI_UPLOAD_URL not set, backup saved locally only"
+    fi
+
+    # Cleanup
+    rm -f "${BACKUP_PATH}"
+
+    echo "==========================================="
+    echo "Backup completed successfully"
+    echo "Finished at: $(date)"
+    echo "==========================================="
+
+  restore.sh: |
+    #!/bin/bash
+    set -e
+
+    DEFINITIONS_FILE="${1}"
+
+    if [ -z "${DEFINITIONS_FILE}" ]; then
+      echo "Usage: restore.sh <definitions-file.json>"
+      exit 1
+    fi
+
+    if [ ! -f "${DEFINITIONS_FILE}" ]; then
+      echo "ERROR: Definitions file not found: ${DEFINITIONS_FILE}"
+      exit 1
+    fi
+
+    echo "==========================================="
+    echo "RabbitMQ Definitions Restore"
+    echo "File: ${DEFINITIONS_FILE}"
+    echo "Started at: $(date)"
+    echo "==========================================="
+
+    # Import definitions
+    echo "Importing RabbitMQ definitions..."
+    curl -u "${RABBITMQ_USER}:${RABBITMQ_PASSWORD}" \
+      -H "content-type:application/json" \
+      -X POST \
+      --data-binary "@${DEFINITIONS_FILE}" \
+      "http://${RABBITMQ_HOST}:15672/api/definitions"
+
+    echo "==========================================="
+    echo "Restore completed successfully"
+    echo "Finished at: $(date)"
+    echo "==========================================="
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: rabbitmq-backup
+  namespace: health-data
+  labels:
+    app: rabbitmq-backup
+    component: message-queue
+spec:
+  schedule: "0 5 * * *"  # Daily at 5 AM UTC
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+
+  jobTemplate:
+    metadata:
+      labels:
+        app: rabbitmq-backup
+        component: message-queue
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: rabbitmq-backup
+            component: message-queue
+        spec:
+          restartPolicy: OnFailure
+
+          containers:
+          - name: rabbitmq-backup
+            image: curlimages/curl:latest
+            command: ["/bin/sh"]
+            args: ["/scripts/backup.sh"]
+
+            env:
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: RABBITMQ_USER
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: rabbitmq-username
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: rabbitmq-password
+            - name: OCI_UPLOAD_URL
+              valueFrom:
+                secretKeyRef:
+                  name: backup-oci-config
+                  key: rabbitmq-upload-url
+                  optional: true
+
+            resources:
+              requests:
+                cpu: 50m
+                memory: 64Mi
+              limits:
+                cpu: 200m
+                memory: 128Mi
+
+            volumeMounts:
+            - name: backup-script
+              mountPath: /scripts
+              readOnly: true
+
+          volumes:
+          - name: backup-script
+            configMap:
+              name: rabbitmq-backup-script
+              defaultMode: 0755
+
+---
+# Manual restore job template
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rabbitmq-restore-manual
+  namespace: health-data
+  labels:
+    app: rabbitmq-restore
+    component: message-queue
+spec:
+  template:
+    metadata:
+      labels:
+        app: rabbitmq-restore
+        component: message-queue
+    spec:
+      restartPolicy: Never
+
+      initContainers:
+      # Download backup from OCI Object Storage
+      - name: download-backup
+        image: curlimages/curl:latest
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            # Download the specified backup file
+            # Set BACKUP_FILENAME as an environment variable
+            curl -o /backup/definitions.json.gz \
+              "${OCI_DOWNLOAD_URL}/${BACKUP_FILENAME}"
+            gunzip /backup/definitions.json.gz
+
+        env:
+        - name: OCI_DOWNLOAD_URL
+          value: "https://objectstorage.eu-amsterdam-1.oraclecloud.com/n/NAMESPACE/b/health-platform-db-backups/o"
+        - name: BACKUP_FILENAME
+          value: "rabbitmq-definitions-20250120-050000.json.gz"
+
+        volumeMounts:
+        - name: backup-data
+          mountPath: /backup
+
+      containers:
+      - name: rabbitmq-restore
+        image: curlimages/curl:latest
+        command: ["/bin/sh"]
+        args: ["/scripts/restore.sh", "/backup/definitions.json"]
+
+        env:
+        - name: RABBITMQ_HOST
+          value: "rabbitmq"
+        - name: RABBITMQ_USER
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: rabbitmq-username
+        - name: RABBITMQ_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: rabbitmq-password
+
+        volumeMounts:
+        - name: backup-script
+          mountPath: /scripts
+          readOnly: true
+        - name: backup-data
+          mountPath: /backup
+
+      volumes:
+      - name: backup-script
+        configMap:
+          name: rabbitmq-backup-script
+          defaultMode: 0755
+      - name: backup-data
+        emptyDir: {}

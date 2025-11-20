@@ -1,0 +1,22 @@
+apiVersion: v2
+name: velero
+description: Disaster recovery and backup solution for Health Data AI Platform using Velero
+type: application
+version: 1.0.0
+appVersion: "1.12.0"
+
+keywords:
+  - backup
+  - disaster-recovery
+  - velero
+  - health-data
+
+maintainers:
+  - name: Health Data AI Platform Team
+
+dependencies:
+  # Velero upstream chart
+  - name: velero
+    version: 5.1.4
+    repository: https://vmware-tanzu.github.io/helm-charts
+    condition: velero.enabled

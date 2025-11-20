@@ -1,0 +1,290 @@
+# Velero Disaster Recovery Configuration
+# Oracle Cloud Always Free tier compatible
+
+velero:
+  enabled: true
+
+  # Velero image configuration
+  image:
+    repository: velero/velero
+    tag: v1.12.0
+    pullPolicy: IfNotPresent
+
+  # Install restic for PV backups
+  deployRestic: true
+
+  restic:
+    podVolumePath: /var/lib/kubelet/pods
+    privileged: false
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+  # Resource limits for Velero pod
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+  # Initialize plugins
+  initContainers:
+    - name: velero-plugin-for-aws
+      image: velero/velero-plugin-for-aws:v1.8.0
+      imagePullPolicy: IfNotPresent
+      volumeMounts:
+        - mountPath: /target
+          name: plugins
+
+  # OCI Object Storage configuration (S3-compatible)
+  configuration:
+    provider: aws
+
+    backupStorageLocation:
+      # OCI Object Storage bucket
+      bucket: health-platform-velero-backups
+      prefix: velero
+
+      config:
+        region: eu-amsterdam-1
+        s3ForcePathStyle: "true"
+        # OCI S3-compatible endpoint - update with your namespace
+        s3Url: https://REPLACE_WITH_OCI_NAMESPACE.compat.objectstorage.eu-amsterdam-1.oraclecloud.com
+        # Use signature version 4 for OCI
+        signatureVersion: "4"
+
+    volumeSnapshotLocation:
+      provider: aws
+      config:
+        region: eu-amsterdam-1
+
+    # Features
+    features: EnableCSI
+
+    # Upload validation frequency
+    uploaderType: restic
+
+    # Default backup TTL (30 days)
+    defaultBackupTTL: 720h
+
+    # Restore resource priorities
+    restoreResourcePriorities: >-
+      customresourcedefinitions,
+      namespaces,
+      storageclasses,
+      persistentvolumes,
+      persistentvolumeclaims,
+      secrets,
+      configmaps,
+      serviceaccounts,
+      limitranges,
+      pods,
+      replicasets,
+      deployments,
+      statefulsets,
+      jobs,
+      cronjobs,
+      services,
+      ingresses
+
+  # Credentials for OCI Object Storage
+  credentials:
+    # Secret will be created separately with OCI credentials
+    useSecret: true
+    existingSecret: velero-oci-credentials
+    secretContents: {}
+
+  # Backup schedules
+  schedules:
+    # Daily full backup at 2 AM UTC
+    daily-full-backup:
+      disabled: false
+      schedule: "0 2 * * *"
+      useOwnerReferencesInBackup: false
+      template:
+        includedNamespaces:
+          - health-api
+          - health-auth
+          - health-etl
+          - health-data
+          - health-observability
+        excludedResources:
+          - events
+          - events.events.k8s.io
+        includeClusterResources: true
+        snapshotVolumes: true
+        defaultVolumesToRestic: true
+        ttl: 720h  # 30 days retention
+
+    # Health data namespace backup every 6 hours
+    health-data-backup:
+      disabled: false
+      schedule: "0 */6 * * *"
+      useOwnerReferencesInBackup: false
+      template:
+        includedNamespaces:
+          - health-data
+        snapshotVolumes: true
+        defaultVolumesToRestic: true
+        ttl: 168h  # 7 days retention
+
+    # Configuration backup hourly (lightweight)
+    config-backup:
+      disabled: false
+      schedule: "0 */1 * * *"
+      useOwnerReferencesInBackup: false
+      template:
+        includedNamespaces:
+          - health-api
+          - health-auth
+          - health-etl
+          - health-data
+        includedResources:
+          - configmap
+          - secret
+          - serviceaccount
+        includeClusterResources: false
+        snapshotVolumes: false
+        ttl: 168h  # 7 days retention
+
+  # Metrics for monitoring
+  metrics:
+    enabled: true
+    scrapeInterval: 30s
+    scrapeTimeout: 10s
+
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        prometheus: health-platform
+
+    prometheusRule:
+      enabled: true
+      additionalLabels:
+        prometheus: health-platform
+      spec:
+        - alert: VeleroBackupFailure
+          expr: velero_backup_failure_total > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Velero backup has failed"
+            description: "Velero backup {{ $labels.backup }} has failed"
+
+        - alert: VeleroBackupTooOld
+          expr: time() - velero_backup_last_successful_timestamp > 86400
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "No successful Velero backup in 24 hours"
+            description: "Latest successful backup is older than 24 hours"
+
+        - alert: VeleroBackupPartialFailure
+          expr: velero_backup_partial_failure_total > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Velero backup partially failed"
+            description: "Velero backup {{ $labels.backup }} partially failed"
+
+  # Service account permissions
+  serviceAccount:
+    server:
+      create: true
+      name: velero
+
+  # Enable kubectl access for restic
+  kubectl:
+    image:
+      repository: docker.io/bitnami/kubectl
+      tag: 1.28
+
+  # Backup and restore log level
+  logLevel: info
+  logFormat: text
+
+  # Cleanup jobs
+  cleanUpCRDs: false
+
+  # Node selector for scheduling
+  nodeSelector: {}
+
+  # Tolerations
+  tolerations: []
+
+  # Affinity rules
+  affinity: {}
+
+# Additional backup jobs configuration
+backupJobs:
+  # PostgreSQL backup schedules
+  postgresql:
+    enabled: true
+    schedule: "0 3 * * *"  # 3 AM daily
+    retention: 7  # days
+
+    healthData:
+      enabled: true
+      database: healthdb
+      user: healthapi
+      host: postgresql-health-primary
+      port: 5432
+
+    webauthnAuth:
+      enabled: true
+      database: webauthn
+      user: webauthn
+      host: postgresql-auth-primary
+      port: 5432
+
+  # MinIO backup schedule
+  minio:
+    enabled: true
+    schedule: "0 4 * * *"  # 4 AM daily
+    retention: 7  # days
+    buckets:
+      - raw-health-data
+      - processed-data
+      - clinical-narratives
+      - model-artifacts
+
+  # RabbitMQ backup schedule
+  rabbitmq:
+    enabled: true
+    schedule: "0 5 * * *"  # 5 AM daily
+    retention: 7  # days
+
+# Backup verification
+backupVerification:
+  enabled: true
+  schedule: "0 6 * * *"  # 6 AM daily
+  testNamespace: dr-test
+  notifyOnFailure: true
+
+# OCI Object Storage configuration
+oci:
+  # Update these values in production
+  namespace: "REPLACE_WITH_OCI_NAMESPACE"
+  region: "eu-amsterdam-1"
+
+  # Bucket for Velero backups
+  veleroBucket: "health-platform-velero-backups"
+
+  # Bucket for database backups
+  databaseBackupsBucket: "health-platform-db-backups"
+
+  # Pre-authenticated request URLs (created separately)
+  # These should be created in OCI console and stored as secrets
+  uploadUrls:
+    velero: ""
+    databases: ""
+    minio: ""

@@ -1,0 +1,185 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: minio-backup-script
+  namespace: health-data
+data:
+  backup.sh: |
+    #!/bin/bash
+    set -e
+
+    TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+
+    echo "==========================================="
+    echo "MinIO Data Lake Backup"
+    echo "Started at: $(date)"
+    echo "==========================================="
+
+    # Configure MinIO client
+    mc alias set source \
+      "http://${MINIO_HOST}:${MINIO_PORT}" \
+      "${MINIO_ACCESS_KEY}" \
+      "${MINIO_SECRET_KEY}"
+
+    # Configure OCI Object Storage as destination (S3-compatible)
+    if [ -n "${OCI_ACCESS_KEY}" ] && [ -n "${OCI_SECRET_KEY}" ]; then
+      mc alias set oci \
+        "${OCI_ENDPOINT}" \
+        "${OCI_ACCESS_KEY}" \
+        "${OCI_SECRET_KEY}"
+
+      # Backup each bucket
+      for BUCKET in ${MINIO_BUCKETS}; do
+        echo "-------------------------------------------"
+        echo "Backing up bucket: ${BUCKET}"
+
+        # Check if bucket exists
+        if mc ls source/${BUCKET} >/dev/null 2>&1; then
+          # Mirror bucket to OCI (incremental sync)
+          mc mirror --overwrite \
+            source/${BUCKET} \
+            oci/${OCI_BACKUP_BUCKET}/minio-backups/${BUCKET}/${TIMESTAMP}/
+
+          BUCKET_SIZE=$(mc du --depth 0 source/${BUCKET} | awk '{print $1, $2}')
+          echo "Bucket ${BUCKET} backed up (${BUCKET_SIZE})"
+        else
+          echo "WARNING: Bucket ${BUCKET} does not exist, skipping"
+        fi
+      done
+
+      echo "-------------------------------------------"
+      echo "All buckets backed up successfully"
+
+      # Cleanup old backups (keep last 7 days)
+      RETENTION_DATE=$(date -d "7 days ago" +%Y%m%d)
+      echo "Cleaning up backups older than ${RETENTION_DATE}..."
+
+      # List and remove old backups
+      # Note: This is simplified - production should use proper lifecycle policies
+      echo "Retention cleanup would be handled by OCI Object Storage lifecycle policies"
+
+    else
+      echo "ERROR: OCI credentials not configured"
+      exit 1
+    fi
+
+    echo "==========================================="
+    echo "Backup completed successfully"
+    echo "Finished at: $(date)"
+    echo "==========================================="
+
+  healthcheck.sh: |
+    #!/bin/bash
+    # Verify MinIO is accessible
+    mc alias set source \
+      "http://${MINIO_HOST}:${MINIO_PORT}" \
+      "${MINIO_ACCESS_KEY}" \
+      "${MINIO_SECRET_KEY}"
+
+    mc admin info source
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: minio-backup
+  namespace: health-data
+  labels:
+    app: minio-backup
+    component: data-lake
+spec:
+  schedule: "0 4 * * *"  # Daily at 4 AM UTC
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+
+  jobTemplate:
+    metadata:
+      labels:
+        app: minio-backup
+        component: data-lake
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: minio-backup
+            component: data-lake
+        spec:
+          restartPolicy: OnFailure
+
+          containers:
+          - name: minio-backup
+            image: minio/mc:latest
+            command: ["/bin/sh"]
+            args: ["/scripts/backup.sh"]
+
+            env:
+            - name: MINIO_HOST
+              value: "minio"
+            - name: MINIO_PORT
+              value: "9000"
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-secret
+                  key: root-user
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-secret
+                  key: root-password
+
+            # Buckets to backup (space-separated)
+            - name: MINIO_BUCKETS
+              value: "raw-health-data processed-data clinical-narratives model-artifacts"
+
+            # OCI Object Storage credentials
+            - name: OCI_ENDPOINT
+              value: "https://REPLACE_WITH_OCI_NAMESPACE.compat.objectstorage.eu-amsterdam-1.oraclecloud.com"
+            - name: OCI_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backup-oci-config
+                  key: oci-access-key
+            - name: OCI_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backup-oci-config
+                  key: oci-secret-key
+            - name: OCI_BACKUP_BUCKET
+              value: "health-platform-minio-backups"
+
+            resources:
+              requests:
+                cpu: 200m
+                memory: 512Mi
+              limits:
+                cpu: 1000m
+                memory: 2Gi
+
+            volumeMounts:
+            - name: backup-script
+              mountPath: /scripts
+              readOnly: true
+
+          volumes:
+          - name: backup-script
+            configMap:
+              name: minio-backup-script
+              defaultMode: 0755
+
+---
+# OCI credentials for MinIO backups
+# Update the backup-oci-config secret in health-data namespace
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backup-oci-config-minio
+  namespace: health-data
+type: Opaque
+stringData:
+  oci-access-key: "REPLACE_WITH_OCI_ACCESS_KEY"
+  oci-secret-key: "REPLACE_WITH_OCI_SECRET_KEY"
+  oci-endpoint: "https://NAMESPACE.compat.objectstorage.eu-amsterdam-1.oraclecloud.com"
+  oci-backup-bucket: "health-platform-minio-backups"
