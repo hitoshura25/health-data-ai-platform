@@ -1,0 +1,35 @@
+apiVersion: v2
+name: observability
+description: Complete observability stack for Health Data AI Platform (Prometheus, Grafana, Jaeger, Loki)
+type: application
+version: 1.0.0
+appVersion: "1.0"
+
+keywords:
+  - observability
+  - monitoring
+  - logging
+  - tracing
+  - prometheus
+  - grafana
+  - jaeger
+  - loki
+
+maintainers:
+  - name: Health Platform Team
+    email: team@healthplatform.example.com
+
+dependencies:
+  # kube-prometheus-stack provides Prometheus + Grafana + AlertManager
+  - name: kube-prometheus-stack
+    version: "55.5.0"
+    repository: https://prometheus-community.github.io/helm-charts
+    condition: prometheus.enabled
+    alias: kube-prometheus-stack
+
+  # Loki stack for log aggregation
+  - name: loki-stack
+    version: "2.9.11"
+    repository: https://grafana.github.io/helm-charts
+    condition: loki.enabled
+    alias: loki-stack

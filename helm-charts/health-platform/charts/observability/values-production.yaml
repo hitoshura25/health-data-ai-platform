@@ -1,0 +1,529 @@
+# Observability Stack Configuration - PRODUCTION
+# Health Data AI Platform - Oracle Cloud Always Free Tier
+
+# Global settings
+global:
+  namespace: health-observability
+  storageClass: oci-bv
+  cluster:
+    name: health-platform-prod
+    environment: production
+
+# Enable/disable components (all enabled in production)
+prometheus:
+  enabled: true
+
+grafana:
+  enabled: true
+
+jaeger:
+  enabled: true
+
+loki:
+  enabled: true
+
+# =============================================================================
+# Prometheus Configuration (via kube-prometheus-stack)
+# =============================================================================
+kube-prometheus-stack:
+  namespaceOverride: health-observability
+
+  prometheus:
+    prometheusSpec:
+      retention: 30d
+      retentionSize: "18GB"
+
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: oci-bv
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 20Gi
+
+      # Production resource limits
+      resources:
+        requests:
+          cpu: 500m
+          memory: 2Gi
+        limits:
+          cpu: 1000m
+          memory: 4Gi
+
+      serviceMonitorSelectorNilUsesHelmValues: false
+      podMonitorSelectorNilUsesHelmValues: false
+      ruleSelectorNilUsesHelmValues: false
+
+      # Production external labels
+      externalLabels:
+        cluster: health-platform-prod
+        environment: production
+        region: eu-amsterdam-1
+        cloud_provider: oracle
+        tier: always-free
+
+      scrapeInterval: 15s
+      evaluationInterval: 15s
+      enableAdminAPI: false  # Disabled in production for security
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
+
+  # Grafana production configuration
+  grafana:
+    enabled: true
+
+    # IMPORTANT: Change this password in production!
+    adminPassword: "CHANGE_ME_IN_PRODUCTION_STRONG_PASSWORD_HERE"
+
+    persistence:
+      enabled: true
+      storageClassName: oci-bv
+      size: 5Gi
+
+    # Production ingress with SSL
+    ingress:
+      enabled: true
+      ingressClassName: nginx
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+        nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+        nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+      hosts:
+        - grafana.healthplatform.example.com  # CHANGE TO YOUR DOMAIN
+      tls:
+        - secretName: grafana-tls
+          hosts:
+            - grafana.healthplatform.example.com
+
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 472
+      fsGroup: 472
+
+    # Production datasources
+    datasources:
+      datasources.yaml:
+        apiVersion: 1
+        datasources:
+          - name: Prometheus
+            type: prometheus
+            url: http://kube-prometheus-stack-prometheus.health-observability.svc.cluster.local:9090
+            access: proxy
+            isDefault: true
+            jsonData:
+              timeInterval: 15s
+
+          - name: Loki
+            type: loki
+            url: http://loki-stack.health-observability.svc.cluster.local:3100
+            access: proxy
+            jsonData:
+              maxLines: 1000
+
+          - name: Jaeger
+            type: jaeger
+            url: http://jaeger-query.health-observability.svc.cluster.local:16686
+            access: proxy
+
+    # Dashboard providers (same as dev)
+    dashboardProviders:
+      dashboardproviders.yaml:
+        apiVersion: 1
+        providers:
+          - name: 'default'
+            orgId: 1
+            folder: ''
+            type: file
+            disableDeletion: false
+            editable: true
+            options:
+              path: /var/lib/grafana/dashboards/default
+
+          - name: 'kubernetes'
+            orgId: 1
+            folder: 'Kubernetes'
+            type: file
+            disableDeletion: false
+            editable: true
+            options:
+              path: /var/lib/grafana/dashboards/kubernetes
+
+          - name: 'applications'
+            orgId: 1
+            folder: 'Applications'
+            type: file
+            disableDeletion: false
+            editable: true
+            options:
+              path: /var/lib/grafana/dashboards/applications
+
+          - name: 'infrastructure'
+            orgId: 1
+            folder: 'Infrastructure'
+            type: file
+            disableDeletion: false
+            editable: true
+            options:
+              path: /var/lib/grafana/dashboards/infrastructure
+
+    # Pre-configured dashboards from Grafana.com
+    dashboards:
+      kubernetes:
+        kubernetes-cluster:
+          gnetId: 7249
+          revision: 1
+          datasource: Prometheus
+        kubernetes-pods:
+          gnetId: 6417
+          revision: 1
+          datasource: Prometheus
+        node-exporter:
+          gnetId: 1860
+          revision: 31
+          datasource: Prometheus
+
+      infrastructure:
+        postgresql:
+          gnetId: 9628
+          revision: 7
+          datasource: Prometheus
+        redis:
+          gnetId: 11835
+          revision: 1
+          datasource: Prometheus
+        rabbitmq:
+          gnetId: 10991
+          revision: 12
+          datasource: Prometheus
+
+    plugins:
+      - grafana-piechart-panel
+      - grafana-worldmap-panel
+
+  # AlertManager production configuration
+  alertmanager:
+    enabled: true
+
+    alertmanagerSpec:
+      storage:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: oci-bv
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 5Gi
+
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
+
+    # Production alerting configuration
+    config:
+      global:
+        resolve_timeout: 5m
+        # Add your SMTP/Slack/PagerDuty settings here
+
+      route:
+        group_by: ['alertname', 'cluster', 'service', 'namespace']
+        group_wait: 10s
+        group_interval: 10s
+        repeat_interval: 12h
+        receiver: 'default'
+        routes:
+          - match:
+              severity: critical
+            receiver: critical
+            continue: true
+          - match:
+              severity: warning
+            receiver: warning
+
+      receivers:
+        - name: 'default'
+          # CONFIGURE YOUR DEFAULT RECEIVER
+          # Example: Email
+          # email_configs:
+          #   - to: 'alerts@example.com'
+          #     from: 'prometheus@example.com'
+          #     smarthost: 'smtp.gmail.com:587'
+          #     auth_username: 'prometheus@example.com'
+          #     auth_password: 'YOUR_PASSWORD'
+
+        - name: 'critical'
+          # CONFIGURE CRITICAL ALERTS (PagerDuty, Opsgenie, etc.)
+          # pagerduty_configs:
+          #   - service_key: 'YOUR_PAGERDUTY_KEY'
+
+        - name: 'warning'
+          # CONFIGURE WARNING ALERTS (Slack, etc.)
+          # slack_configs:
+          #   - api_url: 'YOUR_SLACK_WEBHOOK'
+          #     channel: '#health-platform-alerts'
+          #     title: 'Health Platform Warning Alert'
+
+  # Node exporter
+  prometheus-node-exporter:
+    enabled: true
+    resources:
+      requests:
+        cpu: 100m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+
+  # Kube State Metrics
+  kube-state-metrics:
+    enabled: true
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+
+  # Default alerting rules (all enabled in production)
+  defaultRules:
+    create: true
+    rules:
+      alertmanager: true
+      etcd: false
+      configReloaders: true
+      general: true
+      k8s: true
+      kubeApiserverAvailability: true
+      kubeApiserverSlos: true
+      kubelet: true
+      kubeProxy: true
+      kubePrometheusGeneral: true
+      kubePrometheusNodeRecording: true
+      kubernetesApps: true
+      kubernetesResources: true
+      kubernetesStorage: true
+      kubernetesSystem: true
+      kubeScheduler: false
+      kubeStateMetrics: true
+      network: true
+      node: true
+      nodeExporterAlerting: true
+      nodeExporterRecording: true
+      prometheus: true
+      prometheusOperator: true
+
+# =============================================================================
+# Loki Stack Configuration
+# =============================================================================
+loki-stack:
+  loki:
+    enabled: true
+    auth_enabled: false
+
+    storage:
+      type: filesystem
+
+    commonConfig:
+      replication_factor: 1
+
+    persistence:
+      enabled: true
+      storageClassName: oci-bv
+      size: 5Gi
+
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 400m
+        memory: 1Gi
+
+    # 7-day retention for production
+    limits_config:
+      retention_period: 168h
+      enforce_metric_name: false
+      reject_old_samples: true
+      reject_old_samples_max_age: 168h
+      max_entries_limit_per_query: 5000
+      max_streams_per_user: 0
+      max_global_streams_per_user: 0
+
+    chunk_store_config:
+      max_look_back_period: 168h
+
+    table_manager:
+      retention_deletes_enabled: true
+      retention_period: 168h
+
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 10001
+      fsGroup: 10001
+
+  # Promtail production configuration
+  promtail:
+    enabled: true
+
+    config:
+      clients:
+        - url: http://loki-stack:3100/loki/api/v1/push
+
+      snippets:
+        scrapeConfigs: |
+          - job_name: kubernetes-pods
+            pipeline_stages:
+              - docker: {}
+              - json:
+                  expressions:
+                    level: level
+                    msg: msg
+                    logger: logger
+                    trace_id: trace_id
+              - labels:
+                  level:
+                  logger:
+            kubernetes_sd_configs:
+              - role: pod
+            relabel_configs:
+              - source_labels:
+                  - __meta_kubernetes_pod_controller_name
+                regex: ([0-9a-z-.]+?)(-[0-9a-f]{8,10})?
+                action: replace
+                target_label: __tmp_controller_name
+              - source_labels:
+                  - __meta_kubernetes_pod_label_app_kubernetes_io_name
+                  - __meta_kubernetes_pod_label_app
+                  - __tmp_controller_name
+                  - __meta_kubernetes_pod_name
+                regex: ^;*([^;]+)(;.*)?$
+                action: replace
+                target_label: app
+              - source_labels:
+                  - __meta_kubernetes_pod_label_app_kubernetes_io_component
+                  - __meta_kubernetes_pod_label_component
+                regex: ^;*([^;]+)(;.*)?$
+                action: replace
+                target_label: component
+              - action: replace
+                source_labels:
+                - __meta_kubernetes_pod_node_name
+                target_label: node_name
+              - action: replace
+                source_labels:
+                - __meta_kubernetes_namespace
+                target_label: namespace
+              - action: replace
+                replacement: $1
+                separator: /
+                source_labels:
+                - namespace
+                - app
+                target_label: job
+              - action: replace
+                source_labels:
+                - __meta_kubernetes_pod_name
+                target_label: pod
+              - action: replace
+                source_labels:
+                - __meta_kubernetes_pod_container_name
+                target_label: container
+              - action: replace
+                replacement: /var/log/pods/*$1/*.log
+                separator: /
+                source_labels:
+                - __meta_kubernetes_pod_uid
+                - __meta_kubernetes_pod_container_name
+                target_label: __path__
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+
+  grafana:
+    enabled: false
+
+# =============================================================================
+# Jaeger Configuration
+# =============================================================================
+jaeger:
+  enabled: true
+
+  image:
+    repository: jaegertracing/all-in-one
+    tag: "1.52"
+    pullPolicy: IfNotPresent
+
+  replicas: 1
+
+  resources:
+    requests:
+      cpu: 300m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+  storage:
+    enabled: true
+    storageClassName: oci-bv
+    size: 10Gi
+
+  storageType: badger
+
+  # Production ingress with SSL
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+    hosts:
+      - jaeger.healthplatform.example.com  # CHANGE TO YOUR DOMAIN
+    tls:
+      - secretName: jaeger-tls
+        hosts:
+          - jaeger.healthplatform.example.com
+
+  service:
+    type: ClusterIP
+    ports:
+      query: 16686
+      otlpGrpc: 4317
+      otlpHttp: 4318
+      jaegerCompact: 6831
+      jaegerBinary: 6832
+      jaegerConfig: 5778
+      jaegerGrpc: 14250
+      jaegerHttp: 14268
+
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    fsGroup: 10001

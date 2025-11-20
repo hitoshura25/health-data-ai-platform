@@ -1,0 +1,88 @@
+{{- if .Values.jaeger.enabled }}
+---
+# Jaeger Agent Service (for applications to send traces)
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-agent
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: jaeger
+    component: agent
+    {{- include "observability.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.jaeger.service.type }}
+  ports:
+  - port: {{ .Values.jaeger.service.ports.jaegerCompact }}
+    protocol: UDP
+    targetPort: compact
+    name: jaeger-compact
+  - port: {{ .Values.jaeger.service.ports.jaegerBinary }}
+    protocol: UDP
+    targetPort: binary
+    name: jaeger-binary
+  - port: {{ .Values.jaeger.service.ports.jaegerConfig }}
+    protocol: TCP
+    targetPort: config
+    name: jaeger-config
+  selector:
+    app: jaeger
+    component: all-in-one
+---
+# Jaeger Query Service (for UI access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-query
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: jaeger
+    component: query
+    {{- include "observability.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.jaeger.service.type }}
+  ports:
+  - port: {{ .Values.jaeger.service.ports.query }}
+    protocol: TCP
+    targetPort: ui
+    name: jaeger-ui
+  selector:
+    app: jaeger
+    component: all-in-one
+---
+# Jaeger Collector Service (for receiving traces)
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-collector
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: jaeger
+    component: collector
+    {{- include "observability.labels" . | nindent 4 }}
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "14269"
+spec:
+  type: {{ .Values.jaeger.service.type }}
+  ports:
+  - port: {{ .Values.jaeger.service.ports.jaegerGrpc }}
+    protocol: TCP
+    targetPort: grpc
+    name: jaeger-grpc
+  - port: {{ .Values.jaeger.service.ports.jaegerHttp }}
+    protocol: TCP
+    targetPort: http
+    name: jaeger-http
+  - port: {{ .Values.jaeger.service.ports.otlpGrpc }}
+    protocol: TCP
+    targetPort: otlp-grpc
+    name: otlp-grpc
+  - port: {{ .Values.jaeger.service.ports.otlpHttp }}
+    protocol: TCP
+    targetPort: otlp-http
+    name: otlp-http
+  selector:
+    app: jaeger
+    component: all-in-one
+{{- end }}

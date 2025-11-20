@@ -1,0 +1,20 @@
+{{- if .Values.jaeger.enabled }}
+{{- if .Values.jaeger.storage.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jaeger-pvc
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: jaeger
+    component: storage
+    {{- include "observability.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.jaeger.storage.storageClassName | default .Values.global.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.jaeger.storage.size }}
+{{- end }}
+{{- end }}

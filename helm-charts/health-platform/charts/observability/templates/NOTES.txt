@@ -1,0 +1,140 @@
+================================================================================
+🎯 Observability Stack Deployed Successfully!
+================================================================================
+
+The Health Platform observability stack has been deployed in namespace: {{ .Values.global.namespace }}
+
+COMPONENTS INSTALLED:
+---------------------
+{{- if .Values.prometheus.enabled }}
+✅ Prometheus - Metrics collection and alerting
+{{- end }}
+{{- if .Values.grafana.enabled }}
+✅ Grafana - Visualization and dashboards
+{{- end }}
+{{- if .Values.jaeger.enabled }}
+✅ Jaeger - Distributed tracing
+{{- end }}
+{{- if .Values.loki.enabled }}
+✅ Loki + Promtail - Log aggregation
+{{- end }}
+
+ACCESSING SERVICES:
+-------------------
+
+{{- if .Values.grafana.enabled }}
+
+📊 GRAFANA
+{{- if .Values.kube-prometheus-stack.grafana.ingress.enabled }}
+  URL: https://{{ index .Values.kube-prometheus-stack.grafana.ingress.hosts 0 }}
+{{- else }}
+  Port Forward:
+    kubectl port-forward -n {{ .Values.global.namespace }} svc/kube-prometheus-stack-grafana 3000:80
+
+  Access: http://localhost:3000
+  Username: admin
+  Password: Run to get password:
+    kubectl get secret -n {{ .Values.global.namespace }} kube-prometheus-stack-grafana \
+      -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+{{- end }}
+
+  Pre-configured Dashboards:
+    • Kubernetes Cluster Overview
+    • Health API Performance (RED metrics)
+    • Infrastructure Health (PostgreSQL, Redis, MinIO, RabbitMQ)
+    • Cost Monitoring (Always Free tier utilization)
+{{- end }}
+
+{{- if .Values.prometheus.enabled }}
+
+📈 PROMETHEUS
+  Port Forward:
+    kubectl port-forward -n {{ .Values.global.namespace }} svc/kube-prometheus-stack-prometheus 9090:9090
+
+  Access: http://localhost:9090
+  Targets: http://localhost:9090/targets
+  Alerts: http://localhost:9090/alerts
+{{- end }}
+
+{{- if .Values.jaeger.enabled }}
+
+🔍 JAEGER
+{{- if .Values.jaeger.ingress.enabled }}
+  URL: https://{{ index .Values.jaeger.ingress.hosts 0 }}
+{{- else }}
+  Port Forward:
+    kubectl port-forward -n {{ .Values.global.namespace }} svc/jaeger-query 16686:16686
+
+  Access: http://localhost:16686
+{{- end }}
+
+  OTLP Endpoints (for application tracing):
+    gRPC: jaeger-collector.{{ .Values.global.namespace }}:4317
+    HTTP: jaeger-collector.{{ .Values.global.namespace }}:4318
+{{- end }}
+
+{{- if .Values.loki.enabled }}
+
+📝 LOKI
+  Query via Grafana datasource or:
+    kubectl port-forward -n {{ .Values.global.namespace }} svc/loki-stack 3100:3100
+
+  LogQL Queries: http://localhost:3100
+{{- end }}
+
+🚨 ALERTMANAGER
+  Port Forward:
+    kubectl port-forward -n {{ .Values.global.namespace }} svc/kube-prometheus-stack-alertmanager 9093:9093
+
+  Access: http://localhost:9093
+
+VERIFICATION:
+-------------
+
+Check all pods are running:
+  kubectl get pods -n {{ .Values.global.namespace }}
+
+Check ServiceMonitors:
+  kubectl get servicemonitors -A
+
+Check PrometheusRules:
+  kubectl get prometheusrules -n {{ .Values.global.namespace }}
+
+Check PersistentVolumeClaims:
+  kubectl get pvc -n {{ .Values.global.namespace }}
+
+RESOURCE USAGE:
+---------------
+
+Storage allocation (Always Free tier: 200 GB):
+  • Prometheus: 20 GB (30-day retention)
+  • Grafana: 5 GB (dashboards)
+  • Jaeger: 10 GB (traces)
+  • Loki: 5 GB (7-day log retention)
+  • AlertManager: 5 GB
+  Total: 45 GB (~22.5% of free tier)
+
+CPU/Memory requests optimized for OKE Always Free tier.
+
+NEXT STEPS:
+-----------
+
+1. Access Grafana and review pre-configured dashboards
+2. Configure AlertManager receivers (email, Slack, PagerDuty)
+{{- if not .Values.kube-prometheus-stack.grafana.ingress.enabled }}
+3. Set up Ingress for production access (see values-production.yaml)
+{{- end }}
+4. Review and customize alerting rules in templates/prometheus-rules.yaml
+5. Integrate application metrics endpoints with ServiceMonitors
+
+DOCUMENTATION:
+--------------
+
+Full documentation: helm-charts/health-platform/charts/observability/README.md
+
+For issues or questions, check the troubleshooting section in README.md
+
+================================================================================
+Environment: {{ .Values.global.cluster.environment }}
+Cluster: {{ .Values.global.cluster.name }}
+================================================================================
