@@ -37,7 +37,7 @@ secrets:
   rabbitmq:
     password: "CHANGE_ME_RABBITMQ_PASSWORD_32_CHARS_MIN"
     # Must be exactly 32 characters for Erlang cookie
-    erlangCookie: "CHANGE_ME_ERLANG_COOKIE_32_CHARACTERS_EXACTLY"
+    erlangCookie: "CHANGEME_REPLACE_WITH_32CHARS!!"
 
 # ==============================================================================
 # PostgreSQL Health - Production Configuration
@@ -293,9 +293,6 @@ rabbitmq:
     # Logging
     log.console.level = info
     log.file.level = info
-
-    # Management plugin
-    management.load_definitions = /etc/rabbitmq/definitions.json
 
   extraPlugins: "rabbitmq_management rabbitmq_prometheus rabbitmq_shovel rabbitmq_shovel_management"
 

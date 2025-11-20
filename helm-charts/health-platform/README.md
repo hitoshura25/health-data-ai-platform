@@ -491,7 +491,7 @@ helm create charts/my-new-service
 
 ## Support
 
-- **Issues**: https://github.com/yourusername/health-data-ai-platform/issues
+- **Issues**: https://github.com/hitoshura25/health-data-ai-platform/issues
 - **Documentation**: See `docs/` directory
 - **Slack**: #health-platform-k8s (if applicable)
 

@@ -31,7 +31,7 @@ secrets:
 
   rabbitmq:
     password: "changeme-rabbitmq-password"
-    erlangCookie: "changeme-erlang-cookie-32-characters"
+    erlangCookie: "CHANGEME_ERLANG_COOKIE_32CHARS"
 
 # ==============================================================================
 # PostgreSQL - Health Data (Primary Database)

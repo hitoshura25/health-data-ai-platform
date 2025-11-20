@@ -490,8 +490,8 @@ All pods run with:
 
 ## Support
 
-- **Issues**: https://github.com/yourusername/health-data-ai-platform/issues
-- **Documentation**: https://github.com/yourusername/health-data-ai-platform/tree/main/docs
+- **Issues**: https://github.com/hitoshura25/health-data-ai-platform/issues
+- **Documentation**: https://github.com/hitoshura25/health-data-ai-platform/tree/main/docs
 - **Kubernetes Spec**: `specs/kubernetes-production-implementation-spec.md`
 
 ## License

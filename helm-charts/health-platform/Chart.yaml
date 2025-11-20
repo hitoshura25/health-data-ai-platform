@@ -13,13 +13,13 @@ keywords:
   - healthcare
   - kubernetes
 
-home: https://github.com/yourusername/health-data-ai-platform
+home: https://github.com/hitoshura25/health-data-ai-platform
 sources:
-  - https://github.com/yourusername/health-data-ai-platform
+  - https://github.com/hitoshura25/health-data-ai-platform
 
 maintainers:
   - name: Health Data AI Platform Team
-    email: support@health-platform.example.com
+    email: hitoshura25@users.noreply.github.com
 
 dependencies:
   # Infrastructure layer (PostgreSQL, Redis, MinIO, RabbitMQ)

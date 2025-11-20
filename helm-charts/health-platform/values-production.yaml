@@ -65,7 +65,7 @@ infrastructure:
 
     rabbitmq:
       password: "CHANGE_ME_RABBITMQ_PASSWORD_32_CHARS_MIN"
-      erlangCookie: "CHANGE_ME_ERLANG_COOKIE_32_CHARACTERS_EXACTLY"
+      erlangCookie: "CHANGEME_REPLACE_WITH_32CHARS!!"
 
   # PostgreSQL Health - Production settings
   postgresql-health:
