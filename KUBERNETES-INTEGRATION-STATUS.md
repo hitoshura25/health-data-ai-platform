@@ -1,8 +1,8 @@
 # Kubernetes Implementation - Integration Status Report
 
 **Date**: 2025-11-20 (Updated)
-**Status**: ALL MODULES COMPLETE ✅ 🎉
-**Next Step**: Resource optimization and deployment
+**Status**: ALL MODULES COMPLETE ✅ 🎉 + FREE TIER OPTIMIZED ✅
+**Next Step**: Deployment to Oracle Cloud Always Free tier
 
 ---
 
@@ -10,7 +10,11 @@
 
 **5 parallel Claude Code sessions** successfully implemented and merged **ALL 5 MODULES** of the Kubernetes Production Deployment specification. The umbrella Helm chart has been fully integrated, creating a **complete production-ready deployment configuration** for the Health Data AI Platform on Oracle Kubernetes Engine (OKE).
 
-⚠️ **Important**: The complete platform **exceeds Always Free tier** CPU and storage limits. See optimization recommendations below.
+✅ **Free Tier Optimized**: A dedicated `values-oracle-free-tier.yaml` configuration file has been created that **FITS WITHIN** Oracle Always Free tier limits (4 vCPU, 24 GB RAM, 200 GB storage) while maintaining core functionality.
+
+**Two deployment options available**:
+- **Production HA** (`values-production.yaml`): Full high availability with complete observability (exceeds free tier)
+- **Free Tier** (`values-oracle-free-tier.yaml`): Optimized for Oracle Always Free tier (single replicas, minimal log aggregation)
 
 ### Completion Status
 
@@ -200,68 +204,126 @@
 - ⚠️ Added warning: Complete platform exceeds Always Free tier limits
 - ✅ Added optimization recommendations for staying within free tier
 
+**File**: `helm-charts/health-platform/values-oracle-free-tier.yaml` ✨ **NEW**
+
+**Purpose**: Oracle Cloud Always Free tier optimized configuration
+
+**Optimizations Applied**:
+- ✅ Single replicas (no HA) - reduces CPU/memory by ~50%
+- ✅ Loki/Promtail disabled - saves 500m CPU, 896Mi memory, 10Gi storage
+- ✅ Prometheus retention reduced to 15 days - saves 10Gi storage
+- ✅ Jaeger storage reduced to 5Gi - saves 5Gi storage
+- ✅ Infrastructure storage reduced by ~15Gi
+- ✅ Conservative autoscaling thresholds (80% vs 70%)
+- ✅ ETL autoscaling disabled (maintains single replica)
+
+**Resource Usage**:
+- CPU Requests: 3.45 vCPU out of 4 vCPU ✅ (86.25%)
+- Memory Requests: 7.9 Gi out of 24 Gi ✅ (32.9%)
+- Storage: 194 Gi out of 200 Gi ✅ (97%)
+
+**Trade-offs**:
+- ⚠️ No high availability (single points of failure)
+- ⚠️ No log aggregation (use kubectl logs or external service)
+- ⚠️ Reduced metric history (15 days vs 30 days)
+- ⚠️ Limited horizontal scaling capability
+
 ---
 
 ## Total Platform Resource Usage
 
-### Complete Platform Resource Requirements
+### Configuration Comparison
+
+The platform supports two deployment configurations:
+
+| Configuration | CPU | Memory | Storage | Use Case |
+|--------------|-----|--------|---------|----------|
+| **Production HA** (`values-production.yaml`) | 4.55 vCPU ⚠️ | 10.6 Gi ✅ | 231 Gi ⚠️ | Paid tier with full HA |
+| **Free Tier** (`values-oracle-free-tier.yaml`) | 3.45 vCPU ✅ | 7.9 Gi ✅ | 194 Gi ✅ | Always Free tier |
+
+### Production HA Configuration (values-production.yaml)
 
 **Infrastructure Layer** (Module 2):
 - CPU Requests: 1150m
 - Memory Requests: ~3 Gi
 - Storage: 185 Gi
 
-**WebAuthn Stack** (Module 3):
+**WebAuthn Stack** (Module 3 - 2 replicas):
 - CPU Requests: ~700m
 - Memory Requests: ~1.3 Gi
 
-**Health Services** (Module 4):
+**Health Services** (Module 4 - 2+ replicas):
 - CPU Requests: ~700m
 - Memory Requests: ~1.3 Gi
 - Storage: 1 Gi
 
-**Observability Stack** (Module 5):
+**Observability Stack** (Module 5 - Full):
 - CPU Requests: ~2000m (2 vCPU)
 - Memory Requests: ~5 Gi
-- Storage: 45 Gi
+- Storage: 45 Gi (Prometheus 20Gi, Grafana 5Gi, Jaeger 10Gi, Loki 5Gi, AlertManager 5Gi)
 
-### ⚠️ TOTAL USAGE (ALL MODULES):
+**⚠️ TOTAL (PRODUCTION HA)**:
 - CPU Requests: **~4.55 vCPU** out of 4 vCPU ⚠️ (113.75% - **EXCEEDS FREE TIER**)
 - CPU Limits: ~10+ vCPU (allows bursting)
 - Memory Requests: **~10.6 Gi** out of 24 Gi ✅ (44.2%)
 - Memory Limits: ~20+ Gi
 - Storage: **231 Gi** out of 200 Gi ⚠️ (115.5% - **EXCEEDS FREE TIER**)
 
-⚠️ **WARNING**: Complete platform with full observability **EXCEEDS** Oracle Always Free tier CPU and storage limits!
+### Free Tier Optimized Configuration (values-oracle-free-tier.yaml) ✅
 
-### Optimization Options
+**Infrastructure Layer** (Module 2 - Reduced storage):
+- CPU Requests: 1150m
+- Memory Requests: ~3 Gi
+- Storage: 170 Gi (reduced from 185 Gi)
 
-**Option A - Minimal Observability (Recommended for Free Tier)**:
-- Disable Loki/Promtail (saves 500m CPU, 896Mi memory, 10Gi storage)
-- Reduce Prometheus retention to 15 days (saves 10Gi storage)
-- Reduce Jaeger storage to 5Gi
-- **Result**: ~4 vCPU, ~9.7 Gi memory, ~196 Gi storage ✅ FITS FREE TIER
+**WebAuthn Stack** (Module 3 - Single replica):
+- CPU Requests: 350m (reduced from 700m)
+- Memory Requests: 640Mi (reduced from 1.3 Gi)
 
-**Option B - Reduced HA**:
-- Reduce all service replicas to minimum (1 each)
-- Reduce resource requests by 20%
-- Minimal observability configuration
-- **Result**: Fits within free tier but reduced high availability
+**Health Services** (Module 4 - Single replica):
+- CPU Requests: 450m (reduced from 700m)
+- Memory Requests: 768Mi (reduced from 1.3 Gi)
+- Storage: 1 Gi
 
-**Option C - Upgrade to Paid Tier**:
-- Deploy complete platform as designed
-- Oracle Cloud paid tier starting at ~$50-100/month
-- Full observability and high availability
+**Observability Stack** (Module 5 - Minimal):
+- CPU Requests: 1500m (reduced from 2000m)
+- Memory Requests: 3.5 Gi (reduced from 5 Gi)
+- Storage: 23 Gi (Prometheus 10Gi, Grafana 4Gi, Jaeger 5Gi, AlertManager 4Gi, **NO Loki**)
+
+**✅ TOTAL (FREE TIER)**:
+- CPU Requests: **~3.45 vCPU** out of 4 vCPU ✅ (86.25%)
+- CPU Limits: ~6+ vCPU (allows bursting)
+- Memory Requests: **~7.9 Gi** out of 24 Gi ✅ (32.9%)
+- Memory Limits: ~12+ Gi
+- Storage: **194 Gi** out of 200 Gi ✅ (97%)
+
+✅ **SUCCESS**: Free tier configuration **FITS WITHIN** Oracle Always Free tier limits!
+
+### Deployment Recommendations
+
+**For Oracle Always Free Tier**:
+- ✅ Use `values-oracle-free-tier.yaml`
+- ✅ Deploy command: `helm install health-platform . -f values-oracle-free-tier.yaml`
+- ⚠️ Accept trade-offs: No HA, no log aggregation, reduced retention
+
+**For Production/Paid Tier**:
+- ✅ Use `values-production.yaml`
+- ✅ Deploy command: `helm install health-platform . -f values-production.yaml`
+- ✅ Full high availability and observability
+- 💰 Cost: ~$50-100/month on Oracle Cloud paid tier
 
 ---
 
 ## All Modules Complete! 🎉
 
-**Status**: ALL 5 MODULES SUCCESSFULLY IMPLEMENTED, MERGED, AND INTEGRATED
+**Status**: ALL 5 MODULES SUCCESSFULLY IMPLEMENTED, MERGED, INTEGRATED, AND OPTIMIZED ✅
 
-No pending work for core platform modules. The umbrella Helm chart is complete and ready for deployment (with resource optimization).
+No pending work for core platform modules. The umbrella Helm chart is complete with **two deployment configurations**:
 
-**Next Steps**: See "Deployment Readiness" section below.
+1. ✅ **Production HA** - Full high availability (exceeds free tier)
+2. ✅ **Free Tier Optimized** - Fits within Oracle Always Free tier limits
+
+**Next Steps**: Ready for deployment to Oracle Cloud Always Free tier!
 
 ---
 
@@ -295,38 +357,60 @@ The platform can now be deployed locally or to a development Kubernetes cluster 
 
 ### Deployment Commands
 
+#### Option A: Oracle Always Free Tier Deployment (Recommended)
+
 ```bash
 # 1. Navigate to umbrella chart
 cd helm-charts/health-platform
 
-# 2. Add Bitnami repository
+# 2. Add Helm repositories
 helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo add grafana https://grafana.github.io/helm-charts
 helm repo update
 
 # 3. Update chart dependencies
 helm dependency update
 
-# 4. Review what will be deployed
+# 4. Review what will be deployed (FREE TIER CONFIG)
 helm template health-platform . \
-  -f values-production.yaml \
+  -f values-oracle-free-tier.yaml \
   --namespace health-data
 
 # 5. Deploy to cluster (DRY-RUN first)
 helm install health-platform . \
-  -f values-production.yaml \
+  -f values-oracle-free-tier.yaml \
   --namespace health-data \
   --create-namespace \
   --dry-run --debug
 
-# 6. Deploy for real
+# 6. Deploy to Oracle Always Free tier
 helm install health-platform . \
-  -f values-production.yaml \
+  -f values-oracle-free-tier.yaml \
   --namespace health-data \
   --create-namespace
 
 # 7. Verify deployment
 kubectl get pods -A
-kubectl get pvc -n health-data
+kubectl get pvc --all-namespaces
+kubectl top nodes
+kubectl top pods --all-namespaces
+```
+
+#### Option B: Production HA Deployment (Paid Tier)
+
+```bash
+# Follow steps 1-3 from Option A, then:
+
+# 4. Deploy with production HA configuration
+helm install health-platform . \
+  -f values-production.yaml \
+  --namespace health-data \
+  --create-namespace
+
+# 5. Verify deployment
+kubectl get pods -A
+kubectl get pvc --all-namespaces
 kubectl top nodes
 ```
 
@@ -334,21 +418,31 @@ kubectl top nodes
 
 ## Next Steps
 
-### Immediate (This Session)
+### Immediate (Ready for Deployment)
 
-1. ✅ **Review this integration status** - YOU ARE HERE
-2. **Decide on deployment approach**:
-   - Option A: Wait for Module 5 merge, then deploy complete platform
-   - Option B: Deploy Modules 1-4 now for testing, add Module 5 later
-   - Option C: Test locally with minikube first
+1. ✅ **All modules integrated** - COMPLETE
+2. ✅ **Free tier configuration created** - COMPLETE
+3. ✅ **Resource optimization complete** - COMPLETE
 
-### Short-term (Next 1-2 weeks)
+### Short-term (Next 1-2 weeks) - Deployment Preparation
 
-1. **Module 5 Integration**: Once observability PR is merged, integrate into umbrella chart
-2. **Local Testing**: Deploy to minikube and validate all services
-3. **Docker Images**: Build and push multi-architecture images (arm64 + amd64)
-4. **Secrets Management**: Set up Sealed Secrets or OCI Vault
-5. **Domain Configuration**: Update all `CHANGE_ME` values in values-production.yaml
+1. **Docker Images**: Build and push multi-architecture images (arm64 + amd64)
+   - Health API image
+   - ETL Narrative Engine image
+   - WebAuthn Server image (if not using pre-built)
+
+2. **Secrets Management**: Replace all `CHANGE_ME` values
+   - Use `openssl rand -base64 32` to generate secure passwords
+   - Consider Sealed Secrets or OCI Vault for production
+
+3. **Domain Configuration**: Update all domain placeholders
+   - Replace `*.health-platform.example.com` with your actual domain
+   - Configure DNS records to point to OKE cluster
+
+4. **Local Testing** (Optional): Deploy to minikube first
+   - Test with `values-oracle-free-tier.yaml`
+   - Validate all services start correctly
+   - Test inter-service communication
 
 ### Medium-term (Weeks 3-4)
 
@@ -549,12 +643,13 @@ Ref: specs/kubernetes-production-implementation-spec.md
 
 ---
 
-**Status**: READY FOR DEPLOYMENT DECISIONS
+**Status**: ✅ READY FOR DEPLOYMENT TO ORACLE ALWAYS FREE TIER
 **Coordinator Session**: This session (claude/review-kubernetes-specs-01XeKhudn1HjUhM3kttNDbot)
-**Next Action**: User decision on deployment approach
+**Next Action**: Deploy using `values-oracle-free-tier.yaml` configuration
 
 ---
 
 **Report Generated**: 2025-11-20
-**Implementation Complete**: Modules 1-4 ✅
-**Pending**: Module 5 merge ⏳
+**Implementation Complete**: ALL 5 MODULES ✅
+**Optimization Complete**: Free tier configuration ✅
+**Deployment Status**: Ready for Oracle Cloud Always Free tier deployment

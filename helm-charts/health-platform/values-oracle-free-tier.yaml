@@ -1,0 +1,635 @@
+# Health Data AI Platform - Oracle Cloud Always Free Tier Configuration
+# Optimized for OCI Always Free tier limits: 4 vCPU, 24GB RAM, 200GB storage
+# Region: eu-amsterdam-1 (100% renewable energy)
+#
+# This configuration reduces resource usage while maintaining core functionality:
+# - Single replicas (no HA) for reduced CPU/memory usage
+# - Disabled Loki/Promtail log aggregation to save resources
+# - Reduced Prometheus retention (15 days vs 30 days)
+# - Reduced storage allocations across all services
+# - Minimal autoscaling thresholds
+#
+# Target Resource Usage:
+#   CPU Requests:  ~3.45 vCPU out of 4 vCPU ✅ (86.25%)
+#   Memory Requests: ~7.9 Gi out of 24 Gi ✅ (32.9%)
+#   Storage:       ~194 Gi out of 200 Gi ✅ (97%)
+
+# ==============================================================================
+# Global Configuration
+# ==============================================================================
+global:
+  # Image pull secrets (if using private registry)
+  imagePullSecrets: []
+
+  # Storage class for OCI Block Volumes
+  storageClass: "oci-bv"
+
+  # Monitoring configuration
+  monitoring:
+    namespace: health-observability
+    enabled: true
+
+  # Security settings
+  podSecurityStandards:
+    enforced: true
+    profile: restricted
+
+  # Domain configuration (CHANGE THIS to your domain)
+  domain: "health-platform.example.com"
+
+  # TLS/SSL configuration
+  tls:
+    enabled: true
+    issuer: letsencrypt-prod
+
+# ==============================================================================
+# Infrastructure Layer - Free Tier Optimized
+# ==============================================================================
+infrastructure:
+  enabled: true
+
+  namespace: health-data
+
+  # Production secrets (IMPORTANT: Replace with Sealed Secrets or OCI Vault)
+  secrets:
+    postgresqlHealth:
+      adminPassword: "CHANGE_ME_POSTGRESQL_HEALTH_ADMIN_PASSWORD_32_CHARS_MIN"
+      userPassword: "CHANGE_ME_POSTGRESQL_HEALTH_USER_PASSWORD_32_CHARS_MIN"
+      username: "healthapi"
+      database: "healthdb"
+
+    postgresqlAuth:
+      adminPassword: "CHANGE_ME_POSTGRESQL_AUTH_ADMIN_PASSWORD_32_CHARS_MIN"
+      userPassword: "CHANGE_ME_POSTGRESQL_AUTH_USER_PASSWORD_32_CHARS_MIN"
+      username: "webauthn"
+      database: "webauthn"
+
+    redisHealth:
+      password: "CHANGE_ME_REDIS_HEALTH_PASSWORD_32_CHARS_MIN"
+
+    redisAuth:
+      password: "CHANGE_ME_REDIS_AUTH_PASSWORD_32_CHARS_MIN"
+
+    minio:
+      rootUser: "admin"
+      rootPassword: "CHANGE_ME_MINIO_PASSWORD_32_CHARS_MIN"
+
+    rabbitmq:
+      password: "CHANGE_ME_RABBITMQ_PASSWORD_32_CHARS_MIN"
+      erlangCookie: "CHANGEME_REPLACE_WITH_32CHARS!!"
+
+  # PostgreSQL Health - Reduced storage for free tier
+  postgresql-health:
+    enabled: true
+    primary:
+      persistence:
+        size: 55Gi  # Reduced from 60Gi
+      resources:
+        requests:
+          cpu: 300m
+          memory: 1Gi
+        limits:
+          cpu: 500m
+          memory: 2Gi
+
+  # PostgreSQL Auth - Reduced storage for free tier
+  postgresql-auth:
+    enabled: true
+    primary:
+      persistence:
+        size: 18Gi  # Reduced from 20Gi
+      resources:
+        requests:
+          cpu: 150m
+          memory: 512Mi
+        limits:
+          cpu: 300m
+          memory: 1Gi
+
+  # Redis Health - Minimal configuration
+  redis-health:
+    enabled: true
+    master:
+      persistence:
+        size: 5Gi
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 200m
+          memory: 512Mi
+
+  # Redis Auth - Minimal configuration
+  redis-auth:
+    enabled: true
+    master:
+      persistence:
+        size: 5Gi
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 200m
+          memory: 512Mi
+
+  # MinIO - Reduced storage for free tier
+  minio:
+    enabled: true
+    persistence:
+      size: 75Gi  # Reduced from 80Gi
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 400m
+        memory: 1Gi
+    ingress:
+      enabled: true
+      hostname: minio.health-platform.example.com  # CHANGE THIS
+
+  # RabbitMQ - Reduced storage for free tier
+  rabbitmq:
+    enabled: true
+    persistence:
+      size: 12Gi  # Reduced from 15Gi
+    resources:
+      requests:
+        cpu: 300m
+        memory: 512Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+    ingress:
+      enabled: true
+      hostname: rabbitmq.health-platform.example.com  # CHANGE THIS
+
+# ==============================================================================
+# WebAuthn Stack - Free Tier Optimized (Single Replica)
+# ==============================================================================
+webauthn-stack:
+  enabled: true
+
+  namespace: health-auth
+
+  # WebAuthn Server configuration - SINGLE REPLICA (no HA)
+  webauthn:
+    replicaCount: 1  # Reduced from 2 for free tier
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+
+    # WebAuthn configuration (CHANGE THESE VALUES!)
+    config:
+      relyingPartyId: "auth.health-platform.example.com"  # CHANGE THIS
+      relyingPartyOrigin: "https://auth.health-platform.example.com"  # CHANGE THIS
+      relyingPartyName: "Health Data AI Platform"
+
+  # Envoy Gateway configuration - SINGLE REPLICA
+  envoy:
+    replicaCount: 1  # Reduced from 2 for free tier
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+
+  # Ingress configuration
+  ingress:
+    enabled: true
+    host: "auth.health-platform.example.com"  # CHANGE THIS
+    tls:
+      enabled: true
+      issuer: letsencrypt-prod
+
+  # Secrets (IMPORTANT: Use Sealed Secrets or OCI Vault in production!)
+  secrets:
+    databasePassword: "CHANGE_ME_WEBAUTHN_DB_PASSWORD_32_CHARS_MIN"
+    redisPassword: "CHANGE_ME_WEBAUTHN_REDIS_PASSWORD_32_CHARS_MIN"
+    jwtMasterKey: "CHANGE_ME_BASE64_ENCODED_32_BYTE_KEY"  # openssl rand -base64 32
+
+  # HorizontalPodAutoscaler - Conservative settings for free tier
+  autoscaling:
+    enabled: true
+    minReplicas: 1  # Reduced from 2
+    maxReplicas: 3  # Reduced from 5
+    targetCPUUtilizationPercentage: 80  # Increased threshold
+
+# ==============================================================================
+# Health API - Free Tier Optimized (Single Replica)
+# ==============================================================================
+health-api:
+  enabled: true
+
+  namespace: health-api
+
+  # Deployment configuration - SINGLE REPLICA
+  replicaCount: 1  # Reduced from 2 for free tier
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Docker image configuration
+  image:
+    repository: ghcr.io/hitoshura25/health-api  # CHANGE THIS to your registry
+    tag: "latest"  # Use specific version tags in production
+    pullPolicy: IfNotPresent
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 8001
+
+  # Ingress configuration
+  ingress:
+    enabled: true
+    host: "api.health-platform.example.com"  # CHANGE THIS
+    tls:
+      enabled: true
+      issuer: letsencrypt-prod
+    annotations:
+      nginx.ingress.kubernetes.io/rate-limit: "100"
+      nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+
+  # HorizontalPodAutoscaler - Conservative settings for free tier
+  autoscaling:
+    enabled: true
+    minReplicas: 1  # Reduced from 2
+    maxReplicas: 3  # Reduced from 5
+    targetCPUUtilizationPercentage: 80  # Increased threshold
+    targetMemoryUtilizationPercentage: 85
+
+  # Secrets (IMPORTANT: Use Sealed Secrets or OCI Vault!)
+  secrets:
+    secretKey: "CHANGE_ME_SECRET_KEY_MIN_32_CHARS_FOR_JWT_SIGNING"
+    databasePassword: "CHANGE_ME_USE_SAME_AS_POSTGRESQL_HEALTH_PASSWORD"
+    redisPassword: "CHANGE_ME_USE_SAME_AS_REDIS_HEALTH_PASSWORD"
+    minioAccessKey: "CHANGE_ME_USE_SAME_AS_MINIO_ROOT_USER"
+    minioSecretKey: "CHANGE_ME_USE_SAME_AS_MINIO_ROOT_PASSWORD"
+    rabbitmqPassword: "CHANGE_ME_USE_SAME_AS_RABBITMQ_PASSWORD"
+
+# ==============================================================================
+# ETL Engine - Free Tier Optimized (Single Replica)
+# ==============================================================================
+etl-engine:
+  enabled: true
+
+  namespace: health-etl
+
+  # Deployment configuration - SINGLE REPLICA
+  replicaCount: 1  # Already single replica for deduplication consistency
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 700m
+      memory: 2Gi  # Higher limit for AI model loading
+
+  # Docker image configuration
+  image:
+    repository: ghcr.io/hitoshura25/etl-narrative-engine  # CHANGE THIS
+    tag: "latest"  # Use specific version tags in production
+    pullPolicy: IfNotPresent
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 8002
+    metricsPort: 8004
+
+  # HorizontalPodAutoscaler - Disabled for free tier (single replica only)
+  autoscaling:
+    enabled: false  # Disabled to maintain single replica
+
+  # Persistent volume for deduplication database
+  persistence:
+    enabled: true
+    storageClass: "oci-bv"
+    size: 1Gi
+
+  # AI Model configuration
+  aiModel:
+    modelCache: 5Gi  # EmptyDir volume for HuggingFace model cache
+    maxTokens: 2048
+    temperature: 0.7
+    prefetchCount: 1  # Process one message at a time
+
+  # Secrets (IMPORTANT: Use Sealed Secrets!)
+  secrets:
+    databasePassword: "CHANGE_ME_USE_SAME_AS_POSTGRESQL_HEALTH_PASSWORD"
+    minioAccessKey: "CHANGE_ME_USE_SAME_AS_MINIO_ROOT_USER"
+    minioSecretKey: "CHANGE_ME_USE_SAME_AS_MINIO_ROOT_PASSWORD"
+    rabbitmqUser: "user"
+    rabbitmqPassword: "CHANGE_ME_USE_SAME_AS_RABBITMQ_PASSWORD"
+
+# ==============================================================================
+# Observability Stack - Free Tier Optimized (Minimal Configuration)
+# ==============================================================================
+observability:
+  enabled: true
+
+  namespace: health-observability
+
+  # Prometheus configuration
+  prometheus:
+    enabled: true
+
+  # Grafana configuration
+  grafana:
+    enabled: true
+
+  # Jaeger distributed tracing - REDUCED STORAGE
+  jaeger:
+    enabled: true
+
+  # Loki log aggregation - DISABLED to save resources
+  loki:
+    enabled: false  # ⚠️ DISABLED for free tier (saves 500m CPU, 896Mi memory, 10Gi storage)
+
+  # Free tier optimized settings for kube-prometheus-stack
+  kube-prometheus-stack:
+    # Prometheus configuration - Reduced retention
+    prometheus:
+      prometheusSpec:
+        retention: 15d  # Reduced from 30d (saves ~10GB storage)
+        retentionSize: "9GB"  # Reduced from 19GB
+        storageSpec:
+          volumeClaimTemplate:
+            spec:
+              storageClassName: oci-bv
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 10Gi  # Reduced from 20Gi
+        resources:
+          requests:
+            cpu: 500m
+            memory: 2Gi
+          limits:
+            cpu: 1000m
+            memory: 4Gi
+
+    # Grafana configuration
+    grafana:
+      # ⚠️ CRITICAL: Set Grafana admin password before deployment!
+      # Generate with: openssl rand -base64 32
+      adminPassword: "CHANGE_ME_GRAFANA_ADMIN_PASSWORD_32_CHARS_MIN"
+
+      # Reduced storage for free tier
+      persistence:
+        enabled: true
+        storageClassName: oci-bv
+        size: 4Gi  # Reduced from 5Gi
+
+      resources:
+        requests:
+          cpu: 200m
+          memory: 512Mi
+        limits:
+          cpu: 400m
+          memory: 1Gi
+
+      # Ingress configuration
+      ingress:
+        enabled: true
+        hosts:
+          - grafana.health-platform.example.com  # CHANGE THIS
+        tls:
+          - secretName: grafana-tls
+            hosts:
+              - grafana.health-platform.example.com
+
+    # AlertManager - Reduced storage
+    alertmanager:
+      alertmanagerSpec:
+        storage:
+          volumeClaimTemplate:
+            spec:
+              storageClassName: oci-bv
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 4Gi  # Reduced from 5Gi
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+
+    # Node Exporter - Minimal resources
+    nodeExporter:
+      resources:
+        requests:
+          cpu: 300m
+          memory: 192Mi
+        limits:
+          cpu: 500m
+          memory: 384Mi
+
+    # Kube State Metrics - Minimal resources
+    kubeStateMetrics:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+
+  # Jaeger configuration - REDUCED STORAGE
+  jaeger:
+    storage:
+      type: badger
+      badger:
+        ephemeral: false
+        persistence:
+          enabled: true
+          storageClass: oci-bv
+          size: 5Gi  # Reduced from 10Gi
+
+    collector:
+      resources:
+        requests:
+          cpu: 150m
+          memory: 256Mi
+        limits:
+          cpu: 300m
+          memory: 512Mi
+
+    query:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+
+    agent:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          cpu: 100m
+          memory: 256Mi
+
+# ==============================================================================
+# Oracle Always Free Tier Deployment Checklist
+# ==============================================================================
+#
+# ⚠️  WARNING: This configuration is optimized for Oracle Always Free tier
+#    Trade-offs made for resource constraints:
+#    - NO high availability (single replicas)
+#    - NO log aggregation (Loki/Promtail disabled)
+#    - REDUCED metric retention (15 days vs 30 days)
+#    - REDUCED storage allocations
+#    - MINIMAL autoscaling
+#
+# Before deploying to Oracle Cloud Always Free tier:
+#
+# [ ] 1. Secrets Management
+#     - Replace all CHANGE_ME values with actual secrets
+#     - Use Sealed Secrets or OCI Vault for production
+#     - Generate strong passwords: openssl rand -base64 32
+#     - Erlang cookie must be exactly 32 characters
+#
+# [ ] 2. Domain Configuration
+#     - Update all *.health-platform.example.com to your domain
+#     - Configure DNS records to point to OKE cluster
+#     - Ensure cert-manager is installed for SSL certificates
+#
+# [ ] 3. Oracle Cloud Setup
+#     - OKE cluster provisioned with 3x Ampere A1 instances (ARM64)
+#     - StorageClass 'oci-bv' available
+#     - Load balancer configured for ingress
+#     - Network policies and security lists configured
+#
+# [ ] 4. Prerequisites
+#     - NGINX Ingress Controller installed
+#     - cert-manager installed with Let's Encrypt issuer
+#     - Sealed Secrets controller installed (optional but recommended)
+#     - Monitoring namespace created (health-observability)
+#
+# [ ] 5. Deployment Steps
+#     a. Add Helm repositories:
+#        helm repo add bitnami https://charts.bitnami.com/bitnami
+#        helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#        helm repo add grafana https://grafana.github.io/helm-charts
+#        helm repo update
+#
+#     b. Update dependencies:
+#        cd helm-charts/health-platform
+#        helm dependency update
+#
+#     c. Test with dry-run:
+#        helm install health-platform . \
+#          -f values-oracle-free-tier.yaml \
+#          --namespace health-data \
+#          --create-namespace \
+#          --dry-run --debug
+#
+#     d. Deploy to Oracle Always Free tier:
+#        helm install health-platform . \
+#          -f values-oracle-free-tier.yaml \
+#          --namespace health-data \
+#          --create-namespace
+#
+# [ ] 6. Post-Deployment Verification
+#     - kubectl get pods -n health-data
+#     - kubectl get pods -n health-auth
+#     - kubectl get pods -n health-api
+#     - kubectl get pods -n health-etl
+#     - kubectl get pods -n health-observability
+#     - kubectl get pvc --all-namespaces
+#     - kubectl top nodes
+#     - kubectl top pods --all-namespaces
+#
+# [ ] 7. Initialize Databases
+#     - Create PostgreSQL databases and tables
+#     - Create MinIO buckets
+#     - Configure RabbitMQ queues and exchanges
+#
+# [ ] 8. Monitoring Setup
+#     - Verify ServiceMonitors are created
+#     - Check Prometheus is scraping metrics
+#     - Configure Grafana dashboards
+#     - Set up essential alerting rules (reduced from full set)
+#
+# ==============================================================================
+#
+# Resource Summary (Oracle Always Free Tier) - OPTIMIZED CONFIGURATION:
+#
+# Infrastructure Layer:
+#   CPU Requests:  1150m (1.15 vCPU)
+#   Memory Requests: ~3 Gi
+#   Storage: 170 Gi (reduced from 185 Gi)
+#
+# WebAuthn Stack (Single Replica):
+#   CPU Requests:  350m (1x WebAuthn @ 250m, 1x Envoy @ 100m)
+#   Memory Requests: 640Mi (1x WebAuthn @ 512Mi, 1x Envoy @ 128Mi)
+#
+# Health Services (Single Replica):
+#   CPU Requests:  450m (1x Health API @ 250m, 1x ETL @ 200m)
+#   Memory Requests: 768Mi (1x Health API @ 256Mi, 1x ETL @ 512Mi)
+#   Storage: 1 Gi (ETL deduplication DB)
+#
+# Observability Stack (Minimal - Loki/Promtail DISABLED):
+#   CPU Requests:  1500m (Prometheus 500m, Grafana 200m, Jaeger 300m,
+#                         AlertManager 100m, Node Exporter 300m,
+#                         Kube State Metrics 100m)
+#   Memory Requests: 3.5 Gi (Prometheus 2Gi, Grafana 512Mi, Jaeger 512Mi,
+#                            AlertManager 128Mi, Node Exporter 192Mi,
+#                            Kube State Metrics 128Mi)
+#   Storage: 23 Gi (Prometheus 10Gi, Grafana 4Gi, Jaeger 5Gi,
+#                   AlertManager 4Gi)
+#
+# ============================================================================
+# OPTIMIZED PLATFORM RESOURCE USAGE (FITS FREE TIER):
+# ============================================================================
+#
+#   CPU Requests:  ~3.45 vCPU out of 4 vCPU ✅ (86.25%)
+#   CPU Limits:    ~6+ vCPU (allows bursting when available)
+#   Memory Requests: ~7.9 Gi out of 24 Gi ✅ (32.9%)
+#   Memory Limits:   ~12+ Gi
+#   Storage:       ~194 Gi out of 200 Gi ✅ (97%)
+#
+# ✅ SUCCESS: Platform fits within Oracle Always Free tier limits!
+#
+# Trade-offs for free tier compliance:
+#   ✅ Reduced to single replicas (no HA, ~50% CPU/memory savings)
+#   ✅ Disabled Loki/Promtail (saves 500m CPU, 896Mi memory, 10Gi storage)
+#   ✅ Reduced Prometheus retention 30d→15d (saves 10Gi storage)
+#   ✅ Reduced Jaeger storage 10Gi→5Gi (saves 5Gi storage)
+#   ✅ Reduced infrastructure storage by ~15Gi
+#   ✅ Disabled ETL autoscaling (maintains single replica)
+#
+# Limitations:
+#   ⚠️  NO high availability (single points of failure)
+#   ⚠️  NO log aggregation (use kubectl logs or external service)
+#   ⚠️  REDUCED metric history (15 days vs 30 days)
+#   ⚠️  LIMITED horizontal scaling capability
+#   ⚠️  NO room for additional services without optimization
+#
+# Upgrade Path:
+#   If you need HA, full observability, or additional services:
+#   → Consider Oracle Cloud paid tier (~$50-100/month)
+#   → OR deploy observability to separate free tier account
+#   → OR use managed observability service (Grafana Cloud, etc.)
+#
+# ==============================================================================

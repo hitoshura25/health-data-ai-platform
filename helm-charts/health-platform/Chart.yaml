@@ -63,6 +63,12 @@ annotations:
   cloud.oracle.com/region: eu-amsterdam-1
 
   # Resource requirements (Complete Platform - Modules 1-5)
-  cloud.oracle.com/cpu-request: "4550m"
+  # NOTE: Default production config (values-production.yaml) EXCEEDS Always Free tier
+  cloud.oracle.com/cpu-request: "4550m"  # Production HA config
   cloud.oracle.com/memory-request: "10.6Gi"
   cloud.oracle.com/storage-request: "231Gi"
+
+  # Oracle Always Free tier optimized config (values-oracle-free-tier.yaml)
+  cloud.oracle.com/cpu-request-free-tier: "3450m"  # Single replicas, minimal observability
+  cloud.oracle.com/memory-request-free-tier: "7.9Gi"
+  cloud.oracle.com/storage-request-free-tier: "194Gi"
