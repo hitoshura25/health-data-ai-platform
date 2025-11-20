@@ -22,28 +22,31 @@ maintainers:
     email: hitoshura25@users.noreply.github.com
 
 dependencies:
-  # Infrastructure layer (PostgreSQL, Redis, MinIO, RabbitMQ)
+  # Module 2: Infrastructure layer (PostgreSQL, Redis, MinIO, RabbitMQ)
   - name: infrastructure
     version: 1.0.0
     repository: file://./charts/infrastructure
     condition: infrastructure.enabled
 
-  # Future dependencies (to be added in later modules):
-  # - name: webauthn-stack
-  #   version: 1.0.0
-  #   repository: file://./charts/webauthn-stack
-  #   condition: webauthn-stack.enabled
-  #
-  # - name: health-api
-  #   version: 1.0.0
-  #   repository: file://./charts/health-api
-  #   condition: health-api.enabled
-  #
-  # - name: etl-engine
-  #   version: 1.0.0
-  #   repository: file://./charts/etl-engine
-  #   condition: etl-engine.enabled
-  #
+  # Module 3: WebAuthn Stack (authentication)
+  - name: webauthn-stack
+    version: 1.0.0
+    repository: file://./charts/webauthn-stack
+    condition: webauthn-stack.enabled
+
+  # Module 4: Health API Service
+  - name: health-api
+    version: 1.0.0
+    repository: file://./charts/health-api
+    condition: health-api.enabled
+
+  # Module 4: ETL Narrative Engine
+  - name: etl-engine
+    version: 1.0.0
+    repository: file://./charts/etl-engine
+    condition: etl-engine.enabled
+
+  # Module 5: Observability Stack (pending merge)
   # - name: observability
   #   version: 1.0.0
   #   repository: file://./charts/observability

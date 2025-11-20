@@ -156,41 +156,177 @@ infrastructure:
       hostname: rabbitmq.health-platform.example.com  # CHANGE THIS
 
 # ==============================================================================
-# WebAuthn Stack - Production Configuration (Module 3)
+# WebAuthn Stack - Production Configuration (Module 3) ✅ IMPLEMENTED
 # ==============================================================================
 webauthn-stack:
-  enabled: false  # Enable after Module 3 implementation
+  enabled: true
 
-  # Future configuration
-  # namespace: health-auth
-  # replicas: 2
-  # resources: ...
+  namespace: health-auth
+
+  # WebAuthn Server configuration
+  webauthn:
+    replicaCount: 2  # HA with 2 replicas
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+
+    # WebAuthn configuration (CHANGE THESE VALUES!)
+    config:
+      relyingPartyId: "auth.health-platform.example.com"  # CHANGE THIS
+      relyingPartyOrigin: "https://auth.health-platform.example.com"  # CHANGE THIS
+      relyingPartyName: "Health Data AI Platform"
+
+  # Envoy Gateway configuration
+  envoy:
+    replicaCount: 2
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+
+  # Ingress configuration
+  ingress:
+    enabled: true
+    host: "auth.health-platform.example.com"  # CHANGE THIS
+    tls:
+      enabled: true
+      issuer: letsencrypt-prod
+
+  # Secrets (IMPORTANT: Use Sealed Secrets or OCI Vault in production!)
+  secrets:
+    databasePassword: "CHANGE_ME_WEBAUTHN_DB_PASSWORD_32_CHARS_MIN"
+    redisPassword: "CHANGE_ME_WEBAUTHN_REDIS_PASSWORD_32_CHARS_MIN"
+    jwtMasterKey: "CHANGE_ME_BASE64_ENCODED_32_BYTE_KEY"  # openssl rand -base64 32
+
+  # HorizontalPodAutoscaler
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
 
 # ==============================================================================
-# Health API - Production Configuration (Module 4)
+# Health API - Production Configuration (Module 4) ✅ IMPLEMENTED
 # ==============================================================================
 health-api:
-  enabled: false  # Enable after Module 4 implementation
+  enabled: true
 
-  # Future configuration
-  # namespace: health-api
-  # replicas: 2
-  # autoscaling:
-  #   enabled: true
-  #   minReplicas: 2
-  #   maxReplicas: 4
-  # resources: ...
+  namespace: health-api
+
+  # Deployment configuration
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Docker image configuration
+  image:
+    repository: ghcr.io/hitoshura25/health-api  # CHANGE THIS to your registry
+    tag: "latest"  # Use specific version tags in production
+    pullPolicy: IfNotPresent
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 8001
+
+  # Ingress configuration
+  ingress:
+    enabled: true
+    host: "api.health-platform.example.com"  # CHANGE THIS
+    tls:
+      enabled: true
+      issuer: letsencrypt-prod
+    annotations:
+      nginx.ingress.kubernetes.io/rate-limit: "100"
+      nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+
+  # HorizontalPodAutoscaler
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  # Secrets (IMPORTANT: Use Sealed Secrets or OCI Vault!)
+  secrets:
+    secretKey: "CHANGE_ME_SECRET_KEY_MIN_32_CHARS_FOR_JWT_SIGNING"
+    databasePassword: "CHANGE_ME_USE_SAME_AS_POSTGRESQL_HEALTH_PASSWORD"
+    redisPassword: "CHANGE_ME_USE_SAME_AS_REDIS_HEALTH_PASSWORD"
+    minioAccessKey: "CHANGE_ME_USE_SAME_AS_MINIO_ROOT_USER"
+    minioSecretKey: "CHANGE_ME_USE_SAME_AS_MINIO_ROOT_PASSWORD"
+    rabbitmqPassword: "CHANGE_ME_USE_SAME_AS_RABBITMQ_PASSWORD"
 
 # ==============================================================================
-# ETL Engine - Production Configuration (Module 4)
+# ETL Engine - Production Configuration (Module 4) ✅ IMPLEMENTED
 # ==============================================================================
 etl-engine:
-  enabled: false  # Enable after Module 4 implementation
+  enabled: true
 
-  # Future configuration
-  # namespace: health-etl
-  # schedule: "0 2 * * *"  # Daily at 2 AM
-  # resources: ...
+  namespace: health-etl
+
+  # Deployment configuration
+  replicaCount: 1  # Single replica for deduplication consistency
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 700m
+      memory: 2Gi  # Higher limit for AI model loading
+
+  # Docker image configuration
+  image:
+    repository: ghcr.io/hitoshura25/etl-narrative-engine  # CHANGE THIS
+    tag: "latest"  # Use specific version tags in production
+    pullPolicy: IfNotPresent
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 8002
+    metricsPort: 8004
+
+  # HorizontalPodAutoscaler (conservative for free tier)
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  # Persistent volume for deduplication database
+  persistence:
+    enabled: true
+    storageClass: "oci-bv"
+    size: 1Gi
+
+  # AI Model configuration
+  aiModel:
+    modelCache: 5Gi  # EmptyDir volume for HuggingFace model cache
+    maxTokens: 2048
+    temperature: 0.7
+    prefetchCount: 1  # Process one message at a time
+
+  # Secrets (IMPORTANT: Use Sealed Secrets!)
+  secrets:
+    databasePassword: "CHANGE_ME_USE_SAME_AS_POSTGRESQL_HEALTH_PASSWORD"
+    minioAccessKey: "CHANGE_ME_USE_SAME_AS_MINIO_ROOT_USER"
+    minioSecretKey: "CHANGE_ME_USE_SAME_AS_MINIO_ROOT_PASSWORD"
+    rabbitmqUser: "user"
+    rabbitmqPassword: "CHANGE_ME_USE_SAME_AS_RABBITMQ_PASSWORD"
 
 # ==============================================================================
 # Observability Stack - Production Configuration (Module 5)
@@ -279,16 +415,32 @@ observability:
 #
 # ==============================================================================
 #
-# Resource Summary (Oracle Always Free Tier):
-#   CPU Requests:  1150m (1.15 vCPU) out of 4 vCPU available
-#   CPU Limits:    2100m (2.1 vCPU)
-#   Memory Requests: ~3 Gi out of 24 Gi available
-#   Memory Limits:   ~6 Gi
-#   Storage:       185 Gi out of 200 Gi available
+# Resource Summary (Oracle Always Free Tier) - Modules 1-4 Deployed:
 #
-# Remaining resources for application layer:
-#   CPU:     ~2.85 vCPU
-#   Memory:  ~18 Gi
-#   Storage: ~15 Gi
+# Infrastructure Layer (Module 2):
+#   CPU Requests:  1150m (1.15 vCPU)
+#   Memory Requests: ~3 Gi
+#   Storage: 185 Gi
+#
+# WebAuthn Stack (Module 3):
+#   CPU Requests:  ~700m (2x WebAuthn @ 250m, 2x Envoy @ 100m)
+#   Memory Requests: ~1.3 Gi (2x WebAuthn @ 512Mi, 2x Envoy @ 128Mi)
+#
+# Health Services (Module 4):
+#   CPU Requests:  ~700m (2x Health API @ 250m, 1x ETL @ 200m)
+#   Memory Requests: ~1.3 Gi (2x Health API @ 256Mi, 1x ETL @ 512Mi)
+#   Storage: 1 Gi (ETL deduplication DB)
+#
+# TOTAL PLATFORM USAGE:
+#   CPU Requests:  ~2.55 vCPU out of 4 vCPU ✅ (63.75%)
+#   CPU Limits:    ~6.2 vCPU (allows bursting)
+#   Memory Requests: ~5.6 Gi out of 24 Gi ✅ (23.3%)
+#   Memory Limits:   ~13.5 Gi (includes 5Gi model cache)
+#   Storage:       186 Gi out of 200 Gi ✅ (93%)
+#
+# Remaining resources for Module 5 (Observability):
+#   CPU:     ~1.45 vCPU
+#   Memory:  ~18.4 Gi
+#   Storage: ~14 Gi
 #
 # ==============================================================================

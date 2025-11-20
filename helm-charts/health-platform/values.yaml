@@ -34,41 +34,55 @@ infrastructure:
   namespace: health-data
 
 # ==============================================================================
-# WebAuthn Stack (Module 3) - Not yet implemented
+# WebAuthn Stack (Module 3) ✅ IMPLEMENTED
 # ==============================================================================
 webauthn-stack:
-  enabled: false
+  enabled: true
 
-  # Future configuration for WebAuthn services
-  # Will include:
-  # - WebAuthn server
-  # - Envoy gateway
-  # - PostgreSQL auth (using infrastructure layer)
-  # - Redis sessions (using infrastructure layer)
+  # All WebAuthn values are defined in charts/webauthn-stack/values.yaml
+  # Override specific values here if needed
+
+  # Namespace for authentication services
+  namespace: health-auth
+
+  # Dependencies (from infrastructure module):
+  # - PostgreSQL (postgresql-auth) in health-data namespace
+  # - Redis (redis-auth) in health-data namespace
 
 # ==============================================================================
-# Health API Service (Module 4) - Not yet implemented
+# Health API Service (Module 4) ✅ IMPLEMENTED
 # ==============================================================================
 health-api:
-  enabled: false
+  enabled: true
 
-  # Future configuration for Health API
-  # Will include:
-  # - FastAPI application
-  # - HorizontalPodAutoscaler
-  # - Service and Ingress
+  # All Health API values are defined in charts/health-api/values.yaml
+  # Override specific values here if needed
+
+  # Namespace for health API
+  namespace: health-api
+
+  # Dependencies (from infrastructure module):
+  # - PostgreSQL (health-data)
+  # - Redis (health-data)
+  # - MinIO (data lake)
+  # - RabbitMQ (message queue)
 
 # ==============================================================================
-# ETL Narrative Engine (Module 4) - Not yet implemented
+# ETL Narrative Engine (Module 4) ✅ IMPLEMENTED
 # ==============================================================================
 etl-engine:
-  enabled: false
+  enabled: true
 
-  # Future configuration for ETL Engine
-  # Will include:
-  # - ETL processing service
-  # - CronJobs for scheduled processing
-  # - Job templates
+  # All ETL Engine values are defined in charts/etl-engine/values.yaml
+  # Override specific values here if needed
+
+  # Namespace for ETL processing
+  namespace: health-etl
+
+  # Dependencies (from infrastructure module):
+  # - PostgreSQL (health-data)
+  # - MinIO (data lake)
+  # - RabbitMQ (message queue)
 
 # ==============================================================================
 # AI Query Interface (Future) - Not yet implemented
@@ -100,21 +114,36 @@ observability:
 # Deployment Notes
 # ==============================================================================
 #
-# Current Status: Module 2 (Infrastructure Layer) Ready
+# Current Status: Modules 1-4 COMPLETE ✅
+#   ✅ Module 1: Terraform Infrastructure (OKE cluster)
+#   ✅ Module 2: Infrastructure Helm (PostgreSQL, Redis, MinIO, RabbitMQ)
+#   ✅ Module 3: WebAuthn Stack Helm (Authentication)
+#   ✅ Module 4: Health Services Helm (Health API, ETL Engine)
+#   ⏳ Module 5: Observability (pending merge)
 #
-# To deploy only infrastructure:
+# Prerequisites:
+#   1. OKE cluster provisioned (terraform apply from terraform/environments/production/)
+#   2. kubectl configured to access cluster
+#   3. Namespaces will be created automatically
+#   4. Docker images built and pushed to registry
+#
+# To deploy complete platform (development):
+#   helm dependency update
 #   helm install health-platform . \
 #     --namespace health-data \
 #     --create-namespace
 #
-# To customize for development:
-#   helm install health-platform . \
-#     -f values.yaml \
-#     --namespace health-data
-#
 # To deploy to production:
+#   helm dependency update
 #   helm install health-platform . \
 #     -f values-production.yaml \
+#     --namespace health-data \
+#     --create-namespace
+#
+# To deploy only specific modules:
+#   helm install health-platform . \
+#     --set webauthn-stack.enabled=false \
+#     --set health-api.enabled=false \
 #     --namespace health-data
 #
 # ==============================================================================
