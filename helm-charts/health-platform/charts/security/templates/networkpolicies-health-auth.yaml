@@ -1,0 +1,188 @@
+{{- if .Values.networkPolicies.enabled }}
+---
+# Envoy Gateway - Allow ingress from outside cluster (Ingress controller)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: envoy-gateway-netpol
+  namespace: {{ .Values.namespaces.auth }}
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: envoy-gateway
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from Ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.system }}
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8000
+  # Allow from any namespace for internal service calls
+  - from:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  # Allow to WebAuthn server
+  - to:
+    - podSelector:
+        matchLabels:
+          app: webauthn-server
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+---
+# WebAuthn Server - Allow ingress only from Envoy Gateway
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: webauthn-server-netpol
+  namespace: {{ .Values.namespaces.auth }}
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: webauthn-server
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Only allow from Envoy Gateway
+  - from:
+    - podSelector:
+        matchLabels:
+          app: envoy-gateway
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  # Allow to PostgreSQL Auth
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.data }}
+      podSelector:
+        matchLabels:
+          app: postgresql-auth
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow to Redis Auth
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.data }}
+      podSelector:
+        matchLabels:
+          app: redis-auth
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow to Jaeger for tracing
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.observability }}
+      podSelector:
+        matchLabels:
+          app: jaeger
+    ports:
+    - protocol: UDP
+      port: 6831
+    - protocol: TCP
+      port: 4317
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+---
+# PostgreSQL Auth - Allow ingress only from WebAuthn Server
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgresql-auth-netpol
+  namespace: {{ .Values.namespaces.data }}
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: postgresql-auth
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Only allow from WebAuthn server
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.auth }}
+      podSelector:
+        matchLabels:
+          app: webauthn-server
+    ports:
+    - protocol: TCP
+      port: 5432
+  egress:
+  # PostgreSQL needs minimal egress
+  - {}
+---
+# Redis Auth - Allow ingress only from WebAuthn Server
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-auth-netpol
+  namespace: {{ .Values.namespaces.data }}
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: redis-auth
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Only allow from WebAuthn server
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.auth }}
+      podSelector:
+        matchLabels:
+          app: webauthn-server
+    ports:
+    - protocol: TCP
+      port: 6379
+  egress:
+  # Redis needs minimal egress
+  - {}
+{{- end }}

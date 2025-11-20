@@ -1,0 +1,66 @@
+{{- if .Values.podSecurity.enabled }}
+---
+# Pod Security Standards enforcement via namespace labels
+# These labels enforce Pod Security Standards at the namespace level
+# Docs: https://kubernetes.io/docs/concepts/security/pod-security-standards/
+
+# health-api namespace - Restricted (most secure)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespaces.api }}
+  labels:
+    name: {{ .Values.namespaces.api }}
+    pod-security.kubernetes.io/enforce: {{ .Values.podSecurity.levels.api }}
+    pod-security.kubernetes.io/audit: {{ .Values.podSecurity.levels.api }}
+    pod-security.kubernetes.io/warn: {{ .Values.podSecurity.levels.api }}
+    {{- include "security.labels" . | nindent 4 }}
+---
+# health-etl namespace - Restricted
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespaces.etl }}
+  labels:
+    name: {{ .Values.namespaces.etl }}
+    pod-security.kubernetes.io/enforce: {{ .Values.podSecurity.levels.etl }}
+    pod-security.kubernetes.io/audit: {{ .Values.podSecurity.levels.etl }}
+    pod-security.kubernetes.io/warn: {{ .Values.podSecurity.levels.etl }}
+    {{- include "security.labels" . | nindent 4 }}
+---
+# health-auth namespace - Restricted
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespaces.auth }}
+  labels:
+    name: {{ .Values.namespaces.auth }}
+    pod-security.kubernetes.io/enforce: {{ .Values.podSecurity.levels.auth }}
+    pod-security.kubernetes.io/audit: {{ .Values.podSecurity.levels.auth }}
+    pod-security.kubernetes.io/warn: {{ .Values.podSecurity.levels.auth }}
+    {{- include "security.labels" . | nindent 4 }}
+---
+# health-data namespace - Baseline (stateful services need some privileges)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespaces.data }}
+  labels:
+    name: {{ .Values.namespaces.data }}
+    pod-security.kubernetes.io/enforce: {{ .Values.podSecurity.levels.data }}
+    pod-security.kubernetes.io/audit: {{ .Values.podSecurity.levels.data }}
+    pod-security.kubernetes.io/warn: {{ .Values.podSecurity.levels.data }}
+    {{- include "security.labels" . | nindent 4 }}
+---
+# health-observability namespace - Baseline
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespaces.observability }}
+  labels:
+    name: {{ .Values.namespaces.observability }}
+    pod-security.kubernetes.io/enforce: {{ .Values.podSecurity.levels.observability }}
+    pod-security.kubernetes.io/audit: {{ .Values.podSecurity.levels.observability }}
+    pod-security.kubernetes.io/warn: {{ .Values.podSecurity.levels.observability }}
+    {{- include "security.labels" . | nindent 4 }}
+{{- end }}

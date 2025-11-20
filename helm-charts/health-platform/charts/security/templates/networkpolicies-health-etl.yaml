@@ -1,0 +1,87 @@
+{{- if .Values.networkPolicies.enabled }}
+---
+# ETL Narrative Engine - Internal service, no external ingress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: etl-engine-netpol
+  namespace: {{ .Values.namespaces.etl }}
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: etl-engine
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # No ingress - ETL engine is a consumer only
+  # Health checks from within the namespace
+  - from:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8002
+  egress:
+  # Allow to PostgreSQL Health
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.data }}
+      podSelector:
+        matchLabels:
+          app: postgresql-health
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow to MinIO
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.data }}
+      podSelector:
+        matchLabels:
+          app: minio
+    ports:
+    - protocol: TCP
+      port: 9000
+  # Allow to RabbitMQ
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.data }}
+      podSelector:
+        matchLabels:
+          app: rabbitmq
+    ports:
+    - protocol: TCP
+      port: 5672
+  # Allow to Jaeger for tracing
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.observability }}
+      podSelector:
+        matchLabels:
+          app: jaeger
+    ports:
+    - protocol: UDP
+      port: 6831
+    - protocol: TCP
+      port: 4317
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow HTTPS egress (for AI model APIs)
+  - ports:
+    - protocol: TCP
+      port: 443
+{{- end }}

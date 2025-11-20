@@ -1,0 +1,175 @@
+{{- if .Values.networkPolicies.enabled }}
+---
+# PostgreSQL Health - Allow ingress from health-api and health-etl
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgresql-health-netpol
+  namespace: {{ .Values.namespaces.data }}
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: postgresql-health
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from health-api
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.api }}
+      podSelector:
+        matchLabels:
+          app: health-api
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow from health-etl
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.etl }}
+      podSelector:
+        matchLabels:
+          app: etl-engine
+    ports:
+    - protocol: TCP
+      port: 5432
+  egress:
+  # PostgreSQL needs minimal egress for replication (if configured later)
+  - {}
+---
+# Redis Health - Allow ingress from health-api
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-health-netpol
+  namespace: {{ .Values.namespaces.data }}
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: redis-health
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from health-api
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.api }}
+      podSelector:
+        matchLabels:
+          app: health-api
+    ports:
+    - protocol: TCP
+      port: 6379
+  egress:
+  # Redis needs minimal egress for cluster mode (if configured later)
+  - {}
+---
+# MinIO - Allow ingress from health-api and health-etl
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: minio-netpol
+  namespace: {{ .Values.namespaces.data }}
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: minio
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from health-api
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.api }}
+      podSelector:
+        matchLabels:
+          app: health-api
+    ports:
+    - protocol: TCP
+      port: 9000
+  # Allow from health-etl
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.etl }}
+      podSelector:
+        matchLabels:
+          app: etl-engine
+    ports:
+    - protocol: TCP
+      port: 9000
+  # Allow from observability namespace for monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.observability }}
+    ports:
+    - protocol: TCP
+      port: 9000
+  egress:
+  # MinIO needs egress for replication and notifications (if configured)
+  - {}
+---
+# RabbitMQ - Allow ingress from health-api and health-etl
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rabbitmq-netpol
+  namespace: {{ .Values.namespaces.data }}
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: rabbitmq
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from health-api (publisher)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.api }}
+      podSelector:
+        matchLabels:
+          app: health-api
+    ports:
+    - protocol: TCP
+      port: 5672
+  # Allow from health-etl (consumer)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.etl }}
+      podSelector:
+        matchLabels:
+          app: etl-engine
+    ports:
+    - protocol: TCP
+      port: 5672
+  # Allow management UI from observability namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.observability }}
+    ports:
+    - protocol: TCP
+      port: 15672
+  egress:
+  # RabbitMQ needs egress for clustering
+  - {}
+{{- end }}

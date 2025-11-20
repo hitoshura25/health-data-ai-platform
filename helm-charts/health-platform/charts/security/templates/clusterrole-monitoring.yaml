@@ -1,0 +1,123 @@
+{{- if .Values.rbac.enabled }}
+{{- if .Values.rbac.monitoring.enabled }}
+---
+# ClusterRole for Prometheus to access ServiceMonitors and scrape metrics
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-monitoring
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+rules:
+# Allow Prometheus to read ServiceMonitors (custom resources)
+- apiGroups: ["monitoring.coreos.com"]
+  resources: ["servicemonitors", "podmonitors"]
+  verbs: ["get", "list", "watch"]
+# Allow Prometheus to discover services and endpoints
+- apiGroups: [""]
+  resources: ["services", "endpoints", "pods"]
+  verbs: ["get", "list", "watch"]
+# Allow Prometheus to read nodes for node exporter metrics
+- apiGroups: [""]
+  resources: ["nodes", "nodes/metrics"]
+  verbs: ["get", "list", "watch"]
+# Allow Prometheus to read ingresses for discovery
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "watch"]
+# Allow Prometheus to discover ConfigMaps for rule reload
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+---
+# ClusterRoleBinding for Prometheus ServiceAccount
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-monitoring
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus-monitoring
+subjects:
+- kind: ServiceAccount
+  name: prometheus-sa
+  namespace: {{ .Values.namespaces.observability }}
+---
+# ClusterRole for developers (read-only access)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: health-platform-developer
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+rules:
+# Read-only access to common resources
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "services", "configmaps", "events"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["monitoring.coreos.com"]
+  resources: ["servicemonitors", "podmonitors", "prometheusrules"]
+  verbs: ["get", "list", "watch"]
+---
+# ClusterRole for operators (restricted to application resources)
+# IMPORTANT: This ClusterRole should be bound using RoleBindings (not ClusterRoleBindings)
+# to limit access to specific application namespaces only.
+#
+# Example binding to health-api namespace:
+#   kubectl create rolebinding operator-binding \
+#     --clusterrole=health-platform-operator \
+#     --user=operator@example.com \
+#     --namespace=health-api
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: health-platform-operator
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+rules:
+# Core resources
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "pods/exec", "services", "configmaps", "secrets", "persistentvolumeclaims", "events"]
+  verbs: ["*"]
+# Apps resources
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+  verbs: ["*"]
+# Batch resources
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["*"]
+# Networking resources
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["*"]
+# Autoscaling resources
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["*"]
+# Policy resources
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
+  verbs: ["*"]
+# Monitoring resources
+- apiGroups: ["monitoring.coreos.com"]
+  resources: ["servicemonitors", "podmonitors", "prometheusrules"]
+  verbs: ["*"]
+# RBAC resources (view only for security)
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings"]
+  verbs: ["get", "list", "watch"]
+{{- end }}
+{{- end }}
