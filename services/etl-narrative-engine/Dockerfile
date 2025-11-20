@@ -15,9 +15,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Copy and install Python dependencies
+# Copy and install Python dependencies (system-wide, not --user)
 COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Runtime stage
 FROM python:3.11-slim
@@ -30,8 +30,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Copy Python packages from builder
-COPY --from=builder /root/.local /root/.local
+# Copy Python packages from builder (system-wide installation)
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
 COPY src/ ./src/
@@ -44,9 +45,6 @@ RUN mkdir -p /data && chmod 755 /data
 # Create non-root user
 RUN groupadd -r etl && useradd -r -g etl etl \
     && chown -R etl:etl /app /data
-
-# Make sure Python packages are in PATH
-ENV PATH=/root/.local/bin:$PATH
 
 # Environment variables (defaults, override via Kubernetes ConfigMap/Secrets)
 ENV ETL_RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/

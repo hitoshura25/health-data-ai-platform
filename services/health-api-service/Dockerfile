@@ -14,9 +14,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Copy and install Python dependencies
+# Copy and install Python dependencies (system-wide, not --user)
 COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Runtime stage
 FROM python:3.13-slim
@@ -29,8 +29,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Copy Python packages from builder
-COPY --from=builder /root/.local /root/.local
+# Copy Python packages from builder (system-wide installation)
+COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
 COPY ./app /app/app
@@ -38,9 +39,6 @@ COPY ./app /app/app
 # Create non-root user
 RUN groupadd -r healthapi && useradd -r -g healthapi healthapi \
     && chown -R healthapi:healthapi /app
-
-# Make sure Python packages are in PATH
-ENV PATH=/root/.local/bin:$PATH
 
 USER healthapi
 
