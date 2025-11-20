@@ -74,7 +74,7 @@ def docker_services():
         print("\nStopping dependency services...")
         subprocess.run(
             ["docker", "compose", "-f", compose_file, "--env-file", env_file, "down", "-v"],
-            check=True
+            check=False  # Don't fail if cleanup fails (safe for CI environments)
         )
 
 @pytest.fixture(scope="session")
