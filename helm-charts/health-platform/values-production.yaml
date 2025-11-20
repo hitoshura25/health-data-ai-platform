@@ -1,0 +1,294 @@
+# Health Data AI Platform - Production Values
+# Oracle Cloud Infrastructure - Always Free Tier
+# Region: eu-amsterdam-1 (100% renewable energy)
+
+# ==============================================================================
+# Global Production Configuration
+# ==============================================================================
+global:
+  # Image pull secrets (if using private registry)
+  imagePullSecrets: []
+
+  # Storage class for OCI Block Volumes
+  storageClass: "oci-bv"
+
+  # Monitoring configuration
+  monitoring:
+    namespace: health-observability
+    enabled: true
+
+  # Security settings
+  podSecurityStandards:
+    enforced: true
+    profile: restricted
+
+  # Domain configuration (CHANGE THIS to your domain)
+  domain: "health-platform.example.com"
+
+  # TLS/SSL configuration
+  tls:
+    enabled: true
+    issuer: letsencrypt-prod
+
+# ==============================================================================
+# Infrastructure Layer - Production Configuration
+# ==============================================================================
+infrastructure:
+  enabled: true
+
+  # Namespace for infrastructure services
+  namespace: health-data
+
+  # Production secrets (IMPORTANT: Replace with Sealed Secrets or OCI Vault)
+  secrets:
+    postgresqlHealth:
+      adminPassword: "CHANGE_ME_POSTGRESQL_HEALTH_ADMIN_PASSWORD_32_CHARS_MIN"
+      userPassword: "CHANGE_ME_POSTGRESQL_HEALTH_USER_PASSWORD_32_CHARS_MIN"
+      username: "healthapi"
+      database: "healthdb"
+
+    postgresqlAuth:
+      adminPassword: "CHANGE_ME_POSTGRESQL_AUTH_ADMIN_PASSWORD_32_CHARS_MIN"
+      userPassword: "CHANGE_ME_POSTGRESQL_AUTH_USER_PASSWORD_32_CHARS_MIN"
+      username: "webauthn"
+      database: "webauthn"
+
+    redisHealth:
+      password: "CHANGE_ME_REDIS_HEALTH_PASSWORD_32_CHARS_MIN"
+
+    redisAuth:
+      password: "CHANGE_ME_REDIS_AUTH_PASSWORD_32_CHARS_MIN"
+
+    minio:
+      rootUser: "admin"
+      rootPassword: "CHANGE_ME_MINIO_PASSWORD_32_CHARS_MIN"
+
+    rabbitmq:
+      password: "CHANGE_ME_RABBITMQ_PASSWORD_32_CHARS_MIN"
+      erlangCookie: "CHANGEME_REPLACE_WITH_32CHARS!!"
+
+  # PostgreSQL Health - Production settings
+  postgresql-health:
+    enabled: true
+    primary:
+      persistence:
+        size: 60Gi
+      resources:
+        requests:
+          cpu: 300m
+          memory: 1Gi
+        limits:
+          cpu: 500m
+          memory: 2Gi
+
+  # PostgreSQL Auth - Production settings
+  postgresql-auth:
+    enabled: true
+    primary:
+      persistence:
+        size: 20Gi
+      resources:
+        requests:
+          cpu: 150m
+          memory: 512Mi
+        limits:
+          cpu: 300m
+          memory: 1Gi
+
+  # Redis Health - Production settings
+  redis-health:
+    enabled: true
+    master:
+      persistence:
+        size: 5Gi
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 200m
+          memory: 512Mi
+
+  # Redis Auth - Production settings
+  redis-auth:
+    enabled: true
+    master:
+      persistence:
+        size: 5Gi
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 200m
+          memory: 512Mi
+
+  # MinIO - Production settings
+  minio:
+    enabled: true
+    persistence:
+      size: 80Gi
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 400m
+        memory: 1Gi
+    ingress:
+      enabled: true
+      hostname: minio.health-platform.example.com  # CHANGE THIS
+
+  # RabbitMQ - Production settings
+  rabbitmq:
+    enabled: true
+    persistence:
+      size: 15Gi
+    resources:
+      requests:
+        cpu: 300m
+        memory: 512Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+    ingress:
+      enabled: true
+      hostname: rabbitmq.health-platform.example.com  # CHANGE THIS
+
+# ==============================================================================
+# WebAuthn Stack - Production Configuration (Module 3)
+# ==============================================================================
+webauthn-stack:
+  enabled: false  # Enable after Module 3 implementation
+
+  # Future configuration
+  # namespace: health-auth
+  # replicas: 2
+  # resources: ...
+
+# ==============================================================================
+# Health API - Production Configuration (Module 4)
+# ==============================================================================
+health-api:
+  enabled: false  # Enable after Module 4 implementation
+
+  # Future configuration
+  # namespace: health-api
+  # replicas: 2
+  # autoscaling:
+  #   enabled: true
+  #   minReplicas: 2
+  #   maxReplicas: 4
+  # resources: ...
+
+# ==============================================================================
+# ETL Engine - Production Configuration (Module 4)
+# ==============================================================================
+etl-engine:
+  enabled: false  # Enable after Module 4 implementation
+
+  # Future configuration
+  # namespace: health-etl
+  # schedule: "0 2 * * *"  # Daily at 2 AM
+  # resources: ...
+
+# ==============================================================================
+# Observability Stack - Production Configuration (Module 5)
+# ==============================================================================
+observability:
+  enabled: false  # Enable after Module 5 implementation
+
+  # Future configuration
+  # prometheus:
+  #   retention: 30d
+  #   storage: 20Gi
+  # grafana:
+  #   enabled: true
+  # loki:
+  #   retention: 7d
+  #   storage: 5Gi
+
+# ==============================================================================
+# Production Deployment Checklist
+# ==============================================================================
+#
+# Before deploying to production:
+#
+# [ ] 1. Secrets Management
+#     - Replace all CHANGE_ME values with actual secrets
+#     - Use Sealed Secrets or OCI Vault for production
+#     - Generate strong passwords: openssl rand -base64 32
+#     - Erlang cookie must be exactly 32 characters
+#
+# [ ] 2. Domain Configuration
+#     - Update all *.health-platform.example.com to your domain
+#     - Configure DNS records to point to OKE cluster
+#     - Ensure cert-manager is installed for SSL certificates
+#
+# [ ] 3. Oracle Cloud Setup
+#     - OKE cluster provisioned and configured
+#     - StorageClass 'oci-bv' available
+#     - Load balancer configured for ingress
+#     - Network policies and security lists configured
+#
+# [ ] 4. Prerequisites
+#     - NGINX Ingress Controller installed
+#     - cert-manager installed with Let's Encrypt issuer
+#     - Sealed Secrets controller installed (optional but recommended)
+#     - Monitoring namespace created (health-observability)
+#
+# [ ] 5. Deployment Steps
+#     a. Add Bitnami repository:
+#        helm repo add bitnami https://charts.bitnami.com/bitnami
+#        helm repo update
+#
+#     b. Update dependencies:
+#        cd helm-charts/health-platform
+#        helm dependency update
+#
+#     c. Test with dry-run:
+#        helm install health-platform . \
+#          -f values-production.yaml \
+#          --namespace health-data \
+#          --create-namespace \
+#          --dry-run --debug
+#
+#     d. Deploy to production:
+#        helm install health-platform . \
+#          -f values-production.yaml \
+#          --namespace health-data \
+#          --create-namespace
+#
+# [ ] 6. Post-Deployment Verification
+#     - kubectl get pods -n health-data
+#     - kubectl get pvc -n health-data
+#     - kubectl get svc -n health-data
+#     - kubectl top nodes
+#     - kubectl top pods -n health-data
+#
+# [ ] 7. Initialize Databases
+#     - Create PostgreSQL databases and tables
+#     - Create MinIO buckets
+#     - Configure RabbitMQ queues and exchanges
+#
+# [ ] 8. Monitoring
+#     - Verify ServiceMonitors are created
+#     - Check Prometheus is scraping metrics
+#     - Configure Grafana dashboards
+#     - Set up alerting rules
+#
+# ==============================================================================
+#
+# Resource Summary (Oracle Always Free Tier):
+#   CPU Requests:  1150m (1.15 vCPU) out of 4 vCPU available
+#   CPU Limits:    2100m (2.1 vCPU)
+#   Memory Requests: ~3 Gi out of 24 Gi available
+#   Memory Limits:   ~6 Gi
+#   Storage:       185 Gi out of 200 Gi available
+#
+# Remaining resources for application layer:
+#   CPU:     ~2.85 vCPU
+#   Memory:  ~18 Gi
+#   Storage: ~15 Gi
+#
+# ==============================================================================

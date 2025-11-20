@@ -1,0 +1,65 @@
+apiVersion: v2
+name: health-platform
+description: Health Data AI Platform - Complete deployment for Kubernetes
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+keywords:
+  - health-data
+  - ai
+  - machine-learning
+  - webauthn
+  - healthcare
+  - kubernetes
+
+home: https://github.com/hitoshura25/health-data-ai-platform
+sources:
+  - https://github.com/hitoshura25/health-data-ai-platform
+
+maintainers:
+  - name: Health Data AI Platform Team
+    email: hitoshura25@users.noreply.github.com
+
+dependencies:
+  # Infrastructure layer (PostgreSQL, Redis, MinIO, RabbitMQ)
+  - name: infrastructure
+    version: 1.0.0
+    repository: file://./charts/infrastructure
+    condition: infrastructure.enabled
+
+  # Future dependencies (to be added in later modules):
+  # - name: webauthn-stack
+  #   version: 1.0.0
+  #   repository: file://./charts/webauthn-stack
+  #   condition: webauthn-stack.enabled
+  #
+  # - name: health-api
+  #   version: 1.0.0
+  #   repository: file://./charts/health-api
+  #   condition: health-api.enabled
+  #
+  # - name: etl-engine
+  #   version: 1.0.0
+  #   repository: file://./charts/etl-engine
+  #   condition: etl-engine.enabled
+  #
+  # - name: observability
+  #   version: 1.0.0
+  #   repository: file://./charts/observability
+  #   condition: observability.enabled
+
+annotations:
+  # Helm chart metadata
+  category: Healthcare
+  licenses: MIT
+
+  # Oracle Cloud specific
+  cloud.oracle.com/platform: oke
+  cloud.oracle.com/tier: always-free
+  cloud.oracle.com/region: eu-amsterdam-1
+
+  # Resource requirements
+  cloud.oracle.com/cpu-request: "1150m"
+  cloud.oracle.com/memory-request: "3Gi"
+  cloud.oracle.com/storage-request: "185Gi"

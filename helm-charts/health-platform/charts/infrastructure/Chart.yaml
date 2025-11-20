@@ -1,0 +1,58 @@
+apiVersion: v2
+name: infrastructure
+description: Infrastructure layer for Health Data AI Platform (PostgreSQL, Redis, MinIO, RabbitMQ)
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+keywords:
+  - health-data
+  - infrastructure
+  - postgresql
+  - redis
+  - minio
+  - rabbitmq
+
+maintainers:
+  - name: Health Data AI Platform Team
+
+dependencies:
+  # PostgreSQL for Health Data (60GB storage)
+  - name: postgresql
+    version: 13.2.24
+    repository: https://charts.bitnami.com/bitnami
+    alias: postgresql-health
+    condition: postgresql-health.enabled
+
+  # PostgreSQL for WebAuthn Authentication (20GB storage)
+  - name: postgresql
+    version: 13.2.24
+    repository: https://charts.bitnami.com/bitnami
+    alias: postgresql-auth
+    condition: postgresql-auth.enabled
+
+  # Redis for Health Data rate limiting (5GB storage)
+  - name: redis
+    version: 18.4.0
+    repository: https://charts.bitnami.com/bitnami
+    alias: redis-health
+    condition: redis-health.enabled
+
+  # Redis for WebAuthn Sessions (5GB storage)
+  - name: redis
+    version: 18.4.0
+    repository: https://charts.bitnami.com/bitnami
+    alias: redis-auth
+    condition: redis-auth.enabled
+
+  # MinIO S3-compatible Data Lake (80GB storage)
+  - name: minio
+    version: 12.11.3
+    repository: https://charts.bitnami.com/bitnami
+    condition: minio.enabled
+
+  # RabbitMQ Message Queue (15GB storage)
+  - name: rabbitmq
+    version: 12.9.1
+    repository: https://charts.bitnami.com/bitnami
+    condition: rabbitmq.enabled
