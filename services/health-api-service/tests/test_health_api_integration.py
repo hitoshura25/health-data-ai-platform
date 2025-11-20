@@ -57,7 +57,7 @@ def docker_services():
     services = ["postgres", "redis", "minio", "rabbitmq"]
     
     # Ensure a clean slate before starting
-    subprocess.run(["docker", "compose", "-f", compose_file, "--env-file", env_file, "down", "-v"], check=True)
+    subprocess.run(["docker", "compose", "-f", compose_file, "--env-file", env_file, "down", "-v"], check=False)
 
     try:
         print("\nStarting dependency services...")

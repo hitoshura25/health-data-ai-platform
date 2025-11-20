@@ -47,34 +47,34 @@ jobs:
         run: |
           cd helm-charts/health-platform
           helm dependency update
-          helm lint .
+          helm lint . --debug
 
       - name: Lint Infrastructure chart
         run: |
           cd helm-charts/health-platform/charts/infrastructure
           helm dependency update
-          helm lint .
+          helm lint . --debug
 
       - name: Lint Health API chart
         run: |
           cd helm-charts/health-platform/charts/health-api
-          helm lint .
+          helm lint . --debug
 
       - name: Lint ETL Engine chart
         run: |
           cd helm-charts/health-platform/charts/etl-engine
-          helm lint .
+          helm lint . --debug
 
       - name: Lint WebAuthn Stack chart
         run: |
           cd helm-charts/health-platform/charts/webauthn-stack
-          helm lint .
+          helm lint . --debug
 
       - name: Lint Observability chart
         run: |
           cd helm-charts/health-platform/charts/observability
           helm dependency update
-          helm lint .
+          helm lint . --debug
 
       - name: Run Helm unit tests - Health API
         run: |
