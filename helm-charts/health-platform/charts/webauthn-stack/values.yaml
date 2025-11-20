@@ -12,7 +12,9 @@ webauthn:
 
   image:
     repository: hitoshura25/webauthn-server
-    tag: "latest"
+    # IMPORTANT: Use specific version tags for production deployments
+    # Do not use 'latest' as it makes deployments non-deterministic
+    tag: "1.0.0"
     pullPolicy: IfNotPresent
 
   service:
@@ -101,7 +103,7 @@ webauthn:
     capabilities:
       drop:
         - ALL
-    readOnlyRootFilesystem: false  # Java apps need writable /tmp
+    readOnlyRootFilesystem: true  # /tmp is writable via emptyDir mount
     runAsNonRoot: true
     runAsUser: 1000
 
@@ -112,7 +114,9 @@ envoy:
 
   image:
     repository: envoyproxy/envoy
-    tag: "v1.29-latest"
+    # IMPORTANT: Use specific version tags, not floating tags like 'v1.29-latest'
+    # Floating tags can cause unpredictable deployments
+    tag: "v1.29.0"
     pullPolicy: IfNotPresent
 
   service:
@@ -238,18 +242,29 @@ autoscaling:
     targetCPUUtilizationPercentage: 70
 
 # Secrets Configuration
-# IMPORTANT: These are placeholder values for development
-# In production, use Sealed Secrets or external secret management
+# ⚠️ SECURITY WARNING: These are INSECURE placeholder values
+#
+# DO NOT USE THESE IN PRODUCTION!
+#
+# For production deployments, use ONE of these methods:
+#   1. Sealed Secrets (recommended for GitOps)
+#   2. External Secrets Operator with OCI Vault
+#   3. Pass via --set flags (never commit to Git)
+#
+# The chart will WARN if these placeholder values are detected during installation
+#
 secrets:
   # PostgreSQL password (must match Module 2 postgresql-auth password)
-  databasePassword: "CHANGE_ME_POSTGRES_PASSWORD"
+  # Generate with: openssl rand -base64 32
+  databasePassword: "INSECURE_PLACEHOLDER_CHANGE_ME"
 
   # Redis password (must match Module 2 redis-auth password)
-  redisPassword: "CHANGE_ME_REDIS_PASSWORD"
+  # Generate with: openssl rand -base64 32
+  redisPassword: "INSECURE_PLACEHOLDER_CHANGE_ME"
 
   # JWT master encryption key (base64 encoded, 256-bit)
   # Generate with: openssl rand -base64 32
-  jwtMasterKey: "CHANGE_ME_JWT_MASTER_KEY_BASE64"
+  jwtMasterKey: "INSECURE_PLACEHOLDER_CHANGE_ME"
 
 # ServiceMonitor for Prometheus (Module 5)
 serviceMonitor:

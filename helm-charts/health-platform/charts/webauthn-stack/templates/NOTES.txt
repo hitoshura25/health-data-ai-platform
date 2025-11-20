@@ -107,22 +107,52 @@ Verify dependencies:
   SECURITY NOTES
 ================================================================================
 
-{{- if eq .Values.secrets.databasePassword "CHANGE_ME_POSTGRES_PASSWORD" }}
-⚠️  WARNING: Using default database password!
-   Generate secure password: openssl rand -base64 32
-   Update values file and re-deploy
+{{- if or (contains "PLACEHOLDER" .Values.secrets.databasePassword) (contains "CHANGE_ME" .Values.secrets.databasePassword) (contains "REPLACE" .Values.secrets.databasePassword) }}
+🔴 CRITICAL: Using INSECURE placeholder database password!
+
+   This is a SECURITY VULNERABILITY!
+
+   Generate secure password NOW:
+     openssl rand -base64 32
+
+   Then upgrade with:
+     helm upgrade {{ .Release.Name }} --set secrets.databasePassword="<generated-password>"
 {{- end }}
 
-{{- if eq .Values.secrets.redisPassword "CHANGE_ME_REDIS_PASSWORD" }}
-⚠️  WARNING: Using default Redis password!
-   Generate secure password: openssl rand -base64 32
-   Update values file and re-deploy
+{{- if or (contains "PLACEHOLDER" .Values.secrets.redisPassword) (contains "CHANGE_ME" .Values.secrets.redisPassword) (contains "REPLACE" .Values.secrets.redisPassword) }}
+🔴 CRITICAL: Using INSECURE placeholder Redis password!
+
+   This is a SECURITY VULNERABILITY!
+
+   Generate secure password NOW:
+     openssl rand -base64 32
+
+   Then upgrade with:
+     helm upgrade {{ .Release.Name }} --set secrets.redisPassword="<generated-password>"
 {{- end }}
 
-{{- if eq .Values.secrets.jwtMasterKey "CHANGE_ME_JWT_MASTER_KEY_BASE64" }}
-⚠️  WARNING: Using default JWT master key!
-   Generate secure key: openssl rand -base64 32
-   Update values file and re-deploy
+{{- if or (contains "PLACEHOLDER" .Values.secrets.jwtMasterKey) (contains "CHANGE_ME" .Values.secrets.jwtMasterKey) (contains "REPLACE" .Values.secrets.jwtMasterKey) }}
+🔴 CRITICAL: Using INSECURE placeholder JWT master key!
+
+   This is a SECURITY VULNERABILITY!
+
+   Generate secure key NOW:
+     openssl rand -base64 32
+
+   Then upgrade with:
+     helm upgrade {{ .Release.Name }} --set secrets.jwtMasterKey="<generated-key>"
+{{- end }}
+
+{{- if and (not (contains "PLACEHOLDER" .Values.secrets.databasePassword)) (not (contains "CHANGE_ME" .Values.secrets.databasePassword)) (not (contains "REPLACE" .Values.secrets.databasePassword)) }}
+✅ Database password: Custom value detected (good!)
+{{- end }}
+
+{{- if and (not (contains "PLACEHOLDER" .Values.secrets.redisPassword)) (not (contains "CHANGE_ME" .Values.secrets.redisPassword)) (not (contains "REPLACE" .Values.secrets.redisPassword)) }}
+✅ Redis password: Custom value detected (good!)
+{{- end }}
+
+{{- if and (not (contains "PLACEHOLDER" .Values.secrets.jwtMasterKey)) (not (contains "CHANGE_ME" .Values.secrets.jwtMasterKey)) (not (contains "REPLACE" .Values.secrets.jwtMasterKey)) }}
+✅ JWT master key: Custom value detected (good!)
 {{- end }}
 
 PRODUCTION SECURITY CHECKLIST:

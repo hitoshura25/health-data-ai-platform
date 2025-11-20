@@ -27,6 +27,11 @@ spec:
         app.kubernetes.io/component: tracing
         app.kubernetes.io/part-of: webauthn-stack
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+
       containers:
       - name: jaeger
         image: "{{ .Values.jaeger.image.repository }}:{{ .Values.jaeger.image.tag }}"
@@ -64,6 +69,15 @@ spec:
 
         resources:
           {{- toYaml .Values.jaeger.resources | nindent 10 }}
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          runAsUser: 10001
 
         livenessProbe:
           httpGet:
