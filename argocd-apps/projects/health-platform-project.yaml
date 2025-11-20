@@ -1,0 +1,68 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: health-platform
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Health Data AI Platform - All Services
+
+  # Source repositories
+  sourceRepos:
+    - 'https://github.com/hitoshura25/health-data-ai-platform'  # Update with your repo
+    - 'https://charts.bitnami.com/bitnami'
+    - 'https://prometheus-community.github.io/helm-charts'
+    - 'https://grafana.github.io/helm-charts'
+    - 'https://jaegertracing.github.io/helm-charts'
+
+  # Destination clusters and namespaces
+  destinations:
+    - namespace: 'health-platform-*'
+      server: https://kubernetes.default.svc
+    - namespace: 'health-api'
+      server: https://kubernetes.default.svc
+    - namespace: 'health-etl'
+      server: https://kubernetes.default.svc
+    - namespace: 'health-data'
+      server: https://kubernetes.default.svc
+    - namespace: 'webauthn'
+      server: https://kubernetes.default.svc
+    - namespace: 'observability'
+      server: https://kubernetes.default.svc
+
+  # Cluster resource whitelist
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+    - group: 'rbac.authorization.k8s.io'
+      kind: ClusterRole
+    - group: 'rbac.authorization.k8s.io'
+      kind: ClusterRoleBinding
+    - group: 'storage.k8s.io'
+      kind: StorageClass
+    - group: 'apiextensions.k8s.io'
+      kind: CustomResourceDefinition
+
+  # Namespace resource whitelist (allow all)
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+
+  # Roles for team access control
+  roles:
+    - name: developer
+      description: Developers with read-only access
+      policies:
+        - p, proj:health-platform:developer, applications, get, health-platform/*, allow
+        - p, proj:health-platform:developer, logs, get, health-platform/*, allow
+      groups:
+        - developers
+
+    - name: admin
+      description: Administrators with full access
+      policies:
+        - p, proj:health-platform:admin, applications, *, health-platform/*, allow
+        - p, proj:health-platform:admin, repositories, *, *, allow
+      groups:
+        - admins

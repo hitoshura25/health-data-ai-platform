@@ -1,0 +1,176 @@
+name: Helm Lint and Test
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'helm-charts/**'
+      - '.github/workflows/helm-lint-test.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'helm-charts/**'
+  workflow_dispatch:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Helm plugins
+        run: |
+          helm plugin install https://github.com/helm-unittest/helm-unittest.git --version v0.4.4
+
+      - name: Add Helm repositories
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo add grafana https://grafana.github.io/helm-charts
+          helm repo add jaegertracing https://jaegertracing.github.io/helm-charts
+          helm repo update
+
+      - name: Lint Health Platform umbrella chart
+        run: |
+          cd helm-charts/health-platform
+          helm dependency update
+          helm lint .
+
+      - name: Lint Infrastructure chart
+        run: |
+          cd helm-charts/health-platform/charts/infrastructure
+          helm dependency update
+          helm lint .
+
+      - name: Lint Health API chart
+        run: |
+          cd helm-charts/health-platform/charts/health-api
+          helm lint .
+
+      - name: Lint ETL Engine chart
+        run: |
+          cd helm-charts/health-platform/charts/etl-engine
+          helm lint .
+
+      - name: Lint WebAuthn Stack chart
+        run: |
+          cd helm-charts/health-platform/charts/webauthn-stack
+          helm lint .
+
+      - name: Lint Observability chart
+        run: |
+          cd helm-charts/health-platform/charts/observability
+          helm dependency update
+          helm lint .
+
+      - name: Run Helm unit tests - Health API
+        run: |
+          cd helm-charts/health-platform/charts/health-api
+          if [ -d "tests" ]; then
+            helm unittest .
+          else
+            echo "No tests found for health-api chart (expected - tests will be added)"
+          fi
+
+      - name: Run Helm unit tests - ETL Engine
+        run: |
+          cd helm-charts/health-platform/charts/etl-engine
+          if [ -d "tests" ]; then
+            helm unittest .
+          else
+            echo "No tests found for etl-engine chart (expected - tests will be added)"
+          fi
+
+      - name: Run Helm unit tests - Infrastructure
+        run: |
+          cd helm-charts/health-platform/charts/infrastructure
+          if [ -d "tests" ]; then
+            helm unittest .
+          else
+            echo "No tests found for infrastructure chart (expected - tests will be added)"
+          fi
+
+      - name: Template Health Platform chart with dev values
+        run: |
+          cd helm-charts/health-platform
+          helm template health-platform . \
+            --values values-dev.yaml \
+            --debug \
+            --output-dir /tmp/helm-output-dev || true
+
+      - name: Template Health Platform chart with production values
+        run: |
+          cd helm-charts/health-platform
+          helm template health-platform . \
+            --values values-production.yaml \
+            --debug \
+            --output-dir /tmp/helm-output-prod || true
+
+      - name: Validate Kubernetes manifests
+        run: |
+          # Install kubeval for manifest validation
+          wget https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz
+          tar xf kubeval-linux-amd64.tar.gz
+          sudo mv kubeval /usr/local/bin
+
+          # Validate all generated manifests
+          if [ -d "/tmp/helm-output-dev" ]; then
+            find /tmp/helm-output-dev -name '*.yaml' -type f -exec kubeval --strict {} \;
+          fi
+
+      - name: Check Helm chart versions
+        run: |
+          echo "Checking Helm chart versions..."
+          for chart in helm-charts/health-platform/charts/*/Chart.yaml; do
+            echo "Chart: $chart"
+            grep "^version:" $chart
+          done
+
+          echo ""
+          echo "Main chart:"
+          grep "^version:" helm-charts/health-platform/Chart.yaml
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+
+      - name: Install Helm plugins
+        run: |
+          helm plugin install https://github.com/helm-unittest/helm-unittest.git --version v0.4.4
+
+      - name: Scan for secrets in Helm charts
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./helm-charts
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+        continue-on-error: true
+
+      - name: Run Checkov on Helm charts
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: helm-charts/
+          framework: helm
+          quiet: true
+          soft_fail: true
+        continue-on-error: true

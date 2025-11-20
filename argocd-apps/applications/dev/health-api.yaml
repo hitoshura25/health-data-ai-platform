@@ -1,0 +1,39 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: health-api-dev
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    notifications.argoproj.io/subscribe.on-deployed.slack: deployments
+    notifications.argoproj.io/subscribe.on-health-degraded.slack: alerts
+spec:
+  project: health-platform
+
+  source:
+    repoURL: https://github.com/hitoshura25/health-data-ai-platform  # Update with your repo
+    targetRevision: main
+    path: helm-charts/health-platform/charts/health-api
+    helm:
+      valueFiles:
+        - ../../values-dev.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: health-platform-dev
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+
+  # Ignore HPA changes to replica count
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas

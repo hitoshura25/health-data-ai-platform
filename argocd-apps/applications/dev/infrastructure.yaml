@@ -1,0 +1,43 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: infrastructure-dev
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: health-platform
+
+  source:
+    repoURL: https://github.com/hitoshura25/health-data-ai-platform  # Update with your repo
+    targetRevision: main
+    path: helm-charts/health-platform/charts/infrastructure
+    helm:
+      valueFiles:
+        - ../../values-dev.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: health-platform-dev
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  # Health check configuration
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      jsonPointers:
+        - /spec/volumeClaimTemplates

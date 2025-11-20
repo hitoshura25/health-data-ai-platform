@@ -1,0 +1,128 @@
+# ArgoCD Helm Chart Values for Health Data AI Platform
+# This chart wraps the official ArgoCD Helm chart with platform-specific configuration
+
+argo-cd:
+  global:
+    domain: argocd.yourdomain.com  # Override in values-{env}.yaml
+
+  server:
+    replicas: 2
+
+    service:
+      type: LoadBalancer
+
+    ingress:
+      enabled: true
+      ingressClassName: nginx
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+        nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+        nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+      hosts:
+        - argocd.yourdomain.com
+      tls:
+        - secretName: argocd-server-tls
+          hosts:
+            - argocd.yourdomain.com
+
+    # Resource limits for server
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+
+    # Enable metrics
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+
+  repoServer:
+    replicas: 2
+
+    # Resource limits for repo server
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+
+  controller:
+    replicas: 1
+
+    # Resource limits for controller
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 500m
+        memory: 512Mi
+
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+
+  dex:
+    enabled: false  # Disable Dex for now, can enable for SSO later
+
+  redis:
+    enabled: true
+    resources:
+      limits:
+        cpu: 200m
+        memory: 128Mi
+      requests:
+        cpu: 100m
+        memory: 64Mi
+
+  # Application configuration
+  configs:
+    params:
+      server.insecure: false
+      # Enable anonymous access for health checks
+      server.disable.auth: false
+
+    # Repository credentials (configure via Kubernetes secrets)
+    repositories: {}
+
+    # Resource customizations
+    resource.customizations: |
+      health.lua: |
+        hs = {}
+        hs.status = "Progressing"
+        hs.message = ""
+        if obj.status ~= nil then
+          if obj.status.health ~= nil then
+            hs.status = obj.status.health.status
+            hs.message = obj.status.health.message
+          end
+        end
+        return hs
+
+  # Notifications controller (optional)
+  notifications:
+    enabled: true
+    argocdUrl: https://argocd.yourdomain.com
+
+  # ApplicationSet controller
+  applicationSet:
+    enabled: true
+    replicas: 1
+
+# Platform-specific application sets (defined in templates/)
+platformApps:
+  enabled: true
+  gitRepo: https://github.com/your-org/health-data-ai-platform
+  targetRevision: main
