@@ -1,0 +1,89 @@
+{{- if .Values.rbac.enabled }}
+{{- if .Values.rbac.monitoring.enabled }}
+---
+# ClusterRole for Prometheus to access ServiceMonitors and scrape metrics
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-monitoring
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+rules:
+# Allow Prometheus to read ServiceMonitors (custom resources)
+- apiGroups: ["monitoring.coreos.com"]
+  resources: ["servicemonitors", "podmonitors"]
+  verbs: ["get", "list", "watch"]
+# Allow Prometheus to discover services and endpoints
+- apiGroups: [""]
+  resources: ["services", "endpoints", "pods"]
+  verbs: ["get", "list", "watch"]
+# Allow Prometheus to read nodes for node exporter metrics
+- apiGroups: [""]
+  resources: ["nodes", "nodes/metrics"]
+  verbs: ["get", "list", "watch"]
+# Allow Prometheus to read ingresses for discovery
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "watch"]
+# Allow Prometheus to discover ConfigMaps for rule reload
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+---
+# ClusterRoleBinding for Prometheus ServiceAccount
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-monitoring
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus-monitoring
+subjects:
+- kind: ServiceAccount
+  name: prometheus-sa
+  namespace: {{ .Values.namespaces.observability }}
+---
+# ClusterRole for developers (read-only access)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: health-platform-developer
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+rules:
+# Read-only access to common resources
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "services", "configmaps", "events"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["monitoring.coreos.com"]
+  resources: ["servicemonitors", "podmonitors", "prometheusrules"]
+  verbs: ["get", "list", "watch"]
+---
+# ClusterRole for operators (full access to application resources)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: health-platform-operator
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+rules:
+# Full access to application namespaces
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+  # Note: In production, this should be restricted to specific namespaces
+  # using RoleBindings instead of ClusterRoleBindings
+{{- end }}
+{{- end }}

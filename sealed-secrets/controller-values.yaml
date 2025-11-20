@@ -1,0 +1,73 @@
+# Helm values for Sealed Secrets Controller
+# Use with: helm install sealed-secrets sealed-secrets/sealed-secrets -f controller-values.yaml
+
+# Controller configuration
+fullnameOverride: sealed-secrets-controller
+
+# Image configuration
+image:
+  repository: quay.io/bitnami/sealed-secrets-controller
+  tag: v0.24.5
+  pullPolicy: IfNotPresent
+
+# Resources
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# Security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  fsGroup: 65534
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1001
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8080
+
+# ServiceMonitor for Prometheus
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    namespace: health-observability
+    interval: 30s
+
+# Key prefix for encryption keys
+keyPrefix: sealed-secrets-key
+
+# Update CRD status
+updateStatus: true
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Affinity (run on different nodes if possible)
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - sealed-secrets
+        topologyKey: kubernetes.io/hostname

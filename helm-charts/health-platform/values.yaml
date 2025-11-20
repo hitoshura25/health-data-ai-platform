@@ -34,7 +34,38 @@ infrastructure:
   namespace: health-data
 
 # ==============================================================================
-# WebAuthn Stack (Module 3) - Not yet implemented
+# Security & RBAC (Module 6)
+# ==============================================================================
+security:
+  enabled: true
+
+  # NetworkPolicies configuration
+  networkPolicies:
+    enabled: true
+    defaultDenyAll: true
+    allowDNS: true
+
+  # Pod Security Standards
+  podSecurity:
+    enabled: true
+    levels:
+      api: restricted
+      etl: restricted
+      auth: restricted
+      data: baseline
+      observability: baseline
+
+  # RBAC configuration
+  rbac:
+    enabled: true
+    monitoring:
+      enabled: true
+
+  # All security values are defined in charts/security/values.yaml
+  # Override specific values here if needed for development
+
+# ==============================================================================
+# WebAuthn Stack (Module 3)
 # ==============================================================================
 webauthn-stack:
   enabled: false

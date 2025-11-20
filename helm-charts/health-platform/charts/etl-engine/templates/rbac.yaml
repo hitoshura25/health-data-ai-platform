@@ -1,0 +1,46 @@
+{{- if .Values.serviceAccount.create }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: etl-engine-role
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: etl-engine
+    app.kubernetes.io/name: etl-engine
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: etl
+rules:
+# Allow reading secrets and configmaps (least privilege)
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames: ["etl-engine-secrets"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["etl-engine-config"]
+  verbs: ["get"]
+# Allow reading own pod information for self-monitoring
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: etl-engine-rolebinding
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: etl-engine
+    app.kubernetes.io/name: etl-engine
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: etl
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: etl-engine-role
+subjects:
+- kind: ServiceAccount
+  name: {{ .Values.serviceAccount.name }}
+  namespace: {{ .Values.namespace }}
+{{- end }}

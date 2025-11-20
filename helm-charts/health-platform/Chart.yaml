@@ -28,26 +28,35 @@ dependencies:
     repository: file://./charts/infrastructure
     condition: infrastructure.enabled
 
-  # Future dependencies (to be added in later modules):
-  # - name: webauthn-stack
-  #   version: 1.0.0
-  #   repository: file://./charts/webauthn-stack
-  #   condition: webauthn-stack.enabled
-  #
-  # - name: health-api
-  #   version: 1.0.0
-  #   repository: file://./charts/health-api
-  #   condition: health-api.enabled
-  #
-  # - name: etl-engine
-  #   version: 1.0.0
-  #   repository: file://./charts/etl-engine
-  #   condition: etl-engine.enabled
-  #
-  # - name: observability
-  #   version: 1.0.0
-  #   repository: file://./charts/observability
-  #   condition: observability.enabled
+  # Security & RBAC (Module 6)
+  - name: security
+    version: 1.0.0
+    repository: file://./charts/security
+    condition: security.enabled
+
+  # WebAuthn Stack (Module 3)
+  - name: webauthn-stack
+    version: 1.0.0
+    repository: file://./charts/webauthn-stack
+    condition: webauthn-stack.enabled
+
+  # Health API Service (Module 4)
+  - name: health-api
+    version: 1.0.0
+    repository: file://./charts/health-api
+    condition: health-api.enabled
+
+  # ETL Narrative Engine (Module 4)
+  - name: etl-engine
+    version: 1.0.0
+    repository: file://./charts/etl-engine
+    condition: etl-engine.enabled
+
+  # Observability Stack (Module 5)
+  - name: observability
+    version: 1.0.0
+    repository: file://./charts/observability
+    condition: observability.enabled
 
 annotations:
   # Helm chart metadata

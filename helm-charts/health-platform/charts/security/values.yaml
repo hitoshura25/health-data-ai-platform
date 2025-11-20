@@ -1,0 +1,44 @@
+# Security & RBAC Configuration
+
+# Namespaces
+namespaces:
+  data: health-data
+  auth: health-auth
+  api: health-api
+  etl: health-etl
+  observability: health-observability
+  system: health-system
+
+# NetworkPolicies configuration
+networkPolicies:
+  enabled: true
+
+  # Default deny all traffic (baseline security)
+  defaultDenyAll: true
+
+  # Allow DNS for all namespaces
+  allowDNS: true
+
+# Pod Security Standards
+podSecurity:
+  enabled: true
+
+  # Enforcement levels per namespace
+  levels:
+    api: restricted
+    etl: restricted
+    auth: restricted
+    data: baseline  # Stateful services need some privileges
+    observability: baseline  # Prometheus/Grafana need some privileges
+
+# RBAC configuration
+rbac:
+  enabled: true
+
+  # ClusterRole for monitoring (Prometheus ServiceMonitor access)
+  monitoring:
+    enabled: true
+
+# Monitoring for security events
+monitoring:
+  enabled: true

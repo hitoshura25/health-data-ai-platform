@@ -1,0 +1,121 @@
+{{- if .Values.networkPolicies.enabled }}
+---
+# Health API - Allow ingress from Ingress controller and WebAuthn Gateway
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: health-api-netpol
+  namespace: {{ .Values.namespaces.api }}
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: health-api
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from Ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.system }}
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8000
+  # Allow from WebAuthn for health checks
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.auth }}
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  # Allow to PostgreSQL Health
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.data }}
+      podSelector:
+        matchLabels:
+          app: postgresql-health
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow to Redis Health
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.data }}
+      podSelector:
+        matchLabels:
+          app: redis-health
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow to MinIO
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.data }}
+      podSelector:
+        matchLabels:
+          app: minio
+    ports:
+    - protocol: TCP
+      port: 9000
+  # Allow to RabbitMQ
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.data }}
+      podSelector:
+        matchLabels:
+          app: rabbitmq
+    ports:
+    - protocol: TCP
+      port: 5672
+  # Allow to WebAuthn for JWT verification
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.auth }}
+      podSelector:
+        matchLabels:
+          app: webauthn-server
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow to Jaeger for tracing
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespaces.observability }}
+      podSelector:
+        matchLabels:
+          app: jaeger
+    ports:
+    - protocol: UDP
+      port: 6831
+    - protocol: TCP
+      port: 4317
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow HTTPS egress (for external APIs)
+  - ports:
+    - protocol: TCP
+      port: 443
+{{- end }}

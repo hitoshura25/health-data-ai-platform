@@ -1,0 +1,189 @@
+{{- if .Values.networkPolicies.enabled }}
+---
+# Default Deny All - health-data namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: {{ .Values.namespaces.data }}
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+# Default Deny All - health-auth namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: {{ .Values.namespaces.auth }}
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+# Default Deny All - health-api namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: {{ .Values.namespaces.api }}
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+# Default Deny All - health-etl namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: {{ .Values.namespaces.etl }}
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+# Default Deny All - health-observability namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: {{ .Values.namespaces.observability }}
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+{{- if .Values.networkPolicies.allowDNS }}
+# Allow DNS - health-data namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: {{ .Values.namespaces.data }}
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+---
+# Allow DNS - health-auth namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: {{ .Values.namespaces.auth }}
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+---
+# Allow DNS - health-api namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: {{ .Values.namespaces.api }}
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+---
+# Allow DNS - health-etl namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: {{ .Values.namespaces.etl }}
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+---
+# Allow DNS - health-observability namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: {{ .Values.namespaces.observability }}
+  labels:
+    {{- include "security.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+{{- end }}
+{{- end }}

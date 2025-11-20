@@ -1,0 +1,19 @@
+apiVersion: v2
+name: security
+description: Security & RBAC configuration for Health Data AI Platform
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+keywords:
+  - security
+  - rbac
+  - network-policies
+  - pod-security
+
+maintainers:
+  - name: Health Data AI Platform Team
+    email: hitoshura25@users.noreply.github.com
+
+annotations:
+  category: Security
