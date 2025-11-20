@@ -21,6 +21,9 @@ maintainers:
 
 dependencies:
   # kube-prometheus-stack provides Prometheus + Grafana + AlertManager
+  # Version 55.5.0 - Tested and validated with custom configurations (2025-01-20)
+  # Includes: Prometheus v2.48+, Grafana v10.2+, AlertManager
+  # Note: When upgrading, test ServiceMonitors and PrometheusRules compatibility
   - name: kube-prometheus-stack
     version: "55.5.0"
     repository: https://prometheus-community.github.io/helm-charts
@@ -28,6 +31,9 @@ dependencies:
     alias: kube-prometheus-stack
 
   # Loki stack for log aggregation
+  # Version 2.9.11 - Tested and validated with Promtail relabel_configs (2025-01-20)
+  # Includes: Loki v2.9+, Promtail DaemonSet
+  # Note: When upgrading, verify Promtail scrapeConfigs syntax compatibility
   - name: loki-stack
     version: "2.9.11"
     repository: https://grafana.github.io/helm-charts
