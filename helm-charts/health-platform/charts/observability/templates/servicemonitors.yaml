@@ -1,0 +1,245 @@
+{{- if .Values.prometheus.enabled }}
+# =============================================================================
+# ServiceMonitors for Health Platform Services
+# These CRDs enable Prometheus to auto-discover and scrape metrics endpoints
+# =============================================================================
+
+---
+# Health API Service Monitor
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: health-api
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "observability.labels" . | nindent 4 }}
+    app: health-api
+spec:
+  selector:
+    matchLabels:
+      app: health-api
+  namespaceSelector:
+    matchNames:
+      - health-api
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 15s
+    scrapeTimeout: 10s
+
+---
+# WebAuthn Server Service Monitor
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: webauthn-server
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "observability.labels" . | nindent 4 }}
+    app: webauthn-server
+spec:
+  selector:
+    matchLabels:
+      app: webauthn-server
+  namespaceSelector:
+    matchNames:
+      - health-auth
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 15s
+    scrapeTimeout: 10s
+
+---
+# ETL Narrative Engine Service Monitor
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: etl-engine
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "observability.labels" . | nindent 4 }}
+    app: etl-engine
+spec:
+  selector:
+    matchLabels:
+      app: etl-engine
+  namespaceSelector:
+    matchNames:
+      - health-etl
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 15s
+    scrapeTimeout: 10s
+
+---
+# PostgreSQL Health Data Service Monitor
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: postgresql-health
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "observability.labels" . | nindent 4 }}
+    app: postgresql
+    instance: health-data
+spec:
+  selector:
+    matchLabels:
+      app: postgresql
+      instance: health-data
+  namespaceSelector:
+    matchNames:
+      - health-data
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 15s
+    scrapeTimeout: 10s
+
+---
+# PostgreSQL WebAuthn Service Monitor
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: postgresql-auth
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "observability.labels" . | nindent 4 }}
+    app: postgresql
+    instance: webauthn-auth
+spec:
+  selector:
+    matchLabels:
+      app: postgresql
+      instance: webauthn-auth
+  namespaceSelector:
+    matchNames:
+      - health-auth
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 15s
+    scrapeTimeout: 10s
+
+---
+# Redis Health Data Service Monitor
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: redis-health
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "observability.labels" . | nindent 4 }}
+    app: redis
+    instance: health-data
+spec:
+  selector:
+    matchLabels:
+      app: redis
+      instance: health-data
+  namespaceSelector:
+    matchNames:
+      - health-data
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 15s
+    scrapeTimeout: 10s
+
+---
+# Redis WebAuthn Service Monitor
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: redis-auth
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "observability.labels" . | nindent 4 }}
+    app: redis
+    instance: webauthn-sessions
+spec:
+  selector:
+    matchLabels:
+      app: redis
+      instance: webauthn-sessions
+  namespaceSelector:
+    matchNames:
+      - health-auth
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 15s
+    scrapeTimeout: 10s
+
+---
+# MinIO Service Monitor
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: minio
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "observability.labels" . | nindent 4 }}
+    app: minio
+spec:
+  selector:
+    matchLabels:
+      app: minio
+  namespaceSelector:
+    matchNames:
+      - health-data
+  endpoints:
+  - port: http
+    path: /minio/v2/metrics/cluster
+    interval: 30s
+    scrapeTimeout: 10s
+
+---
+# RabbitMQ Service Monitor
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: rabbitmq
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "observability.labels" . | nindent 4 }}
+    app: rabbitmq
+spec:
+  selector:
+    matchLabels:
+      app: rabbitmq
+  namespaceSelector:
+    matchNames:
+      - health-data
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 15s
+    scrapeTimeout: 10s
+
+---
+# Jaeger Service Monitor
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: jaeger
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "observability.labels" . | nindent 4 }}
+    app: jaeger
+spec:
+  selector:
+    matchLabels:
+      app: jaeger
+      component: collector
+  namespaceSelector:
+    matchNames:
+      - health-observability
+  endpoints:
+  - port: admin
+    path: /metrics
+    interval: 15s
+    scrapeTimeout: 10s
+{{- end }}

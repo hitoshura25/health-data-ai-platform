@@ -1,0 +1,57 @@
+{{- if .Values.grafana.enabled }}
+---
+# ConfigMap for Health API Performance Dashboard
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-health-api-performance
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "observability.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  health-api-performance.json: |-
+{{ .Files.Get "dashboards/health-api-performance.json" | indent 4 }}
+
+---
+# ConfigMap for Infrastructure Health Dashboard
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-infrastructure-health
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "observability.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  infrastructure-health.json: |-
+{{ .Files.Get "dashboards/infrastructure-health.json" | indent 4 }}
+
+---
+# ConfigMap for Cost Monitoring Dashboard
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-cost-monitoring
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "observability.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  cost-monitoring.json: |-
+{{ .Files.Get "dashboards/cost-monitoring.json" | indent 4 }}
+
+---
+# ConfigMap for Kubernetes Cluster Overview Dashboard
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-k8s-cluster-overview
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "observability.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  kubernetes-cluster-overview.json: |-
+{{ .Files.Get "dashboards/kubernetes-cluster-overview.json" | indent 4 }}
+{{- end }}

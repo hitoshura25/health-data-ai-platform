@@ -1,0 +1,114 @@
+{{- if .Values.jaeger.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: jaeger
+    component: all-in-one
+    {{- include "observability.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.jaeger.replicas }}
+  selector:
+    matchLabels:
+      app: jaeger
+      component: all-in-one
+  template:
+    metadata:
+      labels:
+        app: jaeger
+        component: all-in-one
+        {{- include "observability.labels" . | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "14269"
+    spec:
+      securityContext:
+        {{- toYaml .Values.jaeger.securityContext | nindent 8 }}
+      containers:
+      - name: jaeger
+        image: "{{ .Values.jaeger.image.repository }}:{{ .Values.jaeger.image.tag }}"
+        imagePullPolicy: {{ .Values.jaeger.image.pullPolicy }}
+        ports:
+        # Jaeger compact thrift (UDP)
+        - containerPort: 6831
+          protocol: UDP
+          name: compact
+        # Jaeger binary thrift (UDP)
+        - containerPort: 6832
+          protocol: UDP
+          name: binary
+        # Jaeger config (HTTP)
+        - containerPort: 5778
+          protocol: TCP
+          name: config
+        # Jaeger UI (HTTP)
+        - containerPort: 16686
+          protocol: TCP
+          name: ui
+        # Jaeger collector gRPC
+        - containerPort: 14250
+          protocol: TCP
+          name: grpc
+        # Jaeger collector HTTP
+        - containerPort: 14268
+          protocol: TCP
+          name: http
+        # Jaeger admin port
+        - containerPort: 14269
+          protocol: TCP
+          name: admin
+        # OTLP gRPC receiver
+        - containerPort: 4317
+          protocol: TCP
+          name: otlp-grpc
+        # OTLP HTTP receiver
+        - containerPort: 4318
+          protocol: TCP
+          name: otlp-http
+        env:
+        # Enable OTLP receiver
+        - name: COLLECTOR_OTLP_ENABLED
+          value: "true"
+        # Storage type
+        - name: SPAN_STORAGE_TYPE
+          value: {{ .Values.jaeger.storageType }}
+        # Badger configuration
+        {{- if eq .Values.jaeger.storageType "badger" }}
+        - name: BADGER_EPHEMERAL
+          value: "false"
+        - name: BADGER_DIRECTORY_VALUE
+          value: /badger/data
+        - name: BADGER_DIRECTORY_KEY
+          value: /badger/key
+        {{- end }}
+        # Metrics backend
+        - name: METRICS_STORAGE_TYPE
+          value: prometheus
+        resources:
+          {{- toYaml .Values.jaeger.resources | nindent 10 }}
+        {{- if .Values.jaeger.storage.enabled }}
+        volumeMounts:
+        - name: badger-data
+          mountPath: /badger
+        {{- end }}
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 14269
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 14269
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      {{- if .Values.jaeger.storage.enabled }}
+      volumes:
+      - name: badger-data
+        persistentVolumeClaim:
+          claimName: jaeger-pvc
+      {{- end }}
+{{- end }}

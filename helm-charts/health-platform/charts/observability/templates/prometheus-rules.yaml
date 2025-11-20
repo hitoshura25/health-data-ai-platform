@@ -1,0 +1,398 @@
+{{- if .Values.prometheus.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: health-platform-alerts
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "observability.labels" . | nindent 4 }}
+    prometheus: kube-prometheus-stack
+spec:
+  groups:
+  # ============================================================================
+  # Health API Service Alerts
+  # ============================================================================
+  - name: health-api
+    interval: 30s
+    rules:
+    - alert: HealthAPIHighErrorRate
+      expr: |
+        rate(http_requests_total{job="health-api",status=~"5.."}[5m]) > 0.05
+      for: 5m
+      labels:
+        severity: critical
+        service: health-api
+        team: backend
+      annotations:
+        summary: "Health API experiencing high error rate"
+        description: "Health API error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+        runbook_url: "https://runbooks.example.com/health-api-high-error-rate"
+
+    - alert: HealthAPIHighLatency
+      expr: |
+        histogram_quantile(0.95,
+          rate(http_request_duration_seconds_bucket{job="health-api"}[5m])
+        ) > 1
+      for: 5m
+      labels:
+        severity: warning
+        service: health-api
+        team: backend
+      annotations:
+        summary: "Health API experiencing high latency"
+        description: "Health API p95 latency is {{ $value }}s (threshold: 1s)"
+        runbook_url: "https://runbooks.example.com/health-api-high-latency"
+
+    - alert: HealthAPIPodDown
+      expr: |
+        kube_deployment_status_replicas_available{namespace="health-api",deployment="health-api"} < 1
+      for: 1m
+      labels:
+        severity: critical
+        service: health-api
+        team: backend
+      annotations:
+        summary: "No Health API pods available"
+        description: "Health API has {{ $value }} available replicas (expected: >= 1)"
+
+    - alert: HealthAPIHighMemoryUsage
+      expr: |
+        container_memory_usage_bytes{namespace="health-api",pod=~"health-api-.*"}
+        /
+        container_spec_memory_limit_bytes{namespace="health-api",pod=~"health-api-.*"}
+        > 0.85
+      for: 5m
+      labels:
+        severity: warning
+        service: health-api
+        team: backend
+      annotations:
+        summary: "Health API pod high memory usage"
+        description: "Health API pod {{ $labels.pod }} memory usage is {{ $value | humanizePercentage }}"
+
+  # ============================================================================
+  # WebAuthn Service Alerts
+  # ============================================================================
+  - name: webauthn
+    interval: 30s
+    rules:
+    - alert: WebAuthnHighErrorRate
+      expr: |
+        rate(http_requests_total{job="webauthn-server",status=~"5.."}[5m]) > 0.05
+      for: 5m
+      labels:
+        severity: critical
+        service: webauthn
+        team: security
+      annotations:
+        summary: "WebAuthn service experiencing high error rate"
+        description: "WebAuthn error rate is {{ $value | humanizePercentage }}"
+
+    - alert: WebAuthnPodDown
+      expr: |
+        kube_deployment_status_replicas_available{namespace="health-auth",deployment="webauthn-server"} < 1
+      for: 1m
+      labels:
+        severity: critical
+        service: webauthn
+        team: security
+      annotations:
+        summary: "No WebAuthn pods available"
+        description: "WebAuthn has {{ $value }} available replicas"
+
+  # ============================================================================
+  # PostgreSQL Alerts
+  # ============================================================================
+  - name: postgresql
+    interval: 30s
+    rules:
+    - alert: PostgreSQLDown
+      expr: |
+        pg_up == 0
+      for: 1m
+      labels:
+        severity: critical
+        service: postgresql
+        team: infrastructure
+      annotations:
+        summary: "PostgreSQL database is down"
+        description: "PostgreSQL instance {{ $labels.instance }} is not responding"
+
+    - alert: PostgreSQLTooManyConnections
+      expr: |
+        sum by (instance) (pg_stat_activity_count)
+        /
+        sum by (instance) (pg_settings_max_connections)
+        > 0.8
+      for: 5m
+      labels:
+        severity: warning
+        service: postgresql
+        team: infrastructure
+      annotations:
+        summary: "PostgreSQL has too many connections"
+        description: "PostgreSQL {{ $labels.instance }} is using {{ $value | humanizePercentage }} of max connections"
+
+    - alert: PostgreSQLHighReplicationLag
+      expr: |
+        pg_replication_lag > 30
+      for: 5m
+      labels:
+        severity: warning
+        service: postgresql
+        team: infrastructure
+      annotations:
+        summary: "PostgreSQL replication lag is high"
+        description: "PostgreSQL replication lag is {{ $value }}s (threshold: 30s)"
+
+    - alert: PostgreSQLDeadlocks
+      expr: |
+        rate(pg_stat_database_deadlocks[5m]) > 0
+      for: 1m
+      labels:
+        severity: warning
+        service: postgresql
+        team: infrastructure
+      annotations:
+        summary: "PostgreSQL deadlocks detected"
+        description: "PostgreSQL database {{ $labels.datname }} has {{ $value }} deadlocks/sec"
+
+  # ============================================================================
+  # Redis Alerts
+  # ============================================================================
+  - name: redis
+    interval: 30s
+    rules:
+    - alert: RedisDown
+      expr: |
+        redis_up == 0
+      for: 1m
+      labels:
+        severity: critical
+        service: redis
+        team: infrastructure
+      annotations:
+        summary: "Redis instance is down"
+        description: "Redis instance {{ $labels.instance }} is not responding"
+
+    - alert: RedisHighMemoryUsage
+      expr: |
+        redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+      for: 5m
+      labels:
+        severity: warning
+        service: redis
+        team: infrastructure
+      annotations:
+        summary: "Redis high memory usage"
+        description: "Redis {{ $labels.instance }} memory usage is {{ $value | humanizePercentage }}"
+
+    - alert: RedisRejectedConnections
+      expr: |
+        rate(redis_rejected_connections_total[5m]) > 0
+      for: 1m
+      labels:
+        severity: warning
+        service: redis
+        team: infrastructure
+      annotations:
+        summary: "Redis rejecting connections"
+        description: "Redis {{ $labels.instance }} is rejecting {{ $value }} connections/sec"
+
+  # ============================================================================
+  # MinIO Alerts
+  # ============================================================================
+  - name: minio
+    interval: 30s
+    rules:
+    - alert: MinIODown
+      expr: |
+        minio_cluster_nodes_online == 0
+      for: 1m
+      labels:
+        severity: critical
+        service: minio
+        team: infrastructure
+      annotations:
+        summary: "MinIO is down"
+        description: "MinIO cluster has no online nodes"
+
+    - alert: MinIODiskOffline
+      expr: |
+        minio_cluster_disk_offline_total > 0
+      for: 5m
+      labels:
+        severity: critical
+        service: minio
+        team: infrastructure
+      annotations:
+        summary: "MinIO disk offline"
+        description: "MinIO has {{ $value }} offline disks"
+
+    - alert: MinIOHighStorage
+      expr: |
+        minio_cluster_capacity_usable_free_bytes
+        /
+        minio_cluster_capacity_usable_total_bytes
+        < 0.2
+      for: 5m
+      labels:
+        severity: warning
+        service: minio
+        team: infrastructure
+      annotations:
+        summary: "MinIO storage capacity low"
+        description: "MinIO has only {{ $value | humanizePercentage }} free storage remaining"
+
+  # ============================================================================
+  # RabbitMQ Alerts
+  # ============================================================================
+  - name: rabbitmq
+    interval: 30s
+    rules:
+    - alert: RabbitMQDown
+      expr: |
+        rabbitmq_up == 0
+      for: 1m
+      labels:
+        severity: critical
+        service: rabbitmq
+        team: infrastructure
+      annotations:
+        summary: "RabbitMQ is down"
+        description: "RabbitMQ instance {{ $labels.instance }} is not responding"
+
+    - alert: RabbitMQTooManyMessages
+      expr: |
+        rabbitmq_queue_messages > 1000
+      for: 10m
+      labels:
+        severity: warning
+        service: rabbitmq
+        team: infrastructure
+      annotations:
+        summary: "RabbitMQ queue has too many messages"
+        description: "RabbitMQ queue {{ $labels.queue }} has {{ $value }} messages (threshold: 1000)"
+
+    - alert: RabbitMQNoConsumers
+      expr: |
+        rabbitmq_queue_consumers == 0 and rabbitmq_queue_messages > 0
+      for: 5m
+      labels:
+        severity: warning
+        service: rabbitmq
+        team: infrastructure
+      annotations:
+        summary: "RabbitMQ queue has no consumers"
+        description: "RabbitMQ queue {{ $labels.queue }} has no consumers but has {{ $value }} messages"
+
+  # ============================================================================
+  # Kubernetes Infrastructure Alerts
+  # ============================================================================
+  - name: kubernetes-infrastructure
+    interval: 30s
+    rules:
+    - alert: KubernetesNodeNotReady
+      expr: |
+        kube_node_status_condition{condition="Ready",status="true"} == 0
+      for: 5m
+      labels:
+        severity: critical
+        service: kubernetes
+        team: infrastructure
+      annotations:
+        summary: "Kubernetes node is not ready"
+        description: "Node {{ $labels.node }} has been not ready for more than 5 minutes"
+
+    - alert: KubernetesPodCrashLooping
+      expr: |
+        rate(kube_pod_container_status_restarts_total[15m]) > 0.1
+      for: 5m
+      labels:
+        severity: warning
+        service: kubernetes
+        team: infrastructure
+      annotations:
+        summary: "Pod is crash looping"
+        description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is restarting {{ $value }} times per second"
+
+    - alert: KubernetesPersistentVolumeFillingUp
+      expr: |
+        (kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) > 0.8
+      for: 5m
+      labels:
+        severity: warning
+        service: kubernetes
+        team: infrastructure
+      annotations:
+        summary: "PersistentVolume is filling up"
+        description: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is {{ $value | humanizePercentage }} full"
+
+    - alert: KubernetesPersistentVolumeCritical
+      expr: |
+        (kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) > 0.9
+      for: 1m
+      labels:
+        severity: critical
+        service: kubernetes
+        team: infrastructure
+      annotations:
+        summary: "PersistentVolume critically full"
+        description: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is {{ $value | humanizePercentage }} full"
+
+    - alert: KubernetesNodeCPUHigh
+      expr: |
+        (1 - avg by (node) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 0.8
+      for: 10m
+      labels:
+        severity: warning
+        service: kubernetes
+        team: infrastructure
+      annotations:
+        summary: "Node CPU usage is high"
+        description: "Node {{ $labels.node }} CPU usage is {{ $value | humanizePercentage }}"
+
+    - alert: KubernetesNodeMemoryHigh
+      expr: |
+        (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.85
+      for: 10m
+      labels:
+        severity: warning
+        service: kubernetes
+        team: infrastructure
+      annotations:
+        summary: "Node memory usage is high"
+        description: "Node {{ $labels.node }} memory usage is {{ $value | humanizePercentage }}"
+
+  # ============================================================================
+  # ETL Narrative Engine Alerts
+  # ============================================================================
+  - name: etl-engine
+    interval: 30s
+    rules:
+    - alert: ETLEngineJobFailed
+      expr: |
+        rate(etl_job_failures_total[5m]) > 0
+      for: 1m
+      labels:
+        severity: warning
+        service: etl-engine
+        team: backend
+      annotations:
+        summary: "ETL job failures detected"
+        description: "ETL engine has {{ $value }} job failures per second"
+
+    - alert: ETLEngineHighProcessingTime
+      expr: |
+        histogram_quantile(0.95,
+          rate(etl_processing_duration_seconds_bucket[5m])
+        ) > 300
+      for: 5m
+      labels:
+        severity: warning
+        service: etl-engine
+        team: backend
+      annotations:
+        summary: "ETL processing time is high"
+        description: "ETL p95 processing time is {{ $value }}s (threshold: 300s)"
+{{- end }}
