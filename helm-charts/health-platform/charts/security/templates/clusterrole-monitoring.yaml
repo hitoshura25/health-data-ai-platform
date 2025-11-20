@@ -71,7 +71,15 @@ rules:
   resources: ["servicemonitors", "podmonitors", "prometheusrules"]
   verbs: ["get", "list", "watch"]
 ---
-# ClusterRole for operators (full access to application resources)
+# ClusterRole for operators (restricted to application resources)
+# IMPORTANT: This ClusterRole should be bound using RoleBindings (not ClusterRoleBindings)
+# to limit access to specific application namespaces only.
+#
+# Example binding to health-api namespace:
+#   kubectl create rolebinding operator-binding \
+#     --clusterrole=health-platform-operator \
+#     --user=operator@example.com \
+#     --namespace=health-api
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -79,11 +87,37 @@ metadata:
   labels:
     {{- include "security.labels" . | nindent 4 }}
 rules:
-# Full access to application namespaces
-- apiGroups: ["*"]
-  resources: ["*"]
+# Core resources
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "pods/exec", "services", "configmaps", "secrets", "persistentvolumeclaims", "events"]
   verbs: ["*"]
-  # Note: In production, this should be restricted to specific namespaces
-  # using RoleBindings instead of ClusterRoleBindings
+# Apps resources
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+  verbs: ["*"]
+# Batch resources
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["*"]
+# Networking resources
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["*"]
+# Autoscaling resources
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["*"]
+# Policy resources
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
+  verbs: ["*"]
+# Monitoring resources
+- apiGroups: ["monitoring.coreos.com"]
+  resources: ["servicemonitors", "podmonitors", "prometheusrules"]
+  verbs: ["*"]
+# RBAC resources (view only for security)
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings"]
+  verbs: ["get", "list", "watch"]
 {{- end }}
 {{- end }}

@@ -15,23 +15,12 @@
 #     --values controller-values.yaml
 
 ---
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: sealed-secrets-system
-  labels:
-    name: sealed-secrets-system
-    pod-security.kubernetes.io/enforce: privileged
-    pod-security.kubernetes.io/audit: privileged
-    pod-security.kubernetes.io/warn: privileged
-
----
 # ServiceAccount for Sealed Secrets Controller
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: sealed-secrets-controller
-  namespace: sealed-secrets-system
+  namespace: kube-system
   labels:
     app.kubernetes.io/name: sealed-secrets
     app.kubernetes.io/instance: sealed-secrets
@@ -78,7 +67,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: sealed-secrets-controller
-  namespace: sealed-secrets-system
+  namespace: kube-system
 
 ---
 # Role for reading sealed-secrets-key secret
@@ -86,7 +75,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: sealed-secrets-key-admin
-  namespace: sealed-secrets-system
+  namespace: kube-system
   labels:
     app.kubernetes.io/name: sealed-secrets
     app.kubernetes.io/instance: sealed-secrets
@@ -102,7 +91,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: sealed-secrets-key-admin
-  namespace: sealed-secrets-system
+  namespace: kube-system
   labels:
     app.kubernetes.io/name: sealed-secrets
     app.kubernetes.io/instance: sealed-secrets
@@ -114,7 +103,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: sealed-secrets-controller
-  namespace: sealed-secrets-system
+  namespace: kube-system
 
 ---
 # Service for Sealed Secrets Controller
@@ -122,7 +111,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: sealed-secrets-controller
-  namespace: sealed-secrets-system
+  namespace: kube-system
   labels:
     app.kubernetes.io/name: sealed-secrets
     app.kubernetes.io/instance: sealed-secrets
@@ -144,7 +133,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: sealed-secrets-controller
-  namespace: sealed-secrets-system
+  namespace: kube-system
   labels:
     app.kubernetes.io/name: sealed-secrets
     app.kubernetes.io/instance: sealed-secrets
