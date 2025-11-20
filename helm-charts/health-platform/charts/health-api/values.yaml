@@ -78,7 +78,8 @@ webauthn:
 # Jaeger tracing
 jaeger:
   enabled: true
-  otlpEndpoint: http://jaeger-collector.health-observability.svc.cluster.local:4319
+  # Standard OTLP gRPC port (4317), not Docker Compose host-mapped port (4319)
+  otlpEndpoint: http://jaeger-collector.health-observability.svc.cluster.local:4317
   serviceName: health-api-service
 
 # Application settings

@@ -15,7 +15,8 @@ data:
   DATABASE_USER: {{ .Values.database.user | quote }}
 
   # MinIO configuration
-  S3_ENDPOINT: {{ .Values.minio.endpoint | quote }}
+  S3_HOST: {{ .Values.minio.host | quote }}
+  S3_PORT: {{ .Values.minio.port | quote }}
   S3_BUCKET_NAME: {{ .Values.minio.bucket | quote }}
   S3_PROCESSED_BUCKET: {{ .Values.minio.processedBucket | quote }}
 

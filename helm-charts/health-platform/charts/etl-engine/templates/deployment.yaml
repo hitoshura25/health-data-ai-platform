@@ -65,7 +65,7 @@ spec:
 
       - name: wait-for-minio
         image: busybox:1.36
-        command: ['sh', '-c', 'until nc -z {{ regexSplit ":" .Values.minio.endpoint -1 | first }} {{ regexSplit ":" .Values.minio.endpoint -1 | last }}; do echo "Waiting for MinIO..."; sleep 2; done']
+        command: ['sh', '-c', 'until nc -z {{ .Values.minio.host }} {{ .Values.minio.port }}; do echo "Waiting for MinIO..."; sleep 2; done']
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -99,7 +99,7 @@ spec:
 
         # MinIO (S3) configuration
         - name: ETL_S3_ENDPOINT_URL
-          value: "http://{{ .Values.minio.endpoint }}"
+          value: "http://{{ .Values.minio.host }}:{{ .Values.minio.port }}"
         - name: ETL_S3_BUCKET_NAME
           value: {{ .Values.minio.bucket | quote }}
         - name: ETL_S3_PROCESSED_BUCKET

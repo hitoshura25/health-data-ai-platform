@@ -36,7 +36,8 @@ database:
 
 # Production MinIO configuration
 minio:
-  endpoint: minio.health-data.svc.cluster.local:9000
+  host: minio.health-data.svc.cluster.local
+  port: 9000
   bucket: health-data
   processedBucket: processed-data
 
@@ -50,7 +51,8 @@ rabbitmq:
 # Production Jaeger tracing
 jaeger:
   enabled: true
-  otlpEndpoint: http://jaeger-collector.health-observability.svc.cluster.local:4319
+  # Standard OTLP gRPC port (4317), not Docker Compose host-mapped port (4319)
+  otlpEndpoint: http://jaeger-collector.health-observability.svc.cluster.local:4317
   serviceName: etl-narrative-engine
 
 # Production ETL configuration
