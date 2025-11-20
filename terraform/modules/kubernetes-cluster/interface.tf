@@ -31,15 +31,12 @@ variable "kubernetes_version" {
 }
 
 variable "node_pools" {
-  description = "Node pool configurations"
+  description = "Node pool configurations (fixed size)"
   type = list(object({
     name       = string
     ocpu_count = number
     memory_gb  = number
     node_count = number
-    auto_scale = bool
-    min_nodes  = number
-    max_nodes  = number
   }))
 }
 

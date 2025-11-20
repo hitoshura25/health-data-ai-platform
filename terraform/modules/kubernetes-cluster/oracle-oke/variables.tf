@@ -38,15 +38,12 @@ variable "service_cidr" {
 }
 
 variable "node_pools" {
-  description = "Node pool configurations"
+  description = "Node pool configurations (fixed size for Always Free tier)"
   type = list(object({
     name       = string
     ocpu_count = number
     memory_gb  = number
     node_count = number
-    auto_scale = bool
-    min_nodes  = number
-    max_nodes  = number
   }))
   default = [
     {
@@ -54,20 +51,24 @@ variable "node_pools" {
       ocpu_count = 2
       memory_gb  = 12
       node_count = 1
-      auto_scale = false
-      min_nodes  = 1
-      max_nodes  = 1
     },
     {
       name       = "app-pool"
       ocpu_count = 1
       memory_gb  = 6
       node_count = 2
-      auto_scale = false
-      min_nodes  = 2
-      max_nodes  = 2
     }
   ]
+
+  validation {
+    condition = sum([for pool in var.node_pools : pool.ocpu_count * pool.node_count]) <= 4
+    error_message = "Total OCPUs across all node pools cannot exceed 4 (Always Free tier limit)"
+  }
+
+  validation {
+    condition = sum([for pool in var.node_pools : pool.memory_gb * pool.node_count]) <= 24
+    error_message = "Total memory across all node pools cannot exceed 24 GB (Always Free tier limit)"
+  }
 }
 
 variable "cluster_type" {

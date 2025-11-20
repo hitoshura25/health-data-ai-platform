@@ -77,15 +77,12 @@ variable "service_cidr" {
 
 # Node Pool Configuration
 variable "node_pools" {
-  description = "Node pool configurations"
+  description = "Node pool configurations (fixed size for Always Free tier)"
   type = list(object({
     name       = string
     ocpu_count = number
     memory_gb  = number
     node_count = number
-    auto_scale = bool
-    min_nodes  = number
-    max_nodes  = number
   }))
   default = [
     {
@@ -93,18 +90,12 @@ variable "node_pools" {
       ocpu_count = 2
       memory_gb  = 12
       node_count = 1
-      auto_scale = false
-      min_nodes  = 1
-      max_nodes  = 1
     },
     {
       name       = "app-pool"
       ocpu_count = 1
       memory_gb  = 6
       node_count = 2
-      auto_scale = false
-      min_nodes  = 2
-      max_nodes  = 2
     }
   ]
 }

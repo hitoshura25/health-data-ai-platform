@@ -37,27 +37,25 @@ service_cidr = "10.96.0.0/16"
 # =============================================================================
 # Node Pools (Always Free: 4 OCPU, 24 GB RAM total)
 # =============================================================================
-# Configuration for 3 ARM nodes:
+# Configuration for 3 ARM nodes (fixed size, no autoscaling):
 # - 1x system-pool: 2 OCPU, 12 GB RAM (monitoring, ingress, system services)
 # - 2x app-pool: 1 OCPU, 6 GB RAM each (application workloads)
+#
+# NOTE: Total resources are validated automatically:
+#   - Max 4 OCPUs total (2*1 + 1*2 = 4 ✓)
+#   - Max 24 GB RAM total (12*1 + 6*2 = 24 ✓)
 node_pools = [
   {
     name       = "system-pool"
     ocpu_count = 2
     memory_gb  = 12
     node_count = 1
-    auto_scale = false
-    min_nodes  = 1
-    max_nodes  = 1
   },
   {
     name       = "app-pool"
     ocpu_count = 1
     memory_gb  = 6
     node_count = 2
-    auto_scale = false
-    min_nodes  = 2
-    max_nodes  = 2
   }
 ]
 
