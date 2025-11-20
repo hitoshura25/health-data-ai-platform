@@ -1,0 +1,123 @@
+# Production values for ETL Narrative Engine
+# Override default values for production deployment on Oracle Kubernetes Engine (OKE)
+
+namespace: health-etl
+
+replicaCount: 1  # Start with 1, scale based on queue depth
+
+image:
+  repository: ghcr.io/your-org/etl-narrative-engine
+  tag: "v1.0.0"  # Use specific version tags in production
+  pullPolicy: IfNotPresent
+
+# Production autoscaling
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Oracle OKE Always Free tier optimized resources
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 700m   # Lower limits for Always Free tier
+    memory: 2Gi  # Higher memory for AI model inference
+
+# Production database configuration
+database:
+  host: postgresql-health.health-data.svc.cluster.local
+  port: 5432
+  name: healthdb
+  user: healthapi
+
+# Production MinIO configuration
+minio:
+  host: minio.health-data.svc.cluster.local
+  port: 9000
+  bucket: health-data
+  processedBucket: processed-data
+
+# Production RabbitMQ configuration
+rabbitmq:
+  host: rabbitmq.health-data.svc.cluster.local
+  port: 5672
+  queue: health-data-processing
+  prefetchCount: 1  # Conservative for resource-constrained environment
+
+# Production Jaeger tracing
+jaeger:
+  enabled: true
+  # Standard OTLP gRPC port (4317), not Docker Compose host-mapped port (4319)
+  otlpEndpoint: http://jaeger-collector.health-observability.svc.cluster.local:4317
+  serviceName: etl-narrative-engine
+
+# Production ETL configuration
+etl:
+  logLevel: INFO
+  enableMetrics: true
+  deduplicationStore: sqlite
+  deduplicationDbPath: /data/etl_processed_messages.db
+
+# Production AI Model configuration
+aiModel:
+  modelPath: /models/clinical-narrative
+  cachePath: /app/.cache/huggingface
+  maxTokens: 2048
+  temperature: 0.7
+
+# Production secrets (use Sealed Secrets or External Secrets Operator)
+# DO NOT commit actual secrets to Git!
+secrets:
+  database:
+    password: ""  # Set via sealed-secrets
+  minio:
+    accessKey: ""  # Set via sealed-secrets
+    secretKey: ""  # Set via sealed-secrets
+  rabbitmq:
+    user: "user"
+    password: ""  # Set via sealed-secrets
+
+# Pod annotations for production monitoring
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8004"
+  prometheus.io/path: "/metrics"
+
+# Production security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+# Node selector for ARM-based nodes (Oracle Always Free tier)
+nodeSelector:
+  kubernetes.io/arch: arm64
+
+# Tolerations for spot instances or specific node taints
+tolerations: []
+
+# Anti-affinity (not as critical for single replica, but useful during updates)
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app
+            operator: In
+            values:
+            - etl-engine
+        topologyKey: kubernetes.io/hostname
+
+# Persistent volume for deduplication database
+persistence:
+  enabled: true
+  storageClass: "oci-bv"  # Oracle Cloud Block Volume
+  accessMode: ReadWriteOnce
+  size: 1Gi
+  mountPath: /data

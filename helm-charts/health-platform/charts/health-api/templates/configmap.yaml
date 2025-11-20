@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: health-api-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: health-api
+    app.kubernetes.io/name: health-api
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  # Database configuration
+  DATABASE_HOST: {{ .Values.database.host | quote }}
+  DATABASE_PORT: {{ .Values.database.port | quote }}
+  DATABASE_NAME: {{ .Values.database.name | quote }}
+  DATABASE_USER: {{ .Values.database.user | quote }}
+
+  # Redis configuration
+  REDIS_HOST: {{ .Values.redis.host | quote }}
+  REDIS_PORT: {{ .Values.redis.port | quote }}
+
+  # MinIO configuration
+  S3_ENDPOINT: {{ .Values.minio.endpoint | quote }}
+  S3_BUCKET_NAME: {{ .Values.minio.bucket | quote }}
+
+  # RabbitMQ configuration
+  RABBITMQ_HOST: {{ .Values.rabbitmq.host | quote }}
+  RABBITMQ_PORT: {{ .Values.rabbitmq.port | quote }}
+  RABBITMQ_EXCHANGE: {{ .Values.rabbitmq.exchange | quote }}
+  RABBITMQ_ROUTING_KEY: {{ .Values.rabbitmq.routingKey | quote }}
+
+  # WebAuthn configuration
+  WEBAUTHN_JWKS_URL: {{ .Values.webauthn.jwksUrl | quote }}
+  WEBAUTHN_ISSUER: {{ .Values.webauthn.issuer | quote }}
+
+  # Jaeger configuration
+  {{- if .Values.jaeger.enabled }}
+  JAEGER_OTLP_ENDPOINT: {{ .Values.jaeger.otlpEndpoint | quote }}
+  JAEGER_SERVICE_NAME: {{ .Values.jaeger.serviceName | quote }}
+  {{- end }}
+
+  # Application configuration
+  UPLOAD_RATE_LIMIT: {{ .Values.app.uploadRateLimit | quote }}
+  MAX_FILE_SIZE_MB: {{ .Values.app.maxUploadSizeMB | quote }}
+  SSO_USER_EMAIL_DOMAIN: {{ .Values.app.ssoUserEmailDomain | quote }}

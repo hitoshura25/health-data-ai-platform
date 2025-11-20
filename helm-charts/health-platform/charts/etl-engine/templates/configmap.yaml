@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: etl-engine-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: etl-engine
+    app.kubernetes.io/name: etl-engine
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  # Database configuration
+  DATABASE_HOST: {{ .Values.database.host | quote }}
+  DATABASE_PORT: {{ .Values.database.port | quote }}
+  DATABASE_NAME: {{ .Values.database.name | quote }}
+  DATABASE_USER: {{ .Values.database.user | quote }}
+
+  # MinIO configuration
+  S3_HOST: {{ .Values.minio.host | quote }}
+  S3_PORT: {{ .Values.minio.port | quote }}
+  S3_BUCKET_NAME: {{ .Values.minio.bucket | quote }}
+  S3_PROCESSED_BUCKET: {{ .Values.minio.processedBucket | quote }}
+
+  # RabbitMQ configuration
+  RABBITMQ_HOST: {{ .Values.rabbitmq.host | quote }}
+  RABBITMQ_PORT: {{ .Values.rabbitmq.port | quote }}
+  RABBITMQ_QUEUE: {{ .Values.rabbitmq.queue | quote }}
+  RABBITMQ_PREFETCH_COUNT: {{ .Values.rabbitmq.prefetchCount | quote }}
+
+  # Jaeger configuration
+  {{- if .Values.jaeger.enabled }}
+  JAEGER_OTLP_ENDPOINT: {{ .Values.jaeger.otlpEndpoint | quote }}
+  JAEGER_SERVICE_NAME: {{ .Values.jaeger.serviceName | quote }}
+  {{- end }}
+
+  # ETL configuration
+  ETL_LOG_LEVEL: {{ .Values.etl.logLevel | quote }}
+  ETL_ENABLE_METRICS: {{ .Values.etl.enableMetrics | quote }}
+  ETL_METRICS_PORT: {{ .Values.service.metricsPort | quote }}
+  ETL_DEDUPLICATION_STORE: {{ .Values.etl.deduplicationStore | quote }}
+  ETL_DEDUPLICATION_DB_PATH: {{ .Values.etl.deduplicationDbPath | quote }}
+
+  # AI Model configuration
+  MODEL_PATH: {{ .Values.aiModel.modelPath | quote }}
+  TRANSFORMERS_CACHE: {{ .Values.aiModel.cachePath | quote }}
+  MODEL_MAX_TOKENS: {{ .Values.aiModel.maxTokens | quote }}
+  MODEL_TEMPERATURE: {{ .Values.aiModel.temperature | quote }}

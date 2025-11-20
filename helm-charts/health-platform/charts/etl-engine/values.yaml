@@ -1,0 +1,120 @@
+namespace: health-etl
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/your-org/etl-narrative-engine
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8002
+  # ETL Engine exposes metrics on port 8004
+  metricsPort: 8004
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 2000m  # Higher for AI model processing
+    memory: 2Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Database (same as health-api)
+database:
+  host: postgresql-health.health-data.svc.cluster.local
+  port: 5432
+  name: healthdb
+  user: healthapi
+  # Password from secret
+
+# MinIO
+minio:
+  host: minio.health-data.svc.cluster.local
+  port: 9000
+  bucket: health-data
+  processedBucket: processed-data
+  # Credentials from secret
+
+# RabbitMQ (consumer)
+rabbitmq:
+  host: rabbitmq.health-data.svc.cluster.local
+  port: 5672
+  queue: health-data-processing
+  prefetchCount: 1  # Process one message at a time
+  # Credentials from secret
+
+# Jaeger tracing
+jaeger:
+  enabled: true
+  # Standard OTLP gRPC port (4317), not Docker Compose host-mapped port (4319)
+  otlpEndpoint: http://jaeger-collector.health-observability.svc.cluster.local:4317
+  serviceName: etl-narrative-engine
+
+# ETL Engine configuration
+etl:
+  logLevel: INFO
+  enableMetrics: true
+  deduplicationStore: sqlite
+  deduplicationDbPath: /data/etl_processed_messages.db
+
+# AI Model configuration
+aiModel:
+  modelPath: /models/clinical-narrative
+  cachePath: /app/.cache/huggingface
+  maxTokens: 2048
+  temperature: 0.7
+
+# Secrets (use Sealed Secrets in production)
+secrets:
+  database:
+    password: "CHANGE_ME"
+  minio:
+    accessKey: "CHANGE_ME"
+    secretKey: "CHANGE_ME"
+  rabbitmq:
+    user: "user"
+    password: "CHANGE_ME"
+
+# Service Account
+serviceAccount:
+  create: true
+  name: etl-engine-sa
+  annotations: {}
+
+# Pod annotations
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8004"
+  prometheus.io/path: "/metrics"
+
+# Security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
+
+# Persistent volume for deduplication database
+persistence:
+  enabled: true
+  storageClass: "oci-bv"  # Oracle Cloud Block Volume
+  accessMode: ReadWriteOnce
+  size: 1Gi
+  mountPath: /data

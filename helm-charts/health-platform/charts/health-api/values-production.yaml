@@ -1,0 +1,137 @@
+# Production values for Health API
+# Override default values for production deployment on Oracle Kubernetes Engine (OKE)
+
+namespace: health-api
+
+replicaCount: 3  # Higher replica count for production
+
+image:
+  repository: ghcr.io/your-org/health-api
+  tag: "v1.0.0"  # Use specific version tags in production
+  pullPolicy: IfNotPresent
+
+# Production ingress with real domain
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+  host: api.healthdata.example.com  # Replace with actual domain
+  tls:
+    enabled: true
+    secretName: health-api-tls-prod
+
+# Production autoscaling
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Oracle OKE Always Free tier optimized resources
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 500m   # Lower limits for Always Free tier
+    memory: 512Mi
+
+# Production database configuration
+database:
+  host: postgresql-health.health-data.svc.cluster.local
+  port: 5432
+  name: healthdb
+  user: healthapi
+
+# Production Redis configuration
+redis:
+  host: redis-health.health-data.svc.cluster.local
+  port: 6379
+
+# Production MinIO configuration
+minio:
+  endpoint: minio.health-data.svc.cluster.local:9000
+  bucket: health-data
+
+# Production RabbitMQ configuration
+rabbitmq:
+  host: rabbitmq.health-data.svc.cluster.local
+  port: 5672
+  exchange: health-data-upload
+  routingKey: raw-data
+
+# Production WebAuthn configuration
+webauthn:
+  jwksUrl: http://webauthn-server.health-auth.svc.cluster.local:8080/.well-known/jwks.json
+  issuer: mpo-webauthn
+  jwksCacheLifespan: 300
+
+# Production Jaeger tracing
+jaeger:
+  enabled: true
+  # Standard OTLP gRPC port (4317), not Docker Compose host-mapped port (4319)
+  otlpEndpoint: http://jaeger-collector.health-observability.svc.cluster.local:4317
+  serviceName: health-api-service
+
+# Production application settings
+app:
+  logLevel: INFO
+  workers: 4
+  maxUploadSizeMB: 50
+  uploadRateLimit: "10/minute"
+  allowedOrigins: "https://app.healthdata.example.com"  # Replace with actual domain
+  ssoUserEmailDomain: "healthdata.example.com"  # Replace with actual domain
+
+# Production secrets (use Sealed Secrets or External Secrets Operator)
+# DO NOT commit actual secrets to Git!
+secrets:
+  # These should be replaced with SealedSecrets in production
+  secretKey: ""  # Set via sealed-secrets
+  database:
+    password: ""  # Set via sealed-secrets
+  redis:
+    password: ""  # Set via sealed-secrets
+  minio:
+    accessKey: ""  # Set via sealed-secrets
+    secretKey: ""  # Set via sealed-secrets
+  rabbitmq:
+    password: ""  # Set via sealed-secrets
+
+# Pod annotations for production monitoring
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8001"
+  prometheus.io/path: "/metrics"
+
+# Production security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+# Node selector for ARM-based nodes (Oracle Always Free tier)
+nodeSelector:
+  kubernetes.io/arch: arm64
+
+# Tolerations for spot instances or specific node taints
+tolerations: []
+
+# Anti-affinity to spread pods across nodes
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app
+            operator: In
+            values:
+            - health-api
+        topologyKey: kubernetes.io/hostname
