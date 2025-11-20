@@ -1,0 +1,40 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: webauthn-server-pdb
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: webauthn-server
+    app.kubernetes.io/name: webauthn-server
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: authentication
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      app: webauthn-server
+      app.kubernetes.io/name: webauthn-server
+      app.kubernetes.io/instance: {{ .Release.Name }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: envoy-gateway-pdb
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: envoy-gateway
+    app.kubernetes.io/name: envoy-gateway
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      app: envoy-gateway
+      app.kubernetes.io/name: envoy-gateway
+      app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}

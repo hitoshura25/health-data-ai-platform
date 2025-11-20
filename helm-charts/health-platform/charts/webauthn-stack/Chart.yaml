@@ -1,0 +1,16 @@
+apiVersion: v2
+name: webauthn-stack
+description: WebAuthn authentication stack (FIDO2 + Envoy Gateway + Jaeger)
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - webauthn
+  - authentication
+  - fido2
+  - passkeys
+  - envoy
+  - zero-trust
+maintainers:
+  - name: Health Data AI Platform Team
+    email: contact@health-platform.example.com

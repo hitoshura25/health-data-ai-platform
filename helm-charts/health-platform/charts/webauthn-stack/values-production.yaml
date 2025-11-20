@@ -1,0 +1,173 @@
+# Production values for webauthn-stack
+# Override base values.yaml for production deployment
+
+# Update these values for your production environment
+namespace: health-auth
+
+# WebAuthn Server - Production Configuration
+webauthn:
+  enabled: true
+  replicaCount: 2
+
+  image:
+    repository: hitoshura25/webauthn-server
+    tag: "latest"  # Update to specific version tag in production (e.g., "v1.0.0")
+    pullPolicy: IfNotPresent
+
+  # Production domain configuration
+  config:
+    # REQUIRED: Update these for your production domain
+    relyingPartyId: "auth.yourdomain.com"
+    relyingPartyName: "Health Data AI Platform"
+    relyingPartyOrigin: "https://auth.yourdomain.com"
+
+    # Production JWT key rotation settings
+    jwtKeyRotationEnabled: "true"
+    jwtKeyRotationInterval: "180d"  # 6 months
+    jwtKeyGracePeriod: "1h"
+    jwtKeyRetention: "1h"
+    jwtKeySize: "2048"
+    jwtKeyIdPrefix: "webauthn-prod"
+
+  # Production resource limits (Oracle Always Free tier)
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+  # Production health check settings
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 60
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# Envoy Gateway - Production Configuration
+envoy:
+  enabled: true
+  replicaCount: 2
+
+  config:
+    # Production JWKS cache (5 minutes)
+    jwksCacheDuration: 300
+    # REQUIRED: Update for your production domain
+    jwtIssuer: "https://auth.yourdomain.com"
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# Jaeger - Disable in production (use Module 5 observability stack)
+jaeger:
+  enabled: false  # Set to true if Module 5 is not deployed yet
+
+# Ingress - Production Configuration
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Production security headers (using standard nginx directives)
+    nginx.ingress.kubernetes.io/server-snippet: |
+      add_header X-Frame-Options "DENY" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header X-XSS-Protection "1; mode=block" always;
+      add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+  # REQUIRED: Update to your production domain
+  host: auth.yourdomain.com
+
+  tls:
+    enabled: true
+    secretName: webauthn-tls
+
+# Autoscaling - Production Settings
+autoscaling:
+  enabled: true
+
+  webauthn:
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  envoy:
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+
+# CRITICAL: Production Secrets
+# ⚠️  NEVER commit actual secrets to Git!
+#
+# Use one of these methods:
+# 1. Sealed Secrets (recommended for GitOps)
+# 2. External Secrets Operator with OCI Vault
+# 3. Pass via Helm --set flags at install time
+#
+# Example: helm install --set secrets.databasePassword="$(openssl rand -base64 32)"
+#
+secrets:
+  # Generate strong passwords with: openssl rand -base64 32
+  # Then pass via --set flag or environment variable substitution
+  databasePassword: "REPLACE_WITH_ACTUAL_PASSWORD"
+  redisPassword: "REPLACE_WITH_ACTUAL_PASSWORD"
+  jwtMasterKey: "REPLACE_WITH_ACTUAL_BASE64_KEY"
+
+# ServiceMonitor - Enable ONLY after Prometheus Operator is installed (Module 5)
+# WARNING: Enabling this before Prometheus Operator is installed will cause deployment failures
+serviceMonitor:
+  enabled: false  # Set to true AFTER Module 5 is deployed
+  interval: 30s
+  scrapeTimeout: 10s
+
+# Pod Disruption Budget - Ensure availability during updates
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Production node affinity (Oracle Always Free ARM nodes)
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      preference:
+        matchExpressions:
+        - key: kubernetes.io/arch
+          operator: In
+          values:
+          - arm64
+          - amd64
+
+# Tolerations for Oracle Always Free tier
+tolerations: []
+
+# Node selector for multi-architecture support
+nodeSelector: {}
+
+# Production pod annotations
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/metrics"

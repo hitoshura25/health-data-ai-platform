@@ -1,0 +1,170 @@
+{{- if .Values.webauthn.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webauthn-server
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: webauthn-server
+    app.kubernetes.io/name: webauthn-server
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: authentication
+    app.kubernetes.io/part-of: webauthn-stack
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.webauthn.replicaCount }}
+  selector:
+    matchLabels:
+      app: webauthn-server
+      app.kubernetes.io/name: webauthn-server
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: webauthn-server
+        app.kubernetes.io/name: webauthn-server
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: authentication
+        app.kubernetes.io/part-of: webauthn-stack
+      annotations:
+        {{- toYaml .Values.podAnnotations | nindent 8 }}
+        checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: webauthn-sa
+      securityContext:
+        {{- toYaml .Values.webauthn.securityContext | nindent 8 }}
+
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      containers:
+      - name: webauthn-server
+        image: "{{ .Values.webauthn.image.repository }}:{{ .Values.webauthn.image.tag }}"
+        imagePullPolicy: {{ .Values.webauthn.image.pullPolicy }}
+
+        ports:
+        - name: http
+          containerPort: {{ .Values.webauthn.service.targetPort }}
+          protocol: TCP
+
+        env:
+        # JVM Optimization
+        - name: JAVA_OPTS
+          value: {{ .Values.webauthn.javaOpts | quote }}
+
+        # WebAuthn Configuration
+        - name: MPO_AUTHN_APP_RELYING_PARTY_ID
+          value: {{ .Values.webauthn.config.relyingPartyId | quote }}
+        - name: MPO_AUTHN_APP_RELYING_PARTY_NAME
+          value: {{ .Values.webauthn.config.relyingPartyName | quote }}
+
+        # Database Configuration
+        - name: MPO_AUTHN_DB_HOST
+          value: {{ .Values.webauthn.database.host | quote }}
+        - name: MPO_AUTHN_DB_PORT
+          value: {{ .Values.webauthn.database.port | quote }}
+        - name: MPO_AUTHN_DB_NAME
+          value: {{ .Values.webauthn.database.name | quote }}
+        - name: MPO_AUTHN_DB_USERNAME
+          value: {{ .Values.webauthn.database.user | quote }}
+        - name: MPO_AUTHN_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: webauthn-secrets
+              key: database-password
+
+        # Redis Configuration
+        - name: MPO_AUTHN_REDIS_HOST
+          value: {{ .Values.webauthn.redis.host | quote }}
+        - name: MPO_AUTHN_REDIS_PORT
+          value: {{ .Values.webauthn.redis.port | quote }}
+        - name: MPO_AUTHN_REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: webauthn-secrets
+              key: redis-password
+
+        # JWT Master Encryption Key
+        - name: MPO_AUTHN_JWT_MASTER_ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: webauthn-secrets
+              key: jwt-master-key
+
+        # JWT Key Rotation Configuration
+        - name: MPO_AUTHN_JWT_KEY_ROTATION_ENABLED
+          value: {{ .Values.webauthn.config.jwtKeyRotationEnabled | quote }}
+        - name: MPO_AUTHN_JWT_KEY_ROTATION_INTERVAL
+          value: {{ .Values.webauthn.config.jwtKeyRotationInterval | quote }}
+        - name: MPO_AUTHN_JWT_KEY_GRACE_PERIOD
+          value: {{ .Values.webauthn.config.jwtKeyGracePeriod | quote }}
+        - name: MPO_AUTHN_JWT_KEY_RETENTION
+          value: {{ .Values.webauthn.config.jwtKeyRetention | quote }}
+        - name: MPO_AUTHN_JWT_KEY_SIZE
+          value: {{ .Values.webauthn.config.jwtKeySize | quote }}
+        - name: MPO_AUTHN_JWT_KEY_ID_PREFIX
+          value: {{ .Values.webauthn.config.jwtKeyIdPrefix | quote }}
+
+        {{- if .Values.webauthn.jaeger.enabled }}
+        # Jaeger Tracing
+        - name: JAEGER_AGENT_HOST
+          value: {{ .Values.webauthn.jaeger.agentHost | quote }}
+        - name: JAEGER_AGENT_PORT
+          value: {{ .Values.webauthn.jaeger.agentPort | quote }}
+        {{- end }}
+
+        livenessProbe:
+          {{- toYaml .Values.webauthn.livenessProbe | nindent 10 }}
+
+        readinessProbe:
+          {{- toYaml .Values.webauthn.readinessProbe | nindent 10 }}
+
+        resources:
+          {{- toYaml .Values.webauthn.resources | nindent 10 }}
+
+        securityContext:
+          {{- toYaml .Values.webauthn.containerSecurityContext | nindent 10 }}
+
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+
+      volumes:
+      - name: tmp
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webauthn-server
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: webauthn-server
+    app.kubernetes.io/name: webauthn-server
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: authentication
+    app.kubernetes.io/part-of: webauthn-stack
+spec:
+  type: {{ .Values.webauthn.service.type }}
+  ports:
+  - port: {{ .Values.webauthn.service.port }}
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app: webauthn-server
+    app.kubernetes.io/name: webauthn-server
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}

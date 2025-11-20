@@ -1,0 +1,25 @@
+{{- if .Values.serviceMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: webauthn-server
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: webauthn-server
+    app.kubernetes.io/name: webauthn-server
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: authentication
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  selector:
+    matchLabels:
+      app: webauthn-server
+      app.kubernetes.io/name: webauthn-server
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  endpoints:
+  - port: http
+    interval: {{ .Values.serviceMonitor.interval }}
+    scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout }}
+    path: /metrics
+{{- end }}
