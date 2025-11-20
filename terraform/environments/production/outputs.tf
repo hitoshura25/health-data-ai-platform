@@ -64,7 +64,7 @@ output "resource_summary" {
     Cluster Details:
     - Name: ${module.kubernetes_cluster.cluster_name}
     - Type: Always Free tier (BASIC_CLUSTER)
-    - Kubernetes Version: v1.28.2
+    - Kubernetes Version: ${var.kubernetes_version}
     - Region: eu-amsterdam-1 (100% renewable energy)
 
     Resources:

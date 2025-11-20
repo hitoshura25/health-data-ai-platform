@@ -174,11 +174,11 @@ export KUBECONFIG=~/.kube/config-oke
 kubectl cluster-info
 kubectl get nodes
 
-# Expected output:
+# Expected output (version depends on your kubernetes_version variable):
 # NAME                              STATUS   ROLES   AGE   VERSION
-# oke-system-pool-xxxxx             Ready    node    5m    v1.28.2
-# oke-app-pool-xxxxx-0              Ready    node    5m    v1.28.2
-# oke-app-pool-xxxxx-1              Ready    node    5m    v1.28.2
+# oke-system-pool-xxxxx             Ready    node    5m    v1.28.x
+# oke-app-pool-xxxxx-0              Ready    node    5m    v1.28.x
+# oke-app-pool-xxxxx-1              Ready    node    5m    v1.28.x
 ```
 
 ### Step 6: View Resource Summary
