@@ -48,7 +48,8 @@ resource "oci_objectstorage_bucket" "database_backups" {
 
   # Lifecycle policy: Delete backups older than 30 days
   retention_rules {
-    display_name = "delete-old-backups"
+    display_name       = "delete-old-backups"
+    time_rule_locked   = "Unlocked"
     duration {
       time_amount = 30
       time_unit   = "DAYS"

@@ -1,5 +1,18 @@
 # Cloud-Agnostic Kubernetes Cluster Interface
-# Defines standard interface for all cloud providers (Oracle, GCP, AWS)
+#
+# This file defines the standard contract/interface for Kubernetes cluster modules
+# across different cloud providers (Oracle, GCP, AWS, etc.).
+#
+# NOTE: This is a DOCUMENTATION/TEMPLATE file, not a functional Terraform module.
+# Actual implementations are in provider-specific subdirectories:
+#   - oracle-oke/   (Oracle Kubernetes Engine)
+#   - gcp-gke/      (Google Kubernetes Engine - future)
+#   - aws-eks/      (Amazon Elastic Kubernetes Service - future)
+#
+# The outputs defined here have placeholder values and will be overridden by
+# provider-specific implementations. This file serves to document the expected
+# inputs and outputs that all provider implementations should support to maintain
+# cloud portability.
 
 variable "cluster_name" {
   description = "Name of the Kubernetes cluster"

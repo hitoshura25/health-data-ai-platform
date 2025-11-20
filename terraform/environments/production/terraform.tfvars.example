@@ -68,6 +68,28 @@ node_pools = [
 ssh_public_key_path = "~/.ssh/id_rsa.pub"
 
 # =============================================================================
+# Security Configuration
+# =============================================================================
+# CIDR blocks allowed to SSH to worker nodes
+# IMPORTANT: Restrict this in production! Use your VPN or office IP range
+# Examples:
+#   - Your home IP: ["1.2.3.4/32"]
+#   - Your office network: ["10.0.0.0/8"]
+#   - Multiple ranges: ["1.2.3.4/32", "5.6.7.0/24"]
+allowed_ssh_cidrs = ["0.0.0.0/0"] # WARNING: Open to internet (for testing only)
+
+# CIDR blocks allowed to access Kubernetes API
+# Standard practice is to allow from anywhere for managed K8s, but you can restrict
+# Examples:
+#   - Your home IP: ["1.2.3.4/32"]
+#   - CloudFlare IPs + your IP: ["1.2.3.4/32", "103.21.244.0/22"]
+allowed_api_cidrs = ["0.0.0.0/0"] # Allow from anywhere (standard for managed K8s)
+
+# Use private worker nodes (no public IPs)
+# Set to true for enhanced security - nodes will use NAT gateway for outbound only
+use_private_nodes = false # Set to true for production
+
+# =============================================================================
 # Tags
 # =============================================================================
 tags = {

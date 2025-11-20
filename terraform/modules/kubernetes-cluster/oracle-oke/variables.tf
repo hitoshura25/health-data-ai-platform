@@ -14,9 +14,9 @@ variable "region" {
 }
 
 variable "kubernetes_version" {
-  description = "Kubernetes version"
+  description = "Kubernetes version (check OCI console for currently supported versions)"
   type        = string
-  default     = "v1.28.2"
+  default     = "v1.28.2" # NOTE: Verify this version is still supported by OKE before deployment
 }
 
 variable "vcn_cidr" {
@@ -96,6 +96,44 @@ variable "node_image_id" {
 variable "ssh_public_key" {
   description = "SSH public key for node access"
   type        = string
+}
+
+# Security Configuration
+variable "allowed_ssh_cidrs" {
+  description = "CIDR blocks allowed to SSH to worker nodes. Use restrictive CIDRs for production"
+  type        = list(string)
+  default     = ["0.0.0.0/0"] # WARNING: Allow from anywhere (not recommended for production)
+}
+
+variable "allowed_api_cidrs" {
+  description = "CIDR blocks allowed to access Kubernetes API. Use restrictive CIDRs for production"
+  type        = list(string)
+  default     = ["0.0.0.0/0"] # Allow from anywhere (standard for managed K8s, but can be restricted)
+}
+
+variable "use_private_nodes" {
+  description = "Use private nodes (no public IPs). Nodes will use NAT gateway for outbound traffic"
+  type        = bool
+  default     = false # Set to true for enhanced security in production
+}
+
+# Network Subnet Offsets
+variable "api_subnet_offset" {
+  description = "Subnet offset for Kubernetes API endpoint subnet"
+  type        = number
+  default     = 1
+}
+
+variable "node_subnet_offset" {
+  description = "Subnet offset for worker node subnet"
+  type        = number
+  default     = 2
+}
+
+variable "lb_subnet_offset" {
+  description = "Subnet offset for load balancer subnet"
+  type        = number
+  default     = 3
 }
 
 variable "tags" {

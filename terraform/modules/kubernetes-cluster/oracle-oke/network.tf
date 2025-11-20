@@ -90,16 +90,19 @@ resource "oci_core_security_list" "k8s_api_security_list" {
   vcn_id         = oci_core_vcn.k8s_vcn.id
   display_name   = "${var.cluster_name}-api-seclist"
 
-  # Ingress: Allow Kubernetes API access (6443)
-  ingress_security_rules {
-    protocol    = "6" # TCP
-    source      = "0.0.0.0/0"
-    source_type = "CIDR_BLOCK"
-    description = "Kubernetes API access"
+  # Ingress: Allow Kubernetes API access (6443) from specified CIDRs
+  dynamic "ingress_security_rules" {
+    for_each = var.allowed_api_cidrs
+    content {
+      protocol    = "6" # TCP
+      source      = ingress_security_rules.value
+      source_type = "CIDR_BLOCK"
+      description = "Kubernetes API access from ${ingress_security_rules.value}"
 
-    tcp_options {
-      min = 6443
-      max = 6443
+      tcp_options {
+        min = 6443
+        max = 6443
+      }
     }
   }
 
@@ -136,16 +139,19 @@ resource "oci_core_security_list" "k8s_node_security_list" {
     description = "Allow all intra-VCN traffic"
   }
 
-  # Ingress: Allow SSH from anywhere (for debugging)
-  ingress_security_rules {
-    protocol    = "6" # TCP
-    source      = "0.0.0.0/0"
-    source_type = "CIDR_BLOCK"
-    description = "SSH access"
+  # Ingress: Allow SSH from specified CIDRs (restrict for production)
+  dynamic "ingress_security_rules" {
+    for_each = var.allowed_ssh_cidrs
+    content {
+      protocol    = "6" # TCP
+      source      = ingress_security_rules.value
+      source_type = "CIDR_BLOCK"
+      description = "SSH access from ${ingress_security_rules.value}"
 
-    tcp_options {
-      min = 22
-      max = 22
+      tcp_options {
+        min = 22
+        max = 22
+      }
     }
   }
 
@@ -221,7 +227,7 @@ resource "oci_core_subnet" "k8s_api_subnet" {
   compartment_id = var.compartment_id
   vcn_id         = oci_core_vcn.k8s_vcn.id
   display_name   = "${var.cluster_name}-api-subnet"
-  cidr_block     = cidrsubnet(var.vcn_cidr, 8, 1) # 10.0.1.0/24
+  cidr_block     = cidrsubnet(var.vcn_cidr, 8, var.api_subnet_offset) # 10.0.1.0/24 by default
   dns_label      = "api"
 
   route_table_id             = oci_core_route_table.public_route_table.id
@@ -232,18 +238,23 @@ resource "oci_core_subnet" "k8s_api_subnet" {
   freeform_tags = var.tags
 }
 
-# Subnet for Worker Nodes (Private)
+# Subnet for Worker Nodes
+# Can be configured as private (no public IPs) or public (with public IPs)
+# For private nodes: both prohibit_public_ip_on_vnic and prohibit_internet_ingress must be true
 resource "oci_core_subnet" "k8s_node_subnet" {
   compartment_id = var.compartment_id
   vcn_id         = oci_core_vcn.k8s_vcn.id
   display_name   = "${var.cluster_name}-node-subnet"
-  cidr_block     = cidrsubnet(var.vcn_cidr, 8, 2) # 10.0.2.0/24
+  cidr_block     = cidrsubnet(var.vcn_cidr, 8, var.node_subnet_offset) # 10.0.2.0/24 by default
   dns_label      = "nodes"
 
-  route_table_id             = oci_core_route_table.private_route_table.id
-  security_list_ids          = [oci_core_security_list.k8s_node_security_list.id]
-  prohibit_public_ip_on_vnic = false # Set to true for private nodes
-  prohibit_internet_ingress  = false
+  route_table_id = oci_core_route_table.private_route_table.id
+  security_list_ids = [oci_core_security_list.k8s_node_security_list.id]
+
+  # For private nodes: prohibit public IPs and direct internet ingress
+  # Nodes will use NAT gateway for outbound traffic only
+  prohibit_public_ip_on_vnic = var.use_private_nodes
+  prohibit_internet_ingress  = var.use_private_nodes
 
   freeform_tags = var.tags
 }
@@ -253,7 +264,7 @@ resource "oci_core_subnet" "k8s_lb_subnet" {
   compartment_id = var.compartment_id
   vcn_id         = oci_core_vcn.k8s_vcn.id
   display_name   = "${var.cluster_name}-lb-subnet"
-  cidr_block     = cidrsubnet(var.vcn_cidr, 8, 3) # 10.0.3.0/24
+  cidr_block     = cidrsubnet(var.vcn_cidr, 8, var.lb_subnet_offset) # 10.0.3.0/24 by default
   dns_label      = "lb"
 
   route_table_id             = oci_core_route_table.public_route_table.id
