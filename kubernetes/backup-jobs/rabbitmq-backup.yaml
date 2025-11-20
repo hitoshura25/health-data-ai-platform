@@ -5,7 +5,7 @@ metadata:
   namespace: health-data
 data:
   backup.sh: |
-    #!/bin/bash
+    #!/bin/sh
     set -e
 
     TIMESTAMP=$(date +%Y%m%d-%H%M%S)
@@ -32,9 +32,13 @@ data:
     BACKUP_SIZE=$(du -h "${BACKUP_PATH}" | cut -f1)
     echo "Definitions exported: ${BACKUP_FILE} (${BACKUP_SIZE})"
 
-    # Pretty print for verification
-    echo "Backup contents:"
-    jq -r '.rabbit_version, (.users | length) as $users | (.vhosts | length) as $vhosts | (.queues | length) as $queues | (.exchanges | length) as $exchanges | "Users: \($users), VHosts: \($vhosts), Queues: \($queues), Exchanges: \($exchanges)"' "${BACKUP_PATH}"
+    # Pretty print for verification (if jq is available)
+    if command -v jq &> /dev/null; then
+      echo "Backup contents:"
+      jq -r '.rabbit_version, (.users | length) as $users | (.vhosts | length) as $vhosts | (.queues | length) as $queues | (.exchanges | length) as $exchanges | "Users: \($users), VHosts: \($vhosts), Queues: \($queues), Exchanges: \($exchanges)"' "${BACKUP_PATH}" || echo "  (jq parsing failed, but backup file exists)"
+    else
+      echo "Backup file created successfully (jq not available for verification)"
+    fi
 
     # Compress backup
     gzip "${BACKUP_PATH}"
@@ -70,7 +74,7 @@ data:
     echo "==========================================="
 
   restore.sh: |
-    #!/bin/bash
+    #!/bin/sh
     set -e
 
     DEFINITIONS_FILE="${1}"

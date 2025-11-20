@@ -58,7 +58,7 @@ case "${DB_TYPE}" in
 
         # Copy backup file to pod
         echo "Step 2: Uploading backup file..."
-        kubectl cp "${BACKUP_FILE}" "${NAMESPACE}/${POD}:/tmp/backup.sql.gz"
+        kubectl cp "${BACKUP_FILE}" "${NAMESPACE}/${POD}:/tmp/backup.dump"
 
         # Restore database
         echo "Step 3: Restoring database..."
@@ -71,14 +71,14 @@ case "${DB_TYPE}" in
             psql -U postgres -c 'CREATE DATABASE ${DB_NAME};'
 
             echo 'Restoring from backup...'
-            gunzip < /tmp/backup.sql.gz | pg_restore -U postgres -d ${DB_NAME} --no-owner --no-acl || true
+            pg_restore -U postgres -d ${DB_NAME} --no-owner --no-acl --verbose /tmp/backup.dump
 
             echo 'Granting permissions...'
             psql -U postgres -d ${DB_NAME} -c 'GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};'
             psql -U postgres -d ${DB_NAME} -c 'GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${DB_USER};'
 
             echo 'Cleaning up...'
-            rm -f /tmp/backup.sql.gz
+            rm -f /tmp/backup.dump
 
             echo 'Verifying restore...'
             psql -U ${DB_USER} -d ${DB_NAME} -c 'SELECT COUNT(*) FROM information_schema.tables;'
@@ -110,7 +110,7 @@ case "${DB_TYPE}" in
 
         # Copy backup file to pod
         echo "Step 2: Uploading backup file..."
-        kubectl cp "${BACKUP_FILE}" "${NAMESPACE}/${POD}:/tmp/backup.sql.gz"
+        kubectl cp "${BACKUP_FILE}" "${NAMESPACE}/${POD}:/tmp/backup.dump"
 
         # Restore database
         echo "Step 3: Restoring database..."
@@ -123,14 +123,14 @@ case "${DB_TYPE}" in
             psql -U postgres -c 'CREATE DATABASE ${DB_NAME};'
 
             echo 'Restoring from backup...'
-            gunzip < /tmp/backup.sql.gz | pg_restore -U postgres -d ${DB_NAME} --no-owner --no-acl || true
+            pg_restore -U postgres -d ${DB_NAME} --no-owner --no-acl --verbose /tmp/backup.dump
 
             echo 'Granting permissions...'
             psql -U postgres -d ${DB_NAME} -c 'GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};'
             psql -U postgres -d ${DB_NAME} -c 'GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${DB_USER};'
 
             echo 'Cleaning up...'
-            rm -f /tmp/backup.sql.gz
+            rm -f /tmp/backup.dump
 
             echo 'Verifying restore...'
             psql -U ${DB_USER} -d ${DB_NAME} -c 'SELECT COUNT(*) FROM information_schema.tables;'

@@ -170,16 +170,14 @@ spec:
               defaultMode: 0755
 
 ---
-# OCI credentials for MinIO backups
-# Update the backup-oci-config secret in health-data namespace
-apiVersion: v1
-kind: Secret
-metadata:
-  name: backup-oci-config-minio
-  namespace: health-data
-type: Opaque
-stringData:
-  oci-access-key: "REPLACE_WITH_OCI_ACCESS_KEY"
-  oci-secret-key: "REPLACE_WITH_OCI_SECRET_KEY"
-  oci-endpoint: "https://NAMESPACE.compat.objectstorage.eu-amsterdam-1.oraclecloud.com"
-  oci-backup-bucket: "health-platform-minio-backups"
+# Note: Update the backup-oci-config secret in health-data namespace
+# with the following additional keys for MinIO backups:
+#
+# kubectl create secret generic backup-oci-config \
+#   --from-literal=database-upload-url="https://..." \
+#   --from-literal=oci-access-key="YOUR_OCI_ACCESS_KEY" \
+#   --from-literal=oci-secret-key="YOUR_OCI_SECRET_KEY" \
+#   --from-literal=oci-endpoint="https://NAMESPACE.compat.objectstorage.eu-amsterdam-1.oraclecloud.com" \
+#   --from-literal=oci-backup-bucket="health-platform-minio-backups" \
+#   --from-literal=rabbitmq-upload-url="https://..." \
+#   --dry-run=client -o yaml | kubectl apply -f -

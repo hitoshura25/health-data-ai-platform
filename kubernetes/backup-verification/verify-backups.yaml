@@ -83,16 +83,17 @@ data:
     check_database_backup() {
       local backup_prefix=$1
       local max_age_days=$2
+      local namespace=$3
 
       echo ""
       echo "-------------------------------------------"
-      echo "Checking database backup: ${backup_prefix}"
+      echo "Checking database backup: ${backup_prefix} in namespace ${namespace}"
 
       # This would require OCI CLI or API access
       # For now, just check if the CronJob ran successfully
       JOB_NAME="${backup_prefix}-backup"
 
-      LAST_SUCCESS=$(kubectl get cronjob ${JOB_NAME} -n health-data -o jsonpath='{.status.lastSuccessfulTime}' 2>/dev/null || echo "")
+      LAST_SUCCESS=$(kubectl get cronjob ${JOB_NAME} -n ${namespace} -o jsonpath='{.status.lastSuccessfulTime}' 2>/dev/null || echo "")
 
       if [ -z "${LAST_SUCCESS}" ]; then
         echo -e "${RED}✗ No successful backup found${NC}"
@@ -157,10 +158,10 @@ data:
     echo "Verifying Database Backups"
     echo "==========================================="
 
-    check_database_backup "postgresql-health" 2 || true
-    check_database_backup "postgresql-auth" 2 || true
-    check_database_backup "minio" 2 || true
-    check_database_backup "rabbitmq" 2 || true
+    check_database_backup "postgresql-health" 2 "health-data" || true
+    check_database_backup "postgresql-auth" 2 "health-auth" || true
+    check_database_backup "minio" 2 "health-data" || true
+    check_database_backup "rabbitmq" 2 "health-data" || true
 
     # Summary
     echo ""

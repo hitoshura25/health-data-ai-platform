@@ -105,6 +105,9 @@ kubectl exec -n health-auth postgresql-auth-primary-0 -- \
 
 echo ""
 echo "MinIO:"
+# Get MinIO credentials from secret
+MINIO_ROOT_USER=$(kubectl get secret minio-secret -n health-data -o jsonpath='{.data.root-user}' 2>/dev/null | base64 -d || echo "minioadmin")
+MINIO_ROOT_PASSWORD=$(kubectl get secret minio-secret -n health-data -o jsonpath='{.data.root-password}' 2>/dev/null | base64 -d || echo "minioadmin")
 kubectl exec -n health-data deploy/minio -- \
     mc alias set local http://localhost:9000 "${MINIO_ROOT_USER}" "${MINIO_ROOT_PASSWORD}" || echo "WARNING: MinIO not accessible"
 

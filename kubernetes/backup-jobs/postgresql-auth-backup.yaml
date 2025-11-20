@@ -9,7 +9,7 @@ data:
     set -e
 
     TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-    BACKUP_FILE="postgres-auth-${TIMESTAMP}.sql.gz"
+    BACKUP_FILE="postgres-auth-${TIMESTAMP}.dump"
     BACKUP_PATH="/tmp/${BACKUP_FILE}"
 
     echo "==========================================="
@@ -17,7 +17,7 @@ data:
     echo "Started at: $(date)"
     echo "==========================================="
 
-    # Create backup using pg_dump with compression
+    # Create backup using pg_dump with custom format (includes compression)
     echo "Creating database dump..."
     PGPASSWORD="${POSTGRES_PASSWORD}" pg_dump \
       -h "${POSTGRES_HOST}" \
@@ -25,10 +25,11 @@ data:
       -U "${POSTGRES_USER}" \
       -d "${POSTGRES_DB}" \
       --format=custom \
+      --compress=6 \
       --verbose \
       --no-owner \
       --no-acl \
-      2>&1 | gzip > "${BACKUP_PATH}"
+      --file="${BACKUP_PATH}"
 
     BACKUP_SIZE=$(du -h "${BACKUP_PATH}" | cut -f1)
     echo "Backup created: ${BACKUP_FILE} (${BACKUP_SIZE})"

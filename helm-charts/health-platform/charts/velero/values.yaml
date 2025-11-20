@@ -1,5 +1,9 @@
 # Velero Disaster Recovery Configuration
 # Oracle Cloud Always Free tier compatible
+#
+# This values file is structured for vmware-tanzu/velero Helm chart v5.1.4
+# Values are namespaced under 'velero:' since this is included as a dependency
+# See: https://github.com/vmware-tanzu/helm-charts/tree/main/charts/velero
 
 velero:
   enabled: true
