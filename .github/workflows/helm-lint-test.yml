@@ -41,18 +41,69 @@ jobs:
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
           helm repo add grafana https://grafana.github.io/helm-charts
           helm repo add jaegertracing https://jaegertracing.github.io/helm-charts
+          helm repo add vmware-tanzu https://vmware-tanzu.github.io/helm-charts
           helm repo update
 
-      - name: Lint Health Platform umbrella chart
+      # IMPORTANT: Resolve subchart dependencies FIRST before umbrella chart
+      # Subcharts with external dependencies must be resolved before the umbrella
+      # chart tries to package them with helm dependency update
+
+      - name: Resolve Infrastructure chart dependencies
         run: |
-          cd helm-charts/health-platform
+          set -e
+          cd helm-charts/health-platform/charts/infrastructure
+          echo "Current directory: $(pwd)"
+          echo "Cleaning stale Chart.lock if exists..."
+          rm -f Chart.lock
+          echo "Running helm dependency update..."
           helm dependency update
+          echo "Verifying dependencies downloaded:"
+          ls -la charts/ | head -10
+
+      - name: Resolve Observability chart dependencies
+        run: |
+          set -e
+          cd helm-charts/health-platform/charts/observability
+          echo "Current directory: $(pwd)"
+          echo "Cleaning stale Chart.lock if exists..."
+          rm -f Chart.lock
+          echo "Running helm dependency update..."
+          helm dependency update
+          echo "Verifying dependencies downloaded:"
+          ls -la charts/ | head -10
+
+      - name: Resolve Velero chart dependencies
+        run: |
+          set -e
+          cd helm-charts/health-platform/charts/velero
+          echo "Current directory: $(pwd)"
+          echo "Cleaning stale Chart.lock if exists..."
+          rm -f Chart.lock
+          echo "Running helm dependency update..."
+          helm dependency update
+          echo "Verifying dependencies downloaded:"
+          ls -la charts/ | head -10
+
+      # Now that subchart dependencies are resolved, we can build the umbrella chart
+      - name: Build and lint Health Platform umbrella chart
+        run: |
+          set -e
+          cd helm-charts/health-platform
+          echo "Current directory: $(pwd)"
+          echo "Listing subchart directories:"
+          ls -la charts/ | head -20
+          echo "Cleaning stale Chart.lock if exists..."
+          rm -f Chart.lock
+          echo "Running helm dependency build..."
+          helm dependency build
+          echo "Running helm lint..."
           helm lint . --debug
 
       - name: Lint Infrastructure chart
         run: |
+          set -e
           cd helm-charts/health-platform/charts/infrastructure
-          helm dependency update
+          echo "Running helm lint..."
           helm lint . --debug
 
       - name: Lint Health API chart
@@ -72,8 +123,9 @@ jobs:
 
       - name: Lint Observability chart
         run: |
+          set -e
           cd helm-charts/health-platform/charts/observability
-          helm dependency update
+          echo "Running helm lint..."
           helm lint . --debug
 
       - name: Run Helm unit tests - Health API
