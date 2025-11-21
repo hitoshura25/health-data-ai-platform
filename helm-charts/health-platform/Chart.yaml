@@ -21,8 +21,30 @@ maintainers:
   - name: Health Data AI Platform Team
     email: hitoshura25@users.noreply.github.com
 
-# Note: Subcharts are auto-discovered from charts/ directory
-# Conditional enablement is handled via values.yaml for each subchart
+# Dependencies: Local subcharts for umbrella chart
+# Each subchart can be conditionally enabled via values.yaml
+dependencies:
+  - name: infrastructure
+    version: 1.0.0
+    condition: infrastructure.enabled
+  - name: security
+    version: 1.0.0
+    condition: security.enabled
+  - name: webauthn-stack
+    version: 1.0.0
+    condition: webauthn-stack.enabled
+  - name: health-api
+    version: 1.0.0
+    condition: health-api.enabled
+  - name: etl-engine
+    version: 1.0.0
+    condition: etl-engine.enabled
+  - name: observability
+    version: 1.0.0
+    condition: observability.enabled
+  - name: velero
+    version: 1.0.0
+    condition: velero.enabled
 
 annotations:
   # Helm chart metadata

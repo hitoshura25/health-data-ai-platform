@@ -85,6 +85,19 @@ jobs:
           echo "Verifying dependencies downloaded:"
           ls -la charts/ | head -10
 
+      # Build umbrella chart dependencies (local subcharts)
+      - name: Build Health Platform umbrella chart dependencies
+        run: |
+          set -e
+          cd helm-charts/health-platform
+          echo "Current directory: $(pwd)"
+          echo "Cleaning stale Chart.lock if exists..."
+          rm -f Chart.lock
+          echo "Building dependencies for umbrella chart..."
+          helm dependency build
+          echo "Verifying Chart.lock created:"
+          cat Chart.lock
+
       # Lint umbrella chart (subcharts are already in charts/ directory)
       - name: Lint Health Platform umbrella chart
         run: |
