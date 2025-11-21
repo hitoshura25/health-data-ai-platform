@@ -85,33 +85,19 @@ jobs:
           echo "Verifying dependencies downloaded:"
           ls -la charts/ | head -10
 
-      # Now that subchart dependencies are resolved, we can build the umbrella chart
-      - name: Build and lint Health Platform umbrella chart
+      # Lint umbrella chart (subcharts are already in charts/ directory)
+      - name: Lint Health Platform umbrella chart
         run: |
           set -e
           cd helm-charts/health-platform
           echo "Current directory: $(pwd)"
-          echo "Listing all files in current directory:"
-          ls -la | head -30
+          echo "Verifying Chart.yaml:"
+          head -10 Chart.yaml
           echo ""
-          echo "Listing subchart directories:"
-          ls -la charts/ | head -20
+          echo "Verifying subcharts in charts/ directory:"
+          ls -la charts/
           echo ""
-          echo "Checking if Chart.yaml exists:"
-          if [ -f "Chart.yaml" ]; then
-            echo "✓ Chart.yaml exists"
-            head -5 Chart.yaml
-          else
-            echo "✗ Chart.yaml NOT FOUND"
-            echo "Contents of current directory:"
-            find . -maxdepth 1 -type f
-          fi
-          echo ""
-          echo "Cleaning stale Chart.lock if exists..."
-          rm -f Chart.lock
-          echo "Running helm dependency update (packages local subcharts)..."
-          helm dependency update
-          echo "Running helm lint..."
+          echo "Running helm lint on umbrella chart..."
           helm lint . --debug
 
       - name: Lint Infrastructure chart
