@@ -98,7 +98,9 @@ jobs:
           ls -la charts/
           echo ""
           echo "Running helm lint on umbrella chart..."
-          helm lint . --debug
+          # Use --with-subcharts=false to avoid linting downloaded dependencies
+          # Subcharts are linted individually in separate steps
+          helm lint . --with-subcharts=false --debug
 
       - name: Lint Infrastructure chart
         run: |
