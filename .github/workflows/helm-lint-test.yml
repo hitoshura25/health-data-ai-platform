@@ -109,8 +109,8 @@ jobs:
           echo ""
           echo "Cleaning stale Chart.lock if exists..."
           rm -f Chart.lock
-          echo "Running helm dependency build..."
-          helm dependency build
+          echo "Running helm dependency update (packages local subcharts)..."
+          helm dependency update
           echo "Running helm lint..."
           helm lint . --debug
 
