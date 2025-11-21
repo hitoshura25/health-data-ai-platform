@@ -57,7 +57,7 @@ def docker_services():
     services = ["postgres", "redis", "minio", "rabbitmq"]
     
     # Ensure a clean slate before starting
-    subprocess.run(["docker", "compose", "-f", compose_file, "--env-file", env_file, "down", "-v"], check=False)
+    subprocess.run(["docker", "compose", "-f", compose_file, "--env-file", env_file, "down", "-v"], check=True)
 
     try:
         print("\nStarting dependency services...")
@@ -74,7 +74,7 @@ def docker_services():
         print("\nStopping dependency services...")
         subprocess.run(
             ["docker", "compose", "-f", compose_file, "--env-file", env_file, "down", "-v"],
-            check=False  # Don't fail if cleanup fails (safe for CI environments)
+            check=True
         )
 
 @pytest.fixture(scope="session")
