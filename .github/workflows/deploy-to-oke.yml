@@ -11,10 +11,6 @@ on:
           - dev
           - staging
           - production
-      chart_version:
-        description: 'Helm chart version (optional, defaults to latest)'
-        required: false
-        type: string
       dry_run:
         description: 'Perform dry-run only'
         required: false
@@ -35,6 +31,42 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Validate OCI secrets
+        run: |
+          echo "Validating required OCI secrets..."
+
+          if [ -z "${{ secrets.OCI_USER_OCID }}" ]; then
+            echo "Error: OCI_USER_OCID secret is not set"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.OCI_FINGERPRINT }}" ]; then
+            echo "Error: OCI_FINGERPRINT secret is not set"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.OCI_TENANCY_OCID }}" ]; then
+            echo "Error: OCI_TENANCY_OCID secret is not set"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.OCI_REGION }}" ]; then
+            echo "Error: OCI_REGION secret is not set"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.OCI_PRIVATE_KEY }}" ]; then
+            echo "Error: OCI_PRIVATE_KEY secret is not set"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.OKE_CLUSTER_OCID }}" ]; then
+            echo "Error: OKE_CLUSTER_OCID secret is not set"
+            exit 1
+          fi
+
+          echo "All required OCI secrets are present"
 
       - name: Set up Helm
         uses: azure/setup-helm@v4
@@ -87,6 +119,13 @@ jobs:
 
       - name: Create image pull secret
         run: |
+          # NOTE: This uses GITHUB_TOKEN which is only valid during workflow execution.
+          # For production deployments, create a persistent secret with a PAT:
+          # kubectl create secret docker-registry ghcr-secret \
+          #   --docker-server=ghcr.io \
+          #   --docker-username=<github-username> \
+          #   --docker-password=<personal-access-token> \
+          #   --namespace=<namespace>
           kubectl create secret docker-registry ghcr-secret \
             --docker-server=ghcr.io \
             --docker-username=${{ github.actor }} \
@@ -109,22 +148,35 @@ jobs:
           EOF
 
       - name: Helm diff (preview changes)
-        if: github.event.inputs.dry_run == 'true' || github.event.inputs.environment == 'production'
+        if: github.event.inputs.dry_run == true || github.event.inputs.environment == 'production'
         run: |
           cd helm-charts/health-platform
 
-          # Install helm diff plugin
-          helm plugin install https://github.com/databus23/helm-diff || true
+          # Install helm diff plugin if not already installed
+          if ! helm plugin list | grep -q diff; then
+            echo "Installing helm diff plugin..."
+            helm plugin install https://github.com/databus23/helm-diff
+          else
+            echo "helm diff plugin already installed"
+          fi
 
+          # Run diff - exit code 2 means no previous release, which is expected for first deployment
           helm diff upgrade ${{ steps.env-values.outputs.release_name }} . \
             --namespace ${{ steps.env-values.outputs.namespace }} \
             --values ${{ steps.env-values.outputs.values_file }} \
             --values /tmp/deploy-values.yaml \
             --allow-unreleased \
-            || echo "First deployment - no diff available"
+            || EXIT_CODE=$?
+
+          if [ "${EXIT_CODE:-0}" -eq 2 ]; then
+            echo "First deployment - no previous release to compare"
+          elif [ "${EXIT_CODE:-0}" -ne 0 ]; then
+            echo "Error running helm diff (exit code: $EXIT_CODE)"
+            exit $EXIT_CODE
+          fi
 
       - name: Deploy with Helm (dry-run)
-        if: github.event.inputs.dry_run == 'true'
+        if: github.event.inputs.dry_run == true
         run: |
           cd helm-charts/health-platform
 
@@ -137,7 +189,7 @@ jobs:
             --debug
 
       - name: Deploy with Helm
-        if: github.event.inputs.dry_run != 'true'
+        if: github.event.inputs.dry_run != true
         run: |
           cd helm-charts/health-platform
 
@@ -151,7 +203,7 @@ jobs:
             --atomic
 
       - name: Verify deployment
-        if: github.event.inputs.dry_run != 'true'
+        if: github.event.inputs.dry_run != true
         run: |
           echo "Checking deployment status..."
           kubectl get all -n ${{ steps.env-values.outputs.namespace }}
@@ -161,7 +213,7 @@ jobs:
           kubectl wait --for=condition=ready pod \
             --all \
             --namespace=${{ steps.env-values.outputs.namespace }} \
-            --timeout=300s || true
+            --timeout=300s
 
           echo ""
           echo "Recent events:"
@@ -170,12 +222,9 @@ jobs:
             | tail -20
 
       - name: Run smoke tests
-        if: github.event.inputs.dry_run != 'true'
+        if: github.event.inputs.dry_run != true
         run: |
           echo "Running smoke tests..."
-
-          # Wait for health checks to be ready
-          sleep 30
 
           # Test Health API health endpoint
           HEALTH_API_POD=$(kubectl get pods -n ${{ steps.env-values.outputs.namespace }} \
@@ -183,13 +232,18 @@ jobs:
             -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 
           if [ ! -z "$HEALTH_API_POD" ]; then
+            echo "Waiting for Health API pod to be ready..."
+            kubectl wait --for=condition=ready pod/$HEALTH_API_POD \
+              -n ${{ steps.env-values.outputs.namespace }} \
+              --timeout=120s
+
             echo "Testing Health API..."
             kubectl exec -n ${{ steps.env-values.outputs.namespace }} $HEALTH_API_POD \
               -- curl -f http://localhost:8000/health/live || echo "Health API check failed"
           fi
 
       - name: Get deployment info
-        if: github.event.inputs.dry_run != 'true'
+        if: github.event.inputs.dry_run != true
         run: |
           echo "Deployment completed!"
           echo ""
@@ -205,7 +259,7 @@ jobs:
           kubectl get ingress -n ${{ steps.env-values.outputs.namespace }} || echo "No ingresses found"
 
       - name: Rollback on failure
-        if: failure() && github.event.inputs.dry_run != 'true'
+        if: failure() && github.event.inputs.dry_run != true
         run: |
           echo "Deployment failed, rolling back..."
           helm rollback ${{ steps.env-values.outputs.release_name }} \
@@ -215,7 +269,8 @@ jobs:
   notify:
     needs: deploy
     runs-on: ubuntu-latest
-    if: always() && github.event.inputs.dry_run != 'true'
+    if: always() && github.event.inputs.dry_run != true
+    permissions: {}
     steps:
       - name: Send deployment notification
         run: |
