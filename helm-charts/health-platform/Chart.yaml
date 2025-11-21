@@ -21,41 +21,9 @@ maintainers:
   - name: Health Data AI Platform Team
     email: hitoshura25@users.noreply.github.com
 
-dependencies:
-  # Infrastructure layer (PostgreSQL, Redis, MinIO, RabbitMQ)
-  - name: infrastructure
-    version: 1.0.0
-    condition: infrastructure.enabled
-
-  # Security & RBAC (Module 6)
-  - name: security
-    version: 1.0.0
-    condition: security.enabled
-
-  # WebAuthn Stack (Module 3)
-  - name: webauthn-stack
-    version: 1.0.0
-    condition: webauthn-stack.enabled
-
-  # Health API Service (Module 4)
-  - name: health-api
-    version: 1.0.0
-    condition: health-api.enabled
-
-  # ETL Narrative Engine (Module 4)
-  - name: etl-engine
-    version: 1.0.0
-    condition: etl-engine.enabled
-
-  # Observability Stack (Module 5)
-  - name: observability
-    version: 1.0.0
-    condition: observability.enabled
-
-  # Disaster Recovery (Module 8)
-  - name: velero
-    version: 1.0.0
-    condition: velero.enabled
+# Note: Subcharts are automatically discovered from charts/ directory
+# No explicit dependencies declaration needed for local subcharts in Helm 3
+# Enable/disable subcharts using values.yaml with <subchart-name>.enabled: true/false
 
 annotations:
   # Helm chart metadata
