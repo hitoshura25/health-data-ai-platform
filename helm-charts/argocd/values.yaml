@@ -1,29 +1,51 @@
 # ArgoCD Helm Chart Values for Health Data AI Platform
 # This chart wraps the official ArgoCD Helm chart with platform-specific configuration
+#
+# IMPORTANT CONFIGURATION REQUIREMENTS:
+# ======================================
+# 1. Domain Configuration:
+#    - The placeholder 'argocd.yourdomain.com' MUST be overridden before deployment
+#    - Create environment-specific values files to override:
+#      * values-dev.yaml:     domain: argocd-dev.example.com
+#      * values-staging.yaml: domain: argocd-staging.example.com
+#      * values-prod.yaml:    domain: argocd.example.com
+#    - Deploy with: helm install -f values.yaml -f values-{env}.yaml
+#
+# 2. Repository Configuration:
+#    - Update platformApps.gitRepo with your actual repository URL
+#    - Configure repository credentials via Kubernetes secrets if private
 
 argo-cd:
   global:
-    domain: argocd.yourdomain.com  # Override in values-{env}.yaml
+    domain: argocd.yourdomain.com  # MUST OVERRIDE: Set in values-{env}.yaml
 
   server:
     replicas: 2
 
+    # Service configuration
+    # Using ClusterIP since we expose via Ingress (not LoadBalancer)
+    # If you need direct LoadBalancer access without Ingress, set:
+    #   service.type: LoadBalancer
+    #   ingress.enabled: false
     service:
-      type: LoadBalancer
+      type: ClusterIP
 
+    # Ingress configuration for external access
+    # SSL is terminated at ArgoCD server (ssl-passthrough)
     ingress:
       enabled: true
       ingressClassName: nginx
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-prod
+        # SSL passthrough - terminate SSL at ArgoCD server, not at ingress
         nginx.ingress.kubernetes.io/ssl-passthrough: "true"
         nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
       hosts:
-        - argocd.yourdomain.com
+        - argocd.yourdomain.com  # MUST OVERRIDE: Set in values-{env}.yaml
       tls:
         - secretName: argocd-server-tls
           hosts:
-            - argocd.yourdomain.com
+            - argocd.yourdomain.com  # MUST OVERRIDE: Set in values-{env}.yaml
 
     # Resource limits for server
     resources:
@@ -91,30 +113,36 @@ argo-cd:
   configs:
     params:
       server.insecure: false
-      # Enable anonymous access for health checks
+      # SECURITY CRITICAL: Controls authentication for ArgoCD UI and API
+      # - false (default): Authentication REQUIRED - recommended for all environments
+      # - true: Authentication DISABLED - creates major security vulnerability
+      # WARNING: Setting this to 'true' will allow unauthenticated access to ArgoCD
+      # Only use 'true' in isolated development environments, NEVER in staging/production
       server.disable.auth: false
 
     # Repository credentials (configure via Kubernetes secrets)
     repositories: {}
 
-    # Resource customizations
+    # Resource customizations - define custom health checks for specific resource types
+    # Format: <group>/<kind> followed by health.lua script
     resource.customizations: |
-      health.lua: |
-        hs = {}
-        hs.status = "Progressing"
-        hs.message = ""
-        if obj.status ~= nil then
-          if obj.status.health ~= nil then
-            hs.status = obj.status.health.status
-            hs.message = obj.status.health.message
+      argoproj.io/Application:
+        health.lua: |
+          hs = {}
+          hs.status = "Progressing"
+          hs.message = ""
+          if obj.status ~= nil then
+            if obj.status.health ~= nil then
+              hs.status = obj.status.health.status
+              hs.message = obj.status.health.message
+            end
           end
-        end
-        return hs
+          return hs
 
   # Notifications controller (optional)
   notifications:
     enabled: true
-    argocdUrl: https://argocd.yourdomain.com
+    argocdUrl: https://argocd.yourdomain.com  # MUST OVERRIDE: Set in values-{env}.yaml
 
   # ApplicationSet controller
   applicationSet:
@@ -124,5 +152,5 @@ argo-cd:
 # Platform-specific application sets (defined in templates/)
 platformApps:
   enabled: true
-  gitRepo: https://github.com/your-org/health-data-ai-platform
+  gitRepo: https://github.com/your-org/health-data-ai-platform  # MUST OVERRIDE: Set to actual repository URL
   targetRevision: main
