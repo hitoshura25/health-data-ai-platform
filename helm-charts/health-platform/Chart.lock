@@ -1,0 +1,24 @@
+dependencies:
+- name: infrastructure
+  repository: ""
+  version: 1.0.0
+- name: security
+  repository: ""
+  version: 1.0.0
+- name: webauthn-stack
+  repository: ""
+  version: 1.0.0
+- name: health-api
+  repository: ""
+  version: 1.0.0
+- name: etl-engine
+  repository: ""
+  version: 1.0.0
+- name: observability
+  repository: ""
+  version: 1.0.0
+- name: velero
+  repository: ""
+  version: 1.0.0
+digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+generated: "2025-11-21T04:26:00Z"
