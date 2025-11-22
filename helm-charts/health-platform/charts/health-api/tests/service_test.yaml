@@ -1,0 +1,44 @@
+suite: test health-api service
+templates:
+  - service.yaml
+tests:
+  - it: should create a service with correct name
+    asserts:
+      - isKind:
+          of: Service
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-health-api
+
+  - it: should have correct service type
+    set:
+      service.type: ClusterIP
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+
+  - it: should expose correct port
+    set:
+      service.port: 8000
+    asserts:
+      - equal:
+          path: spec.ports[0].port
+          value: 8000
+
+  - it: should target correct container port
+    set:
+      service.targetPort: 8000
+    asserts:
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 8000
+
+  - it: should have correct selector labels
+    asserts:
+      - equal:
+          path: spec.selector["app.kubernetes.io/name"]
+          value: health-api
+      - equal:
+          path: spec.selector["app.kubernetes.io/instance"]
+          value: RELEASE-NAME

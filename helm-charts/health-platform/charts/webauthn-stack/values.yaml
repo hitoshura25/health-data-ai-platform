@@ -107,6 +107,60 @@ webauthn:
     runAsNonRoot: true
     runAsUser: 1000
 
+# Example Service Configuration (JWT verification demonstration)
+exampleService:
+  enabled: true
+  replicaCount: 1
+
+  image:
+    repository: ghcr.io/hitoshura25/webauthn-example-service
+    # Auto-updated by CI/CD pipeline on main branch commits
+    tag: "main-latest"
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 9001
+    targetPort: 9001
+
+  # Resource limits for Oracle Always Free tier
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+  # Health checks
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 9001
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 9001
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 2
+    failureThreshold: 3
+
+  # Container security context
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: false
+    runAsNonRoot: true
+    runAsUser: 1000
+
 # Envoy Gateway Configuration
 envoy:
   enabled: true

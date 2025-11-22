@@ -130,8 +130,3 @@ services:
 volumes:
   etl-data:
     driver: local
-
-# Networks (shared with other services)
-networks:
-  health-platform-net:
-    external: true

@@ -394,13 +394,14 @@ minio:
       console: 9001
 
   # Ingress for MinIO Console (optional, for production)
-  ingress:
-    enabled: false  # Enable in production values
-    ingressClassName: nginx
-    hostname: minio.health-platform.example.com
-    annotations:
-      cert-manager.io/cluster-issuer: letsencrypt-prod
-    tls: true
+  console:
+    ingress:
+      enabled: false  # Enable in production values
+      ingressClassName: nginx
+      hostname: minio.health-platform.example.com
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+      tls: true
 
   # Metrics
   metrics:

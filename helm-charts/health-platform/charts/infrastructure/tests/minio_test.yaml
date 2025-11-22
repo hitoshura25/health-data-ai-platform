@@ -1,0 +1,51 @@
+suite: test infrastructure minio
+templates:
+  - minio.yaml
+tests:
+  - it: should create MinIO StatefulSet when enabled
+    set:
+      minio.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: StatefulSet
+
+  - it: should not create MinIO when disabled
+    set:
+      minio.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: should use correct MinIO image
+    set:
+      minio.enabled: true
+      minio.image.repository: minio/minio
+      minio.image.tag: RELEASE.2024-01-01T00-00-00Z
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: minio/minio:RELEASE.2024-01-01T00-00-00Z
+
+  - it: should configure persistent storage
+    set:
+      minio.enabled: true
+      minio.persistence.enabled: true
+      minio.persistence.size: 50Gi
+    asserts:
+      - isNotNull:
+          path: spec.volumeClaimTemplates
+
+  - it: should set resource limits
+    set:
+      minio.enabled: true
+      minio.resources.limits.cpu: "2000m"
+      minio.resources.limits.memory: "4Gi"
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.cpu
+          value: "2000m"
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: "4Gi"

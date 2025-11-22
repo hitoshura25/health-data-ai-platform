@@ -1,0 +1,72 @@
+suite: test health-api deployment
+templates:
+  - deployment.yaml
+tests:
+  - it: should create a deployment with correct name
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-health-api
+
+  - it: should use the correct image
+    set:
+      image.repository: ghcr.io/test/health-api
+      image.tag: test-tag
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/test/health-api:test-tag
+
+  - it: should set correct resource limits
+    set:
+      resources.limits.cpu: "1000m"
+      resources.limits.memory: "1Gi"
+      resources.requests.cpu: "500m"
+      resources.requests.memory: "512Mi"
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.cpu
+          value: "1000m"
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: "1Gi"
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.cpu
+          value: "500m"
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.memory
+          value: "512Mi"
+
+  - it: should configure environment variables
+    set:
+      env:
+        - name: TEST_VAR
+          value: test_value
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: TEST_VAR
+            value: test_value
+
+  - it: should set correct number of replicas
+    set:
+      replicaCount: 3
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 3
+
+  - it: should configure liveness and readiness probes
+    asserts:
+      - isNotNull:
+          path: spec.template.spec.containers[0].livenessProbe
+      - isNotNull:
+          path: spec.template.spec.containers[0].readinessProbe
+
+  - it: should use non-root user for security
+    asserts:
+      - isNotNull:
+          path: spec.template.spec.securityContext

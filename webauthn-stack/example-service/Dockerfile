@@ -26,4 +26,5 @@ ENTRYPOINT ["./docker-entrypoint.sh"]
 
 # Run application using $APP_PORT from entrypoint
 # Envoy sidecar handles mTLS and exposes service on port 9000
-CMD ["sh", "-c", "uvicorn main:app --host 127.0.0.1 --port $APP_PORT"]
+# Use 0.0.0.0 to accept connections from Kubernetes pods/services
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port $APP_PORT"]

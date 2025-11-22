@@ -1,0 +1,61 @@
+suite: test etl-engine deployment
+templates:
+  - deployment.yaml
+tests:
+  - it: should create a deployment with correct name
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-etl-engine
+
+  - it: should use the correct image
+    set:
+      image.repository: ghcr.io/test/etl-engine
+      image.tag: test-tag
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/test/etl-engine:test-tag
+
+  - it: should configure RabbitMQ connection
+    set:
+      config.rabbitmqUrl: "amqp://test-rabbitmq:5672/"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ETL_RABBITMQ_URL
+            value: "amqp://test-rabbitmq:5672/"
+
+  - it: should configure S3 endpoint
+    set:
+      config.s3EndpointUrl: "http://test-minio:9000"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ETL_S3_ENDPOINT_URL
+            value: "http://test-minio:9000"
+
+  - it: should set correct number of replicas
+    set:
+      replicaCount: 2
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 2
+
+  - it: should configure persistent volume for deduplication
+    set:
+      persistence.enabled: true
+      persistence.size: 5Gi
+    asserts:
+      - isNotNull:
+          path: spec.template.spec.volumes
+
+  - it: should use non-root user for security
+    asserts:
+      - isNotNull:
+          path: spec.template.spec.securityContext

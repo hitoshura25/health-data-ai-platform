@@ -1,0 +1,133 @@
+name: Build and Push WebAuthn Example Service (Multi-arch)
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'webauthn-stack/example-service/**'
+      - '.github/workflows/docker-build-webauthn.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'webauthn-stack/example-service/**'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/webauthn-example-service
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64,amd64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: network=host
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=main-,format=short,enable={{is_default_branch}}
+            type=sha,prefix=sha-,format=short,enable=${{ github.ref != 'refs/heads/main' }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.title=WebAuthn Example Service
+            org.opencontainers.image.description=Example Python service demonstrating JWT verification with WebAuthn
+            org.opencontainers.image.vendor=Health Data AI Platform
+
+      - name: Build and push multi-arch image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./webauthn-stack/example-service
+          file: ./webauthn-stack/example-service/Dockerfile.multiarch
+          platforms: linux/arm64,linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+
+      # Generate build provenance attestation for supply chain security
+      # Uses continue-on-error to prevent blocking deployments if attestation fails
+      # (e.g., due to GitHub token permissions or service issues)
+      - name: Generate artifact attestation
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+        continue-on-error: true
+
+  update-gitops:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up yq for YAML manipulation
+        uses: mikefarah/yq@v4
+
+      - name: Update Helm values with new image tag
+        run: |
+          NEW_TAG="${GITHUB_SHA:0:7}"
+
+          # Update example-service image tag using yq for precise YAML manipulation
+          # This is more robust than sed and won't accidentally modify wrong fields
+          yq eval '.exampleService.image.tag = "main-'"${NEW_TAG}"'"' -i \
+            helm-charts/health-platform/charts/webauthn-stack/values.yaml
+
+          # Verify the change
+          echo "Updated image tag to: $(yq eval '.exampleService.image.tag' helm-charts/health-platform/charts/webauthn-stack/values.yaml)"
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add helm-charts/health-platform/charts/webauthn-stack/values.yaml
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update example-service image tag to main-${GITHUB_SHA:0:7} [skip ci]"
+            git push
+          fi
