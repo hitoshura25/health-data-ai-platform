@@ -49,6 +49,17 @@ spec:
     - group: '*'
       kind: '*'
 
+  # Sync windows - prevent deployments during business hours in production
+  # Note: ArgoCD cron schedules use UTC timezone by default
+  syncWindows:
+    - kind: deny
+      schedule: '0 8 * * 1-5'  # Mon-Fri at 8:00 AM UTC
+      duration: 9h              # Block for 9 hours (8:00 AM - 5:00 PM UTC)
+      namespaces:
+        - health-platform-production
+      # Prevents production deployments during business hours (8am-5pm UTC, Mon-Fri)
+      # Adjust schedule if your team operates in a different timezone
+
   # Roles for team access control
   roles:
     - name: developer

@@ -36,14 +36,6 @@ spec:
         factor: 2
         maxDuration: 3m
 
-    # Prevent deployments during business hours
-    syncWindows:
-      - kind: deny
-        schedule: '0 8-17 * * 1-5'  # Mon-Fri 8am-5pm
-        duration: 9h
-        applications:
-          - health-api-production
-
   ignoreDifferences:
     - group: apps
       kind: Deployment
