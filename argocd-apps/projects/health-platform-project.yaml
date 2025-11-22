@@ -9,8 +9,15 @@ spec:
   description: Health Data AI Platform - All Services
 
   # Source repositories
+  # IMPORTANT: Update the repository URL below to match your GitHub repository
+  # This URL should point to your fork or organization's repository
+  # Example: https://github.com/your-org/health-data-ai-platform
+  #
+  # For production deployments, consider using a separate repository for
+  # GitOps manifests to decouple application code from deployment configurations.
+  # In that case, update this URL to point to your GitOps repository.
   sourceRepos:
-    - 'https://github.com/hitoshura25/health-data-ai-platform'  # Update with your repo
+    - 'https://github.com/hitoshura25/health-data-ai-platform'  # CUSTOMIZE: Replace with your repository URL
     - 'https://charts.bitnami.com/bitnami'
     - 'https://prometheus-community.github.io/helm-charts'
     - 'https://grafana.github.io/helm-charts'

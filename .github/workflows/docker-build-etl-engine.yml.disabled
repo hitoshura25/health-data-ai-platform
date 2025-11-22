@@ -113,6 +113,7 @@ jobs:
             org.opencontainers.image.vendor=Health Data AI Platform
 
       - name: Build and push multi-arch image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: ./services/etl-narrative-engine
@@ -130,9 +131,8 @@ jobs:
         uses: actions/attest-build-provenance@v1
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.meta.outputs.digest }}
+          subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
-        continue-on-error: true
 
   update-gitops:
     needs: build-and-push
@@ -147,18 +147,25 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install yq
+        run: |
+          wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+          chmod +x /usr/local/bin/yq
+        shell: bash
+
       - name: Update Helm values with new image tag
         run: |
           NEW_TAG="${GITHUB_SHA:0:7}"
 
-          # Update etl-engine chart values
-          sed -i "s/tag: .*/tag: \"main-${NEW_TAG}\"/" \
+          # Update etl-engine chart values using yq for safe YAML modification
+          yq eval '.image.tag = "main-'"${NEW_TAG}"'"' -i \
             helm-charts/health-platform/charts/etl-engine/values.yaml
 
           # Verify the change
-          grep "tag:" helm-charts/health-platform/charts/etl-engine/values.yaml
+          echo "Updated image tag:"
+          yq eval '.image.tag' helm-charts/health-platform/charts/etl-engine/values.yaml
 
-      - name: Commit and push changes
+      - name: Commit and push changes with retry logic
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -166,7 +173,48 @@ jobs:
 
           if git diff --staged --quiet; then
             echo "No changes to commit"
-          else
-            git commit -m "chore: update etl-engine image tag to main-${GITHUB_SHA:0:7} [skip ci]"
-            git push
+            exit 0
+          fi
+
+          # Commit and push with retry logic to handle race conditions
+          MAX_RETRIES=5
+          RETRY_COUNT=0
+          SUCCESS=false
+
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$SUCCESS" = "false" ]; do
+            # Attempt to pull latest changes and rebase
+            if git pull --rebase origin main; then
+              # Re-apply our changes if needed after rebase
+              if [ -f helm-charts/health-platform/charts/etl-engine/values.yaml ]; then
+                NEW_TAG="${GITHUB_SHA:0:7}"
+                yq eval '.image.tag = "main-'"${NEW_TAG}"'"' -i \
+                  helm-charts/health-platform/charts/etl-engine/values.yaml
+                git add helm-charts/health-platform/charts/etl-engine/values.yaml
+              fi
+
+              # Commit if there are staged changes
+              if ! git diff --staged --quiet; then
+                git commit -m "chore: update etl-engine image tag to main-${GITHUB_SHA:0:7} [skip ci]"
+              fi
+
+              # Attempt to push
+              if git push origin main; then
+                echo "Successfully pushed changes"
+                SUCCESS=true
+              else
+                echo "Push failed, retrying... (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)"
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+                sleep $((2 ** RETRY_COUNT))  # Exponential backoff: 2, 4, 8, 16, 32 seconds
+              fi
+            else
+              echo "Rebase failed, retrying... (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)"
+              git rebase --abort || true
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              sleep $((2 ** RETRY_COUNT))
+            fi
+          done
+
+          if [ "$SUCCESS" = "false" ]; then
+            echo "Failed to push changes after $MAX_RETRIES attempts"
+            exit 1
           fi
