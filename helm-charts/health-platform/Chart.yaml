@@ -26,24 +26,31 @@ maintainers:
 dependencies:
   - name: infrastructure
     version: 1.0.0
+    repository: file://./charts/infrastructure
     condition: infrastructure.enabled
   - name: security
     version: 1.0.0
+    repository: file://./charts/security
     condition: security.enabled
   - name: webauthn-stack
     version: 1.0.0
+    repository: file://./charts/webauthn-stack
     condition: webauthn-stack.enabled
   - name: health-api
     version: 1.0.0
+    repository: file://./charts/health-api
     condition: health-api.enabled
   - name: etl-engine
     version: 1.0.0
+    repository: file://./charts/etl-engine
     condition: etl-engine.enabled
   - name: observability
     version: 1.0.0
+    repository: file://./charts/observability
     condition: observability.enabled
   - name: velero
     version: 1.0.0
+    repository: file://./charts/velero
     condition: velero.enabled
 
 annotations:
