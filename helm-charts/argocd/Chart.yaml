@@ -3,7 +3,7 @@ name: argocd
 description: ArgoCD installation chart for Health Data AI Platform GitOps
 type: application
 version: 1.0.0
-appVersion: "2.10.0"
+appVersion: "2.13.2"
 keywords:
   - argocd
   - gitops
@@ -12,5 +12,5 @@ maintainers:
   - name: Health Data AI Platform Team
 dependencies:
   - name: argo-cd
-    version: "5.51.6"
+    version: "7.7.12"
     repository: https://argoproj.github.io/argo-helm

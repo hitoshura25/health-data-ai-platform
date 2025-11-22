@@ -177,7 +177,7 @@ jobs:
       - name: Build ETL Docker image
         run: |
           cd services/etl-narrative-engine
-          docker build --no-cache -t etl-narrative-engine:test .
+          docker build -t etl-narrative-engine:test .
           echo "ETL Docker image built"
 
       - name: Start ETL service

@@ -182,20 +182,26 @@ argocd repo add https://github.com/your-org/health-data-ai-platform \
 # Settings → Repositories → Connect Repo
 ```
 
-### 4. Enable Notifications (Optional)
+### 4. Configure Notifications (Optional)
+
+ArgoCD v2.3+ includes built-in notifications controller (no separate installation needed).
+
+**Configure Slack Notifications:**
 
 ```bash
-# Install argocd-notifications
-kubectl apply -n argocd -f \
-  https://raw.githubusercontent.com/argoproj-labs/argocd-notifications/stable/manifests/install.yaml
-
-# Configure Slack
+# Create notifications secret with Slack token
 kubectl create secret generic argocd-notifications-secret \
   -n argocd \
   --from-literal=slack-token=<SLACK_BOT_TOKEN>
 
-# Apply notification templates (see CICD.md)
+# Verify notifications controller is running
+kubectl get pods -n argocd | grep notifications
+
+# Apply notification templates and triggers (see CICD.md for templates)
+kubectl apply -f argocd-apps/notifications/
 ```
+
+**Note:** The notifications controller is already enabled in our values.yaml configuration.
 
 ## Upgrading ArgoCD
 

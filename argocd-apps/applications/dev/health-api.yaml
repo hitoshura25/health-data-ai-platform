@@ -12,7 +12,10 @@ spec:
   project: health-platform
 
   source:
-    repoURL: https://github.com/hitoshura25/health-data-ai-platform  # Update with your repo
+    # IMPORTANT: Update this URL to match your repository
+    # See argocd-apps/REPOSITORY_URL_CONFIGURATION.md for automated update script
+    # Use scripts/update-repo-urls.sh to update all manifests consistently
+    repoURL: https://github.com/hitoshura25/health-data-ai-platform
     targetRevision: main
     path: helm-charts/health-platform/charts/health-api
     helm:

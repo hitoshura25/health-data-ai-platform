@@ -12,7 +12,9 @@ spec:
   project: health-platform
 
   source:
-    repoURL: https://github.com/hitoshura25/health-data-ai-platform  # Update with your repo
+    # IMPORTANT: Update this URL to match your repository
+    # See argocd-apps/REPOSITORY_URL_CONFIGURATION.md for automated update script
+    repoURL: https://github.com/hitoshura25/health-data-ai-platform
     targetRevision: main
     path: helm-charts/health-platform/charts/etl-engine
     helm:
