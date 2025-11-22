@@ -25,7 +25,7 @@ jobs:
       - name: Set up Helm
         uses: azure/setup-helm@v4
         with:
-          version: 'v3.14.0'
+          version: 'v3.16.2'  # Updated to latest stable version (Nov 2025)
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -34,7 +34,10 @@ jobs:
 
       - name: Install Helm plugins
         run: |
-          helm plugin install https://github.com/helm-unittest/helm-unittest.git --version v0.4.4
+          # Check if plugin is already installed to avoid reinstallation
+          if ! helm plugin list | grep -q unittest; then
+            helm plugin install https://github.com/helm-unittest/helm-unittest.git --version v0.6.2
+          fi
 
       - name: Add Helm repositories
         run: |
@@ -174,23 +177,31 @@ jobs:
       - name: Template Health Platform chart with dev values
         run: |
           cd helm-charts/health-platform
-          helm template health-platform . \
+          if ! helm template health-platform . \
             --values values-dev.yaml \
             --debug \
-            --output-dir /tmp/helm-output-dev || true
+            --output-dir /tmp/helm-output-dev; then
+            echo "WARNING: Helm templating failed for dev values. This may be expected if the chart requires secrets or external dependencies."
+            echo "Please verify this is intentional and not a real issue with the chart."
+          fi
 
       - name: Template Health Platform chart with production values
         run: |
           cd helm-charts/health-platform
-          helm template health-platform . \
+          if ! helm template health-platform . \
             --values values-production.yaml \
             --debug \
-            --output-dir /tmp/helm-output-prod || true
+            --output-dir /tmp/helm-output-prod; then
+            echo "WARNING: Helm templating failed for production values. This may be expected if the chart requires secrets or external dependencies."
+            echo "Please verify this is intentional and not a real issue with the chart."
+          fi
 
       - name: Validate Kubernetes manifests
         run: |
           # Install kubeval for manifest validation
-          wget https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz
+          # NOTE: kubeval is no longer actively maintained. Consider migrating to kubeconform in the future.
+          # Using pinned version v0.16.1 for reproducibility
+          wget https://github.com/instrumenta/kubeval/releases/download/v0.16.1/kubeval-linux-amd64.tar.gz
           tar xf kubeval-linux-amd64.tar.gz
           sudo mv kubeval /usr/local/bin
 
@@ -220,11 +231,10 @@ jobs:
       - name: Set up Helm
         uses: azure/setup-helm@v4
         with:
-          version: 'v3.14.0'
+          version: 'v3.16.2'  # Updated to latest stable version (Nov 2025)
 
-      - name: Install Helm plugins
-        run: |
-          helm plugin install https://github.com/helm-unittest/helm-unittest.git --version v0.4.4
+      # NOTE: helm-unittest plugin not needed for security scanning
+      # Removed redundant plugin installation
 
       - name: Scan for secrets in Helm charts
         uses: trufflesecurity/trufflehog@main
@@ -232,7 +242,8 @@ jobs:
           path: ./helm-charts
           base: ${{ github.event.repository.default_branch }}
           head: HEAD
-        continue-on-error: true
+        # NOTE: Security scans should fail the workflow to prevent secrets from being committed
+        # Remove continue-on-error once initial findings are addressed
 
       - name: Run Checkov on Helm charts
         uses: bridgecrewio/checkov-action@master
@@ -240,5 +251,6 @@ jobs:
           directory: helm-charts/
           framework: helm
           quiet: true
-          soft_fail: true
-        continue-on-error: true
+          soft_fail: false  # Hard fail on security issues for production-bound code
+        # NOTE: Security scans should fail the workflow to catch security issues
+        # Remove continue-on-error once initial findings are addressed
