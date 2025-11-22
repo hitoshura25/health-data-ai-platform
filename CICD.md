@@ -177,12 +177,17 @@ All Docker images support both **arm64** (Oracle Ampere A1) and **amd64** (x86_6
 ```dockerfile
 # Build stage - compile dependencies
 FROM python:3.11-slim AS builder
-RUN pip install --user -r requirements.txt
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Runtime stage - minimal image
 FROM python:3.11-slim
-COPY --from=builder /root/.local /root/.local
+WORKDIR /app
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 # Application code and config
+COPY src/ ./src/
 ```
 
 **Benefits**:
@@ -375,15 +380,33 @@ These are managed via Kubernetes Secrets and mounted into pods.
 - Webhook integrations available
 
 **Configure Notifications**:
-```bash
-# Install argocd-notifications
-kubectl apply -n argocd -f \
-  https://raw.githubusercontent.com/argoproj-labs/argocd-notifications/stable/manifests/install.yaml
 
+ArgoCD notifications are already enabled in the Helm chart (`helm-charts/argocd/values.yaml`). You only need to configure the notification secrets and templates:
+
+```bash
 # Configure Slack secret
 kubectl create secret generic argocd-notifications-secret \
   -n argocd \
   --from-literal=slack-token=<SLACK_BOT_TOKEN>
+
+# Configure notification templates (optional - defaults are provided)
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-notifications-cm
+  namespace: argocd
+data:
+  # Custom notification templates
+  template.app-deployed: |
+    message: Application {{.app.metadata.name}} has been successfully deployed.
+  template.app-health-degraded: |
+    message: Application {{.app.metadata.name}} health is degraded.
+  # Add more custom templates as needed
+EOF
+
+# Verify notifications configuration
+kubectl get configmap argocd-notifications-cm -n argocd
 ```
 
 ### Application Monitoring

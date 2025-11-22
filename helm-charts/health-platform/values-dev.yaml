@@ -10,6 +10,9 @@ global:
   imagePullSecrets: []
 
   # Storage class for development (use default or local-path for local clusters)
+  # IMPORTANT: Verify your cluster has a default storage class configured with:
+  #   kubectl get storageclass
+  # If no default exists, specify one explicitly (e.g., "local-path" for k3s/k3d, "oci-bv" for Oracle OKE)
   storageClass: ""  # Empty = use cluster default
 
   # Monitoring namespace
@@ -74,9 +77,14 @@ security:
   enabled: true
 
   # Relaxed NetworkPolicies for development
+  # WARNING: defaultDenyAll is disabled for easier debugging, but this:
+  #   - Reduces security posture in dev environments
+  #   - May cause environment drift from production
+  #   - Could hide networking issues that will appear in production
+  # RECOMMENDED: Keep defaultDenyAll: true even in dev to catch issues early
   networkPolicies:
     enabled: true
-    defaultDenyAll: false  # Allow all traffic in dev for easier debugging
+    defaultDenyAll: false  # Set to 'true' to match production security posture
     allowDNS: true
 
   # Relaxed Pod Security Standards for development

@@ -209,6 +209,68 @@ observability:
   #   storage: 5Gi
 
 # ==============================================================================
+# Disaster Recovery - Production Configuration (Module 8)
+# ==============================================================================
+velero:
+  enabled: true  # Enable backups in production
+
+  # Velero configuration for OCI Object Storage
+  configuration:
+    backupStorageLocation:
+      name: default
+      provider: aws  # OCI Object Storage is S3-compatible
+      bucket: "health-platform-backups"  # CHANGE THIS to your OCI bucket name
+      config:
+        region: "eu-amsterdam-1"
+        s3Url: "https://namespace.compat.objectstorage.eu-amsterdam-1.oraclecloud.com"  # CHANGE THIS
+        s3ForcePathStyle: "true"
+
+    volumeSnapshotLocation:
+      name: default
+      provider: aws
+      config:
+        region: "eu-amsterdam-1"
+
+  # Backup schedules
+  schedules:
+    daily:
+      schedule: "0 2 * * *"  # Daily at 2 AM
+      template:
+        ttl: "720h"  # 30 days retention
+        includedNamespaces:
+          - health-data
+          - health-observability
+
+    weekly:
+      schedule: "0 3 * * 0"  # Weekly on Sunday at 3 AM
+      template:
+        ttl: "2160h"  # 90 days retention
+        includedNamespaces:
+          - health-data
+          - health-observability
+
+  # Resource settings
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  # Credentials (IMPORTANT: Replace with Sealed Secrets or OCI Vault)
+  credentials:
+    # Create OCI credentials with:
+    # - Customer Secret Key for Object Storage
+    # See: https://docs.oracle.com/en-us/iaas/Content/Identity/Tasks/managingcredentials.htm#Working2
+    useSecret: true
+    secretContents:
+      cloud: |
+        [default]
+        aws_access_key_id = CHANGE_ME_OCI_ACCESS_KEY
+        aws_secret_access_key = CHANGE_ME_OCI_SECRET_KEY
+
+# ==============================================================================
 # Production Deployment Checklist
 # ==============================================================================
 #
@@ -276,6 +338,17 @@ observability:
 #     - Check Prometheus is scraping metrics
 #     - Configure Grafana dashboards
 #     - Set up alerting rules
+#
+# [ ] 9. Disaster Recovery (Velero)
+#     - Create OCI Object Storage bucket for backups
+#     - Generate Customer Secret Key for Object Storage access
+#     - Update velero.configuration.backupStorageLocation.bucket with your bucket name
+#     - Update velero.configuration.backupStorageLocation.config.s3Url with your OCI namespace
+#     - Update velero.credentials.secretContents.cloud with your OCI credentials
+#     - Test backup and restore procedures:
+#       velero backup create test-backup --include-namespaces health-data
+#       velero restore create --from-backup test-backup
+#     - Verify scheduled backups are running
 #
 # ==============================================================================
 #

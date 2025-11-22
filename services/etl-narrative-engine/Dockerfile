@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Copy and install Python dependencies (system-wide, not --user)
+# Install Python dependencies system-wide
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -32,12 +32,9 @@ WORKDIR /app
 
 # Copy Python packages from builder (system-wide installation)
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy application code
+# Copy application code (tests excluded from production image)
 COPY src/ ./src/
-COPY tests/ ./tests/
-COPY pytest.ini ./
 
 # Create data directory for SQLite deduplication
 RUN mkdir -p /data && chmod 755 /data
