@@ -63,50 +63,8 @@ jobs:
             org.opencontainers.image.description=Example Python service demonstrating JWT verification with WebAuthn
             org.opencontainers.image.vendor=Health Data AI Platform
 
-      - name: Update example-service Dockerfile for multi-arch
-        run: |
-          cat > webauthn-stack/example-service/Dockerfile.multiarch << 'EOF'
-          # Multi-stage Dockerfile for WebAuthn Example Service
-          # Supports both arm64 (Oracle Ampere A1) and amd64
-          FROM python:3.12-slim AS builder
-
-          WORKDIR /app
-
-          # Install dependencies
-          COPY requirements.txt .
-          RUN pip install --no-cache-dir --user -r requirements.txt
-
-          # Runtime stage
-          FROM python:3.12-slim
-
-          WORKDIR /app
-
-          # Copy Python packages from builder
-          COPY --from=builder /root/.local /root/.local
-
-          # Copy application code
-          COPY main.py .
-          COPY docker-entrypoint.sh .
-          RUN chmod +x docker-entrypoint.sh
-
-          # Make sure Python packages are in PATH
-          ENV PATH=/root/.local/bin:$PATH
-
-          # Create non-root user for security
-          RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
-          USER appuser
-
-          # Expose port (Envoy sidecar exposes 9000, app listens on APP_PORT)
-          EXPOSE 9001
-
-          # Entrypoint sets APP_PORT environment variable (default: 9001)
-          ENTRYPOINT ["./docker-entrypoint.sh"]
-
-          # Run application using $APP_PORT from entrypoint
-          CMD ["sh", "-c", "uvicorn main:app --host 127.0.0.1 --port $APP_PORT"]
-          EOF
-
       - name: Build and push multi-arch image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: ./webauthn-stack/example-service
@@ -120,12 +78,15 @@ jobs:
           build-args: |
             BUILDKIT_INLINE_CACHE=1
 
+      # Generate build provenance attestation for supply chain security
+      # Uses continue-on-error to prevent blocking deployments if attestation fails
+      # (e.g., due to GitHub token permissions or service issues)
       - name: Generate artifact attestation
         if: github.event_name != 'pull_request'
         uses: actions/attest-build-provenance@v1
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.meta.outputs.digest }}
+          subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
         continue-on-error: true
 
@@ -142,16 +103,20 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up yq for YAML manipulation
+        uses: mikefarah/yq@v4
+
       - name: Update Helm values with new image tag
         run: |
           NEW_TAG="${GITHUB_SHA:0:7}"
 
-          # Update webauthn-stack chart values
-          sed -i "s/tag: .*/tag: \"main-${NEW_TAG}\"/" \
+          # Update example-service image tag using yq for precise YAML manipulation
+          # This is more robust than sed and won't accidentally modify wrong fields
+          yq eval '.exampleService.image.tag = "main-'"${NEW_TAG}"'"' -i \
             helm-charts/health-platform/charts/webauthn-stack/values.yaml
 
           # Verify the change
-          grep "tag:" helm-charts/health-platform/charts/webauthn-stack/values.yaml
+          echo "Updated image tag to: $(yq eval '.exampleService.image.tag' helm-charts/health-platform/charts/webauthn-stack/values.yaml)"
 
       - name: Commit and push changes
         run: |
@@ -162,6 +127,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "chore: update webauthn-example-service image tag to main-${GITHUB_SHA:0:7} [skip ci]"
+            git commit -m "chore: update example-service image tag to main-${GITHUB_SHA:0:7} [skip ci]"
             git push
           fi
