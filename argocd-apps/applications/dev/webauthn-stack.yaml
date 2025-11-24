@@ -1,0 +1,43 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: webauthn-stack-dev
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    notifications.argoproj.io/subscribe.on-deployed.slack: deployments
+    notifications.argoproj.io/subscribe.on-health-degraded.slack: alerts
+spec:
+  project: health-platform
+
+  source:
+    # ⚠️ CRITICAL: Update this URL when forking this repository
+    # Current URL is the upstream repository: hitoshura25/health-data-ai-platform
+    # For automated updates across all manifests:
+    #   1. See argocd-apps/REPOSITORY_URL_CONFIGURATION.md
+    #   2. Use scripts/update-repo-urls.sh to update all files consistently
+    repoURL: https://github.com/hitoshura25/health-data-ai-platform
+    targetRevision: main
+    path: helm-charts/health-platform/charts/webauthn-stack
+    helm:
+      valueFiles:
+        - ../../values-dev.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: health-platform-dev
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas

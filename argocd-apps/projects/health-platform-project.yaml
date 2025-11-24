@@ -1,0 +1,86 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: health-platform
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Health Data AI Platform - All Services
+
+  # Source repositories
+  # IMPORTANT: Update the repository URL below to match your GitHub repository
+  # This URL should point to your fork or organization's repository
+  # Example: https://github.com/your-org/health-data-ai-platform
+  #
+  # For production deployments, consider using a separate repository for
+  # GitOps manifests to decouple application code from deployment configurations.
+  # In that case, update this URL to point to your GitOps repository.
+  sourceRepos:
+    - 'https://github.com/hitoshura25/health-data-ai-platform'  # CUSTOMIZE: Replace with your repository URL
+    - 'https://charts.bitnami.com/bitnami'
+    - 'https://prometheus-community.github.io/helm-charts'
+    - 'https://grafana.github.io/helm-charts'
+    - 'https://jaegertracing.github.io/helm-charts'
+
+  # Destination clusters and namespaces
+  destinations:
+    - namespace: 'health-platform-*'
+      server: https://kubernetes.default.svc
+    - namespace: 'health-api'
+      server: https://kubernetes.default.svc
+    - namespace: 'health-etl'
+      server: https://kubernetes.default.svc
+    - namespace: 'health-data'
+      server: https://kubernetes.default.svc
+    - namespace: 'webauthn'
+      server: https://kubernetes.default.svc
+    - namespace: 'observability'
+      server: https://kubernetes.default.svc
+
+  # Cluster resource whitelist
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+    - group: 'rbac.authorization.k8s.io'
+      kind: ClusterRole
+    - group: 'rbac.authorization.k8s.io'
+      kind: ClusterRoleBinding
+    - group: 'storage.k8s.io'
+      kind: StorageClass
+    - group: 'apiextensions.k8s.io'
+      kind: CustomResourceDefinition
+
+  # Namespace resource whitelist (allow all)
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+
+  # Sync windows - prevent deployments during business hours in production
+  # Note: ArgoCD cron schedules use UTC timezone by default
+  syncWindows:
+    - kind: deny
+      schedule: '0 8 * * 1-5'  # Mon-Fri at 8:00 AM UTC
+      duration: 9h              # Block for 9 hours (8:00 AM - 5:00 PM UTC)
+      namespaces:
+        - health-platform-production
+      # Prevents production deployments during business hours (8am-5pm UTC, Mon-Fri)
+      # Adjust schedule if your team operates in a different timezone
+
+  # Roles for team access control
+  roles:
+    - name: developer
+      description: Developers with read-only access
+      policies:
+        - p, proj:health-platform:developer, applications, get, health-platform/*, allow
+        - p, proj:health-platform:developer, logs, get, health-platform/*, allow
+      groups:
+        - developers
+
+    - name: admin
+      description: Administrators with full access
+      policies:
+        - p, proj:health-platform:admin, applications, *, health-platform/*, allow
+        - p, proj:health-platform:admin, repositories, *, *, allow
+      groups:
+        - admins

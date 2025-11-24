@@ -1,0 +1,220 @@
+name: Build and Push ETL Engine (Multi-arch)
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'services/etl-narrative-engine/**'
+      - '.github/workflows/docker-build-etl-engine.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'services/etl-narrative-engine/**'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/etl-engine
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      rabbitmq:
+        image: rabbitmq:3-management
+        ports:
+          - 5672:5672
+        env:
+          RABBITMQ_DEFAULT_USER: guest
+          RABBITMQ_DEFAULT_PASS: guest
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          cd services/etl-narrative-engine
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-asyncio
+
+      - name: Run tests
+        run: |
+          cd services/etl-narrative-engine
+          pytest tests/ --cov=src --cov-report=xml --cov-report=term
+        env:
+          ETL_RABBITMQ_URL: amqp://guest:guest@localhost:5672/
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./services/etl-narrative-engine/coverage.xml
+          flags: etl-engine
+          name: etl-engine-coverage
+        continue-on-error: true
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64,amd64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: network=host
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-,format=short
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.title=ETL Narrative Engine
+            org.opencontainers.image.description=ETL service for processing health data into clinical narratives
+            org.opencontainers.image.vendor=Health Data AI Platform
+
+      - name: Build and push multi-arch image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/etl-narrative-engine
+          platforms: linux/arm64,linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+
+      - name: Generate artifact attestation
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  update-gitops:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install yq
+        run: |
+          wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+          chmod +x /usr/local/bin/yq
+        shell: bash
+
+      - name: Update Helm values with new image tag
+        run: |
+          NEW_TAG="${GITHUB_SHA:0:7}"
+
+          # Update etl-engine chart values using yq for safe YAML modification
+          yq eval '.image.tag = "main-'"${NEW_TAG}"'"' -i \
+            helm-charts/health-platform/charts/etl-engine/values.yaml
+
+          # Verify the change
+          echo "Updated image tag:"
+          yq eval '.image.tag' helm-charts/health-platform/charts/etl-engine/values.yaml
+
+      - name: Commit and push changes with retry logic
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add helm-charts/health-platform/charts/etl-engine/values.yaml
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          # Commit and push with retry logic to handle race conditions
+          MAX_RETRIES=5
+          RETRY_COUNT=0
+          SUCCESS=false
+
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$SUCCESS" = "false" ]; do
+            # Attempt to pull latest changes and rebase
+            if git pull --rebase origin main; then
+              # Re-apply our changes if needed after rebase
+              if [ -f helm-charts/health-platform/charts/etl-engine/values.yaml ]; then
+                NEW_TAG="${GITHUB_SHA:0:7}"
+                yq eval '.image.tag = "main-'"${NEW_TAG}"'"' -i \
+                  helm-charts/health-platform/charts/etl-engine/values.yaml
+                git add helm-charts/health-platform/charts/etl-engine/values.yaml
+              fi
+
+              # Commit if there are staged changes
+              if ! git diff --staged --quiet; then
+                git commit -m "chore: update etl-engine image tag to main-${GITHUB_SHA:0:7} [skip ci]"
+              fi
+
+              # Attempt to push
+              if git push origin main; then
+                echo "Successfully pushed changes"
+                SUCCESS=true
+              else
+                echo "Push failed, retrying... (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)"
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+                sleep $((2 ** RETRY_COUNT))  # Exponential backoff: 2, 4, 8, 16, 32 seconds
+              fi
+            else
+              echo "Rebase failed, retrying... (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)"
+              git rebase --abort || true
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              sleep $((2 ** RETRY_COUNT))
+            fi
+          done
+
+          if [ "$SUCCESS" = "false" ]; then
+            echo "Failed to push changes after $MAX_RETRIES attempts"
+            exit 1
+          fi

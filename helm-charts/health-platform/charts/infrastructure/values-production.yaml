@@ -229,15 +229,16 @@ minio:
       memory: 1Gi
 
   # Enable ingress for production (requires cert-manager)
-  ingress:
-    enabled: true
-    ingressClassName: nginx
-    hostname: minio.health-platform.example.com  # CHANGE THIS to your domain
-    annotations:
-      cert-manager.io/cluster-issuer: letsencrypt-prod
-      nginx.ingress.kubernetes.io/proxy-body-size: "100m"
-      nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
-    tls: true
+  console:
+    ingress:
+      enabled: true
+      ingressClassName: nginx
+      hostname: minio.health-platform.example.com  # CHANGE THIS to your domain
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+        nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+        nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+      tls: true
 
   # MinIO configuration
   extraEnvVars:

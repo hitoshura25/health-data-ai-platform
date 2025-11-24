@@ -47,7 +47,7 @@ dependencies:
 
   # MinIO S3-compatible Data Lake (80GB storage)
   - name: minio
-    version: 12.11.3
+    version: 17.0.21
     repository: https://charts.bitnami.com/bitnami
     condition: minio.enabled
 

@@ -1,0 +1,235 @@
+# Health Data AI Platform - Development Values
+# This file contains development-specific overrides for the umbrella chart
+# Use this for local development and testing environments
+
+# ==============================================================================
+# Global Configuration
+# ==============================================================================
+global:
+  # Image pull settings
+  imagePullSecrets: []
+
+  # Storage class for development (use default or local-path for local clusters)
+  # IMPORTANT: Verify your cluster has a default storage class configured with:
+  #   kubectl get storageclass
+  # If no default exists, specify one explicitly (e.g., "local-path" for k3s/k3d, "oci-bv" for Oracle OKE)
+  storageClass: ""  # Empty = use cluster default
+
+  # Monitoring namespace
+  monitoring:
+    namespace: health-observability
+    enabled: true
+
+  # Relaxed security settings for development
+  podSecurityStandards:
+    enforced: false  # Relaxed for easier debugging
+    profile: baseline  # Less restrictive for dev
+
+# ==============================================================================
+# Infrastructure Layer (Module 2)
+# ==============================================================================
+infrastructure:
+  enabled: true
+
+  namespace: health-data
+
+  # Development-specific infrastructure overrides
+  postgresql:
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+  redis:
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+
+  minio:
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+  rabbitmq:
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+# ==============================================================================
+# Security & RBAC (Module 6)
+# ==============================================================================
+security:
+  enabled: true
+
+  # Relaxed NetworkPolicies for development
+  # WARNING: defaultDenyAll is disabled for easier debugging, but this:
+  #   - Reduces security posture in dev environments
+  #   - May cause environment drift from production
+  #   - Could hide networking issues that will appear in production
+  # RECOMMENDED: Keep defaultDenyAll: true even in dev to catch issues early
+  networkPolicies:
+    enabled: true
+    defaultDenyAll: false  # Set to 'true' to match production security posture
+    allowDNS: true
+
+  # Relaxed Pod Security Standards for development
+  podSecurity:
+    enabled: true
+    levels:
+      api: baseline  # Less restrictive
+      etl: baseline
+      auth: baseline
+      data: baseline
+      observability: baseline
+
+  # RBAC still enabled for testing
+  rbac:
+    enabled: true
+    monitoring:
+      enabled: true
+
+# ==============================================================================
+# WebAuthn Stack (Module 3)
+# ==============================================================================
+webauthn-stack:
+  enabled: true  # Enable for dev testing
+
+  replicaCount: 1  # Single replica for dev
+
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# ==============================================================================
+# Health API Service (Module 4)
+# ==============================================================================
+health-api:
+  enabled: true  # Enable for dev testing
+
+  replicaCount: 1  # Single replica for dev
+
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+  # Development-specific environment variables
+  env:
+    LOG_LEVEL: "DEBUG"
+    DEBUG: "true"
+
+# ==============================================================================
+# ETL Narrative Engine (Module 4)
+# ==============================================================================
+etl-engine:
+  enabled: true  # Enable for dev testing
+
+  replicaCount: 1  # Single replica for dev
+
+  resources:
+    requests:
+      memory: "512Mi"  # ETL needs more memory
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+
+  # Development-specific environment variables
+  env:
+    LOG_LEVEL: "DEBUG"
+    DEBUG: "true"
+
+# ==============================================================================
+# Observability Stack (Module 5)
+# ==============================================================================
+observability:
+  enabled: true  # Enable for dev testing
+
+  # Prometheus
+  prometheus:
+    enabled: true
+    retention: "7d"  # Shorter retention for dev
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "250m"
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
+
+  # Grafana
+  grafana:
+    enabled: true
+    persistence:
+      enabled: false  # No persistence needed in dev
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+
+  # Jaeger (if not using webauthn-stack's Jaeger)
+  jaeger:
+    enabled: false  # Use webauthn-stack's Jaeger instance
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+# ==============================================================================
+# Disaster Recovery (Module 8)
+# ==============================================================================
+velero:
+  enabled: false  # Disable backups in dev environment
+
+# ==============================================================================
+# Development Notes
+# ==============================================================================
+#
+# This configuration is optimized for development environments:
+# - All services enabled for integration testing
+# - Lower resource limits to fit on smaller clusters
+# - Relaxed security policies for easier debugging
+# - Debug logging enabled
+# - No persistence for stateless services
+# - Shorter retention periods
+#
+# To deploy with dev values:
+#   helm install health-platform . \
+#     --values values-dev.yaml \
+#     --namespace health-data \
+#     --create-namespace
+#
+# To upgrade existing deployment:
+#   helm upgrade health-platform . \
+#     --values values-dev.yaml \
+#     --namespace health-data
+#
+# ==============================================================================

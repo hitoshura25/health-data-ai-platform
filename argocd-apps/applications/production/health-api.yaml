@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: health-api-production
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    notifications.argoproj.io/subscribe.on-deployed.slack: production-deployments
+    notifications.argoproj.io/subscribe.on-health-degraded.slack: production-alerts
+spec:
+  project: health-platform
+
+  source:
+    # ⚠️ CRITICAL: Update this URL when forking this repository
+    # Current URL is the upstream repository: hitoshura25/health-data-ai-platform
+    # For automated updates across all manifests:
+    #   1. See argocd-apps/REPOSITORY_URL_CONFIGURATION.md
+    #   2. Use scripts/update-repo-urls.sh to update all files consistently
+    repoURL: https://github.com/hitoshura25/health-data-ai-platform
+    targetRevision: main
+    path: helm-charts/health-platform/charts/health-api
+    helm:
+      valueFiles:
+        - ../../values-production.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: health-platform-production
+
+  syncPolicy:
+    # MANUAL sync for production - require approval
+    automated: null
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
